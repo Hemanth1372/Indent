@@ -1,0 +1,55 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<Shell
+    x:Class="IndentMate.Mobile.AppShell"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:views="clr-namespace:IndentMate.Mobile.Views"
+    Shell.FlyoutBehavior="Disabled">
+
+    <!-- Setup route (first-run configuration) -->
+    <ShellContent
+        Route="setup"
+        ContentTemplate="{DataTemplate views:SetupPage}"
+        Shell.NavBarIsVisible="False" />
+
+    <!-- Login route -->
+    <ShellContent
+        Route="login"
+        ContentTemplate="{DataTemplate views:LoginPage}"
+        Shell.NavBarIsVisible="False" />
+
+    <!-- Home route -->
+    <ShellContent
+        Route="home"
+        ContentTemplate="{DataTemplate views:IndentHomePage}"
+        Title="IndentMate" />
+
+    <!-- Indent Header (SIE / SER selection) -->
+    <ShellContent
+        Route="indent-header"
+        ContentTemplate="{DataTemplate views:SIEIndentHeaderPage}"
+        Title="New Indent" />
+
+    <ShellContent
+        Route="ser-indent-header"
+        ContentTemplate="{DataTemplate views:SERIndentHeaderPage}"
+        Title="New SER Indent" />
+
+    <!-- Indent Details (item list, submit) -->
+    <ShellContent
+        Route="indent-details"
+        ContentTemplate="{DataTemplate views:IndentDetailsPage}"
+        Title="Indent Details" />
+
+    <!-- Add Item -->
+    <ShellContent
+        Route="add-item"
+        ContentTemplate="{DataTemplate views:AddItemPage}"
+        Title="Add Item" />
+
+    <ShellContent
+        Route="add-item-ser"
+        ContentTemplate="{DataTemplate views:AddItemSERPage}"
+        Title="Add SER Item" />
+
+</Shell>

@@ -1,0 +1,35 @@
+﻿using CommunityToolkit.Mvvm.ComponentModel;
+using CommunityToolkit.Mvvm.Input;
+
+namespace IndentMate.Mobile.ViewModels;
+
+public partial class SetupViewModel : BaseViewModel
+{
+    [ObservableProperty] private string _lnEnvironment = string.Empty;
+    [ObservableProperty] private string _company = string.Empty;
+    [ObservableProperty] private string _engineerId = string.Empty;
+    [ObservableProperty] private string _pin = string.Empty;
+
+    [RelayCommand]
+    private async Task SaveAndSyncAsync()
+    {
+        await RunBusyAsync(async () =>
+        {
+            // TODO: Validate inputs
+            if (string.IsNullOrWhiteSpace(LnEnvironment) ||
+                string.IsNullOrWhiteSpace(Company) ||
+                string.IsNullOrWhiteSpace(EngineerId) ||
+                string.IsNullOrWhiteSpace(Pin))
+            {
+                throw new InvalidOperationException("All fields are required.");
+            }
+
+            // TODO: Save to SecureStorage / SQLite
+            // TODO: Call SyncService to do initial data sync from LN
+            await Task.Delay(1500); // placeholder for sync
+
+            // Navigate to Login after successful setup
+            await Shell.Current.GoToAsync("//login");
+        });
+    }
+}

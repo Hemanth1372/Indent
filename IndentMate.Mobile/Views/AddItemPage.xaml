@@ -1,0 +1,109 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="IndentMate.Mobile.Views.AddItemPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
+    BackgroundColor="#F4F7FB"
+    Shell.NavBarIsVisible="False">
+
+    <ContentPage.BindingContext>
+        <vm:AddItemViewModel />
+    </ContentPage.BindingContext>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="20" Spacing="14">
+            <Label FontAttributes="Bold" FontSize="22" Text="Add Item" TextColor="#172033" />
+
+            <Label FontAttributes="Bold" FontSize="13" Text="Work Type" TextColor="#475467" />
+            <Picker
+                BackgroundColor="White"
+                IsEnabled="{Binding IsWorkTypeEnabled}"
+                ItemsSource="{Binding WorkTypes}"
+                SelectedItem="{Binding SelectedWorkType}"
+                Title="BOQ / NON-BOQ" />
+
+            <Label FontAttributes="Bold" FontSize="13" Text="Location" TextColor="#475467" />
+            <Border
+                Padding="12"
+                BackgroundColor="#EEF2F7"
+                IsVisible="{Binding IsHeaderLocationVisible}"
+                Stroke="#D6DEE9"
+                StrokeShape="RoundRectangle 8"
+                StrokeThickness="1">
+                <Label Text="{Binding HeaderLocationDisplay}" TextColor="#172033" />
+            </Border>
+            <Picker
+                BackgroundColor="White"
+                IsVisible="{Binding IsLocationPickerVisible}"
+                ItemDisplayBinding="{Binding Description}"
+                ItemsSource="{Binding Locations}"
+                SelectedItem="{Binding SelectedLocation}"
+                Title="Select location" />
+
+            <Label FontAttributes="Bold" FontSize="13" Text="Activity" TextColor="#475467" />
+            <Picker
+                BackgroundColor="White"
+                IsEnabled="{Binding IsActivityEnabled}"
+                ItemDisplayBinding="{Binding Description}"
+                ItemsSource="{Binding Activities}"
+                SelectedItem="{Binding SelectedActivity}"
+                Title="Select activity" />
+
+            <Label FontAttributes="Bold" FontSize="13" Text="Material" TextColor="#475467" />
+            <Picker
+                BackgroundColor="White"
+                ItemDisplayBinding="{Binding Description}"
+                ItemsSource="{Binding Materials}"
+                SelectedItem="{Binding SelectedMaterial}"
+                Title="Select material" />
+
+            <Label FontAttributes="Bold" FontSize="13" Text="UoM" TextColor="#475467" />
+            <Border Padding="12" BackgroundColor="#EEF2F7" Stroke="#D6DEE9" StrokeShape="RoundRectangle 8" StrokeThickness="1">
+                <Label Text="{Binding UoM}" TextColor="#172033" />
+            </Border>
+
+            <Label FontAttributes="Bold" FontSize="13" Text="Requested Qty" TextColor="#475467" />
+            <Entry
+                BackgroundColor="White"
+                Keyboard="Numeric"
+                Placeholder="0"
+                Text="{Binding RequestedQty}" />
+
+            <Label FontAttributes="Bold" FontSize="13" Text="Remarks" TextColor="#475467" />
+            <Editor
+                AutoSize="TextChanges"
+                BackgroundColor="White"
+                HeightRequest="90"
+                Placeholder="Enter remarks"
+                Text="{Binding Remarks}" />
+
+            <Button
+                BackgroundColor="#EEF2F7"
+                Command="{Binding AttachFileCommand}"
+                CornerRadius="8"
+                Text="Attach File"
+                TextColor="#1565D8" />
+            <Label
+                FontSize="12"
+                IsVisible="{Binding HasAttachment}"
+                Text="{Binding AttachmentName}"
+                TextColor="#667085" />
+
+            <Label
+                FontSize="13"
+                IsVisible="{Binding HasValidationError}"
+                Text="{Binding ValidationMessage}"
+                TextColor="#D92D20" />
+
+            <Button
+                BackgroundColor="#1565D8"
+                Command="{Binding SaveItemCommand}"
+                CornerRadius="8"
+                FontAttributes="Bold"
+                HeightRequest="52"
+                Text="Save Item"
+                TextColor="White" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

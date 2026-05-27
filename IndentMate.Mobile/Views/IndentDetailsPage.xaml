@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="IndentMate.Mobile.Views.IndentDetailsPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
+    BackgroundColor="#F4F7FB"
+    Shell.NavBarIsVisible="False">
+
+    <ContentPage.BindingContext>
+        <vm:IndentDetailsViewModel />
+    </ContentPage.BindingContext>
+
+    <Grid Padding="20" RowDefinitions="Auto,*,Auto">
+        <Border Padding="16" BackgroundColor="White" Stroke="#E5EAF2" StrokeShape="RoundRectangle 8" StrokeThickness="1">
+            <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="8">
+                <VerticalStackLayout Spacing="2">
+                    <Label FontAttributes="Bold" FontSize="18" Text="{Binding IndentNo}" TextColor="#172033" />
+                    <Label FontSize="12" Text="{Binding IndentDate, StringFormat='Date: {0:dd MMM yyyy}'}" TextColor="#667085" />
+                </VerticalStackLayout>
+
+                <Border Grid.Column="1" Padding="10,5" BackgroundColor="{Binding StatusColor}" StrokeThickness="0" StrokeShape="RoundRectangle 8" VerticalOptions="Start">
+                    <Label FontAttributes="Bold" FontSize="11" Text="{Binding Status}" TextColor="White" />
+                </Border>
+
+                <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="*,*" ColumnSpacing="12">
+                    <Label FontSize="12" Text="{Binding ProjectDisplay, StringFormat='Project: {0}'}" TextColor="#475467" />
+                    <Label Grid.Column="1" FontSize="12" Text="{Binding IndentType, StringFormat='Type: {0}'}" TextColor="#475467" />
+                </Grid>
+
+                <Grid
+                    Grid.Row="2"
+                    Grid.ColumnSpan="2"
+                    ColumnDefinitions="*,*"
+                    ColumnSpacing="12"
+                    IsVisible="{Binding IsSieIndent}">
+                    <Label FontSize="12" Text="{Binding FromLocation, StringFormat='From: {0}'}" TextColor="#475467" />
+                    <Label Grid.Column="1" FontSize="12" Text="{Binding ToContractor, StringFormat='To: {0}'}" TextColor="#475467" />
+                </Grid>
+
+                <Grid
+                    Grid.Row="2"
+                    Grid.ColumnSpan="2"
+                    ColumnDefinitions="*,*"
+                    ColumnSpacing="12"
+                    IsVisible="{Binding IsSerIndent}">
+                    <Label FontSize="12" Text="{Binding OrderDisplay, StringFormat='Order: {0}'}" TextColor="#475467" />
+                    <Label Grid.Column="1" FontSize="12" Text="{Binding EquipmentDisplay, StringFormat='Equipment: {0}'}" TextColor="#475467" />
+                </Grid>
+            </Grid>
+        </Border>
+
+        <CollectionView Grid.Row="1" ItemsSource="{Binding Items}" Margin="0,16" EmptyView="No items added yet.">
+            <CollectionView.ItemTemplate>
+                <DataTemplate>
+                    <Border Margin="0,0,0,10" Padding="14" BackgroundColor="White" Stroke="#E5EAF2" StrokeShape="RoundRectangle 8" StrokeThickness="1">
+                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
+                            <VerticalStackLayout Spacing="4">
+                                <Label FontAttributes="Bold" Text="{Binding MaterialCode}" TextColor="#172033" />
+                                <Label FontSize="12" Text="{Binding MaterialDesc}" TextColor="#667085" />
+                                <Label FontSize="12" Text="{Binding RequestedQty, StringFormat='Qty: {0}'}" TextColor="#667085" />
+                            </VerticalStackLayout>
+                            <Border Grid.Column="1" Padding="10,5" BackgroundColor="#EEF2F7" StrokeThickness="0" StrokeShape="RoundRectangle 8" VerticalOptions="Center">
+                                <Label FontAttributes="Bold" FontSize="11" Text="{Binding WorkType}" TextColor="#1565D8" />
+                            </Border>
+                        </Grid>
+                    </Border>
+                </DataTemplate>
+            </CollectionView.ItemTemplate>
+        </CollectionView>
+
+        <Grid Grid.Row="2" RowDefinitions="Auto,Auto" ColumnDefinitions="*,*" ColumnSpacing="12" RowSpacing="10">
+            <Button
+                Grid.ColumnSpan="2"
+                BackgroundColor="#1565D8"
+                Command="{Binding AddItemCommand}"
+                CornerRadius="8"
+                FontAttributes="Bold"
+                HeightRequest="50"
+                IsVisible="{Binding CanEdit}"
+                Text="+"
+                TextColor="White" />
+            <Button
+                Grid.Row="1"
+                BackgroundColor="#EEF2F7"
+                Command="{Binding SaveDraftCommand}"
+                CornerRadius="8"
+                HeightRequest="50"
+                Text="Save as Draft"
+                TextColor="#1565D8" />
+            <Button
+                Grid.Row="1"
+                Grid.Column="1"
+                BackgroundColor="#1565D8"
+                Command="{Binding SubmitCommand}"
+                CornerRadius="8"
+                FontAttributes="Bold"
+                HeightRequest="50"
+                IsVisible="{Binding CanEdit}"
+                Text="Submit for Approval"
+                TextColor="White" />
+        </Grid>
+    </Grid>
+</ContentPage>

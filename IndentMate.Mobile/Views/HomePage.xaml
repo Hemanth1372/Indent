@@ -1,0 +1,93 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="IndentMate.Mobile.Views.HomePage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
+    Title="Home"
+    BackgroundColor="#1A1A2E">
+
+    <ContentPage.BindingContext>
+        <vm:HomeViewModel />
+    </ContentPage.BindingContext>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="16">
+
+            <!-- Header -->
+            <Label Text="{Binding WelcomeMessage}"
+                   FontSize="20" FontAttributes="Bold"
+                   TextColor="White" Margin="0,8" />
+
+            <!-- Stat cards -->
+            <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="12">
+
+                <Frame Grid.Row="0" Grid.Column="0" BackgroundColor="#2A2A3E"
+                       CornerRadius="12" Padding="16" BorderColor="Transparent">
+                    <VerticalStackLayout>
+                        <Label Text="{Binding PendingCount}" FontSize="28" FontAttributes="Bold" TextColor="#FFC107" />
+                        <Label Text="Pending" FontSize="12" TextColor="#AAAACC" />
+                    </VerticalStackLayout>
+                </Frame>
+
+                <Frame Grid.Row="0" Grid.Column="1" BackgroundColor="#2A2A3E"
+                       CornerRadius="12" Padding="16" BorderColor="Transparent">
+                    <VerticalStackLayout>
+                        <Label Text="{Binding RaisedCount}" FontSize="28" FontAttributes="Bold" TextColor="#4CAF50" />
+                        <Label Text="Raised" FontSize="12" TextColor="#AAAACC" />
+                    </VerticalStackLayout>
+                </Frame>
+
+                <Frame Grid.Row="1" Grid.Column="0" BackgroundColor="#2A2A3E"
+                       CornerRadius="12" Padding="16" BorderColor="Transparent">
+                    <VerticalStackLayout>
+                        <Label Text="{Binding RejectedCount}" FontSize="28" FontAttributes="Bold" TextColor="#F44336" />
+                        <Label Text="Rejected" FontSize="12" TextColor="#AAAACC" />
+                    </VerticalStackLayout>
+                </Frame>
+
+                <Frame Grid.Row="1" Grid.Column="1" BackgroundColor="#2A2A3E"
+                       CornerRadius="12" Padding="16" BorderColor="Transparent">
+                    <VerticalStackLayout>
+                        <Label Text="{Binding CreatedCount}" FontSize="28" FontAttributes="Bold" TextColor="#6C63FF" />
+                        <Label Text="Created" FontSize="12" TextColor="#AAAACC" />
+                    </VerticalStackLayout>
+                </Frame>
+
+            </Grid>
+
+            <!-- New Indent Button -->
+            <Button Text="+ New Indent"
+                    Command="{Binding NewIndentCommand}"
+                    BackgroundColor="#6C63FF"
+                    TextColor="White"
+                    CornerRadius="8"
+                    FontAttributes="Bold" />
+
+            <!-- Recent Requests -->
+            <Label Text="Recent Requests" FontSize="16" FontAttributes="Bold"
+                   TextColor="White" Margin="0,8,0,0" />
+
+            <CollectionView ItemsSource="{Binding RecentIndents}"
+                            EmptyView="No indents yet.">
+                <CollectionView.ItemTemplate>
+                    <DataTemplate>
+                        <Frame BackgroundColor="#2A2A3E" CornerRadius="8"
+                               Margin="0,4" Padding="12" BorderColor="Transparent">
+                            <Grid ColumnDefinitions="*,Auto">
+                                <VerticalStackLayout>
+                                    <Label Text="{Binding RequestNo}" FontAttributes="Bold" TextColor="White" />
+                                    <Label Text="{Binding ProjectId}" FontSize="12" TextColor="#AAAACC" />
+                                    <Label Text="{Binding CreatedAt, StringFormat='{0:dd MMM yyyy}'}" FontSize="11" TextColor="#888" />
+                                </VerticalStackLayout>
+                                <Label Grid.Column="1" Text="{Binding Status}"
+                                       TextColor="#6C63FF" VerticalOptions="Center" />
+                            </Grid>
+                        </Frame>
+                    </DataTemplate>
+                </CollectionView.ItemTemplate>
+            </CollectionView>
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

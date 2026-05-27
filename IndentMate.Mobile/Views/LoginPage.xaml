@@ -1,0 +1,207 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="IndentMate.Mobile.Views.LoginPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:shapes="clr-namespace:Microsoft.Maui.Controls.Shapes;assembly=Microsoft.Maui.Controls"
+    xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
+    BackgroundColor="#F4F7FB"
+    Shell.NavBarIsVisible="False">
+
+    <ContentPage.BindingContext>
+        <vm:LoginViewModel />
+    </ContentPage.BindingContext>
+
+    <Grid x:Name="RootLayout" Padding="24,18,24,28" RowDefinitions="Auto,*">
+        <Grid.GestureRecognizers>
+            <TapGestureRecognizer Tapped="OnUserInteraction" />
+        </Grid.GestureRecognizers>
+
+        <Grid ColumnDefinitions="Auto,*,Auto" VerticalOptions="Start">
+            <Grid ColumnDefinitions="40,Auto" ColumnSpacing="10" VerticalOptions="Center">
+                <Border
+                    HeightRequest="40"
+                    StrokeShape="RoundRectangle 10"
+                    StrokeThickness="0"
+                    WidthRequest="40"
+                    BackgroundColor="#1565D8">
+                    <Label
+                        FontAttributes="Bold"
+                        FontSize="16"
+                        HorizontalOptions="Center"
+                        Text="IM"
+                        TextColor="White"
+                        VerticalOptions="Center" />
+                </Border>
+                <Label
+                    Grid.Column="1"
+                    FontAttributes="Bold"
+                    FontSize="18"
+                    Text="IndentMate"
+                    TextColor="#172033"
+                    VerticalOptions="Center" />
+            </Grid>
+
+            <Button
+                Grid.Column="2"
+                Padding="0"
+                BackgroundColor="Transparent"
+                Command="{Binding GoToSetupCommand}"
+                FontSize="24"
+                HeightRequest="44"
+                Text="&#x2699;"
+                TextColor="#172033"
+                WidthRequest="44" />
+        </Grid>
+
+        <Grid Grid.Row="1" RowDefinitions="*,Auto,*">
+            <VerticalStackLayout Grid.Row="1" Spacing="20">
+                <Border
+                    BackgroundColor="#1565D8"
+                    HeightRequest="112"
+                    HorizontalOptions="Center"
+                    StrokeShape="RoundRectangle 24"
+                    StrokeThickness="0"
+                    WidthRequest="112">
+                    <Label
+                        FontAttributes="Bold"
+                        FontSize="36"
+                        HorizontalOptions="Center"
+                        Text="IM"
+                        TextColor="White"
+                        VerticalOptions="Center" />
+                </Border>
+
+                <Border
+                    Padding="18"
+                    BackgroundColor="White"
+                    Stroke="#E5EAF2"
+                    StrokeShape="RoundRectangle 18"
+                    StrokeThickness="1">
+                    <VerticalStackLayout Spacing="14">
+                        <Grid ColumnDefinitions="28,*" ColumnSpacing="12">
+                            <Label
+                                FontSize="21"
+                                Text="&#x1F464;"
+                                TextColor="#1565D8"
+                                VerticalOptions="Center" />
+                            <VerticalStackLayout Grid.Column="1" Spacing="2">
+                                <Label
+                                    FontAttributes="Bold"
+                                    FontSize="15"
+                                    Text="{Binding EngineerId}"
+                                    TextColor="#172033" />
+                                <Label
+                                    FontSize="13"
+                                    Text="{Binding EngineerName}"
+                                    TextColor="#6B7280" />
+                            </VerticalStackLayout>
+                        </Grid>
+
+                        <BoxView HeightRequest="1" Color="#EEF2F7" />
+
+                        <Grid ColumnDefinitions="28,*" ColumnSpacing="12">
+                            <Label
+                                FontSize="21"
+                                Text="&#x1F3E2;"
+                                TextColor="#1565D8"
+                                VerticalOptions="Center" />
+                            <VerticalStackLayout Grid.Column="1" Spacing="2">
+                                <Label
+                                    FontAttributes="Bold"
+                                    FontSize="15"
+                                    Text="{Binding Company}"
+                                    TextColor="#172033" />
+                                <Label
+                                    FontSize="13"
+                                    Text="Company"
+                                    TextColor="#6B7280" />
+                            </VerticalStackLayout>
+                        </Grid>
+                    </VerticalStackLayout>
+                </Border>
+
+                <VerticalStackLayout Spacing="16">
+                    <Label
+                        FontAttributes="Bold"
+                        FontSize="13"
+                        HorizontalOptions="Center"
+                        Text="ENTER PIN"
+                        TextColor="#8A94A6" />
+
+                    <HorizontalStackLayout HorizontalOptions="Center" Spacing="14">
+                        <shapes:Ellipse Fill="#CED6E0" HeightRequest="16" WidthRequest="16">
+                            <shapes:Ellipse.Triggers>
+                                <DataTrigger Binding="{Binding PinDot1}" TargetType="shapes:Ellipse" Value="True">
+                                    <Setter Property="Fill" Value="#1565D8" />
+                                </DataTrigger>
+                            </shapes:Ellipse.Triggers>
+                        </shapes:Ellipse>
+                        <shapes:Ellipse Fill="#CED6E0" HeightRequest="16" WidthRequest="16">
+                            <shapes:Ellipse.Triggers>
+                                <DataTrigger Binding="{Binding PinDot2}" TargetType="shapes:Ellipse" Value="True">
+                                    <Setter Property="Fill" Value="#1565D8" />
+                                </DataTrigger>
+                            </shapes:Ellipse.Triggers>
+                        </shapes:Ellipse>
+                        <shapes:Ellipse Fill="#CED6E0" HeightRequest="16" WidthRequest="16">
+                            <shapes:Ellipse.Triggers>
+                                <DataTrigger Binding="{Binding PinDot3}" TargetType="shapes:Ellipse" Value="True">
+                                    <Setter Property="Fill" Value="#1565D8" />
+                                </DataTrigger>
+                            </shapes:Ellipse.Triggers>
+                        </shapes:Ellipse>
+                        <shapes:Ellipse Fill="#CED6E0" HeightRequest="16" WidthRequest="16">
+                            <shapes:Ellipse.Triggers>
+                                <DataTrigger Binding="{Binding PinDot4}" TargetType="shapes:Ellipse" Value="True">
+                                    <Setter Property="Fill" Value="#1565D8" />
+                                </DataTrigger>
+                            </shapes:Ellipse.Triggers>
+                        </shapes:Ellipse>
+                        <shapes:Ellipse Fill="#CED6E0" HeightRequest="16" WidthRequest="16">
+                            <shapes:Ellipse.Triggers>
+                                <DataTrigger Binding="{Binding PinDot5}" TargetType="shapes:Ellipse" Value="True">
+                                    <Setter Property="Fill" Value="#1565D8" />
+                                </DataTrigger>
+                            </shapes:Ellipse.Triggers>
+                        </shapes:Ellipse>
+                        <shapes:Ellipse Fill="#CED6E0" HeightRequest="16" WidthRequest="16">
+                            <shapes:Ellipse.Triggers>
+                                <DataTrigger Binding="{Binding PinDot6}" TargetType="shapes:Ellipse" Value="True">
+                                    <Setter Property="Fill" Value="#1565D8" />
+                                </DataTrigger>
+                            </shapes:Ellipse.Triggers>
+                        </shapes:Ellipse>
+                    </HorizontalStackLayout>
+
+                    <Entry
+                        x:Name="HiddenPinEntry"
+                        HeightRequest="1"
+                        IsPassword="True"
+                        Keyboard="Numeric"
+                        MaxLength="6"
+                        Opacity="0"
+                        Text="{Binding PinInput, Mode=TwoWay}"
+                        TextChanged="OnPinEntryTextChanged"
+                        WidthRequest="1" />
+
+                    <Button
+                        BackgroundColor="#1565D8"
+                        Command="{Binding LoginCommand}"
+                        CornerRadius="14"
+                        FontAttributes="Bold"
+                        HeightRequest="54"
+                        Text="Login"
+                        TextColor="White" />
+
+                    <Label
+                        FontSize="13"
+                        HorizontalOptions="Center"
+                        IsVisible="{Binding HasError}"
+                        Text="{Binding StatusMessage}"
+                        TextColor="#D92D20" />
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </Grid>
+    </Grid>
+</ContentPage>

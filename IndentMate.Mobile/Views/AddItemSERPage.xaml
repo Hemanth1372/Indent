@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="IndentMate.Mobile.Views.AddItemSERPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
+    BackgroundColor="#F4F7FB"
+    Shell.NavBarIsVisible="False">
+
+    <ContentPage.BindingContext>
+        <vm:AddItemSERViewModel />
+    </ContentPage.BindingContext>
+
+    <Grid Padding="20" RowDefinitions="Auto,*">
+        <Grid ColumnDefinitions="Auto,*" Padding="0,0,0,18">
+            <Button
+                BackgroundColor="Transparent"
+                Clicked="OnBackClicked"
+                FontSize="24"
+                HeightRequest="42"
+                Padding="0"
+                Text="&#x2039;"
+                TextColor="#172033"
+                WidthRequest="42" />
+            <Label
+                Grid.Column="1"
+                FontAttributes="Bold"
+                FontSize="22"
+                Text="Add SER Item"
+                TextColor="#172033"
+                VerticalOptions="Center" />
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Spacing="14">
+                <Label FontAttributes="Bold" FontSize="13" Text="Material" TextColor="#475467" />
+                <Picker
+                    Title="Select material"
+                    BackgroundColor="White"
+                    ItemDisplayBinding="{Binding ItemCode}"
+                    ItemsSource="{Binding Materials}"
+                    SelectedItem="{Binding SelectedMaterial}" />
+
+                <Label FontAttributes="Bold" FontSize="13" Text="UoM" TextColor="#475467" />
+                <Border
+                    Padding="12"
+                    BackgroundColor="#EEF2F7"
+                    Stroke="#D6DEE9"
+                    StrokeShape="RoundRectangle 8"
+                    StrokeThickness="1">
+                    <Label Text="{Binding UoM}" TextColor="#172033" />
+                </Border>
+
+                <Label FontAttributes="Bold" FontSize="13" Text="Requested Qty" TextColor="#475467" />
+                <Entry
+                    BackgroundColor="White"
+                    Keyboard="Numeric"
+                    Placeholder="0"
+                    Text="{Binding RequestedQty}" />
+
+                <Label FontAttributes="Bold" FontSize="13" Text="Remarks" TextColor="#475467" />
+                <Editor
+                    AutoSize="TextChanges"
+                    BackgroundColor="White"
+                    HeightRequest="96"
+                    Placeholder="Optional"
+                    Text="{Binding Remarks}" />
+
+                <Button
+                    BackgroundColor="#EEF2F7"
+                    Command="{Binding AttachFileCommand}"
+                    CornerRadius="8"
+                    HeightRequest="48"
+                    Text="Attachment"
+                    TextColor="#1565D8" />
+                <Label
+                    FontSize="12"
+                    IsVisible="{Binding HasAttachment}"
+                    Text="{Binding AttachmentName}"
+                    TextColor="#667085" />
+
+                <Label
+                    FontSize="13"
+                    IsVisible="{Binding HasValidationError}"
+                    Text="{Binding ValidationMessage}"
+                    TextColor="#D92D20" />
+
+                <Button
+                    Margin="0,8,0,0"
+                    BackgroundColor="#1565D8"
+                    Command="{Binding SaveItemCommand}"
+                    CornerRadius="8"
+                    FontAttributes="Bold"
+                    HeightRequest="52"
+                    Text="Save Item"
+                    TextColor="White" />
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</ContentPage>

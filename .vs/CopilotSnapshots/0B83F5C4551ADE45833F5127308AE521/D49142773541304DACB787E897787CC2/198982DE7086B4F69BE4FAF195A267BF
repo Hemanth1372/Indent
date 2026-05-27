@@ -1,0 +1,65 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="IndentMate.Mobile.Views.SetupPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
+    Title="Initial Setup"
+    BackgroundColor="#1A1A2E">
+
+    <ContentPage.BindingContext>
+        <vm:SetupViewModel />
+    </ContentPage.BindingContext>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="32" Spacing="16" VerticalOptions="Center">
+
+            <Label Text="IndentMate" FontSize="32" FontAttributes="Bold"
+                   TextColor="White" HorizontalOptions="Center" />
+            <Label Text="Initial Configuration" FontSize="14"
+                   TextColor="#AAAACC" HorizontalOptions="Center" Margin="0,0,0,24" />
+
+            <Label Text="LN Environment" TextColor="White" FontSize="13" />
+            <Entry Placeholder="PRD / TRN / TST"
+                   Text="{Binding LnEnvironment}"
+                   PlaceholderColor="#666" TextColor="White"
+                   BackgroundColor="#2A2A3E" />
+
+            <Label Text="Company Code" TextColor="White" FontSize="13" />
+            <Entry Placeholder="e.g. 100"
+                   Text="{Binding Company}"
+                   PlaceholderColor="#666" TextColor="White"
+                   BackgroundColor="#2A2A3E" />
+
+            <Label Text="Engineer ID" TextColor="White" FontSize="13" />
+            <Entry Placeholder="Your LN Engineer ID"
+                   Text="{Binding EngineerId}"
+                   PlaceholderColor="#666" TextColor="White"
+                   BackgroundColor="#2A2A3E" />
+
+            <Label Text="PIN (6 digits)" TextColor="White" FontSize="13" />
+            <Entry Placeholder="••••••"
+                   Text="{Binding Pin}"
+                   IsPassword="True"
+                   PlaceholderColor="#666" TextColor="White"
+                   BackgroundColor="#2A2A3E" />
+
+            <Button Text="Save &amp; Sync"
+                    Command="{Binding SaveAndSyncCommand}"
+                    BackgroundColor="#6C63FF"
+                    TextColor="White"
+                    CornerRadius="8"
+                    Margin="0,16,0,0" />
+
+            <ActivityIndicator IsRunning="{Binding IsBusy}"
+                               IsVisible="{Binding IsBusy}"
+                               Color="#6C63FF" />
+
+            <Label Text="{Binding StatusMessage}"
+                   TextColor="#FF6B6B"
+                   HorizontalOptions="Center"
+                   IsVisible="{Binding HasError}" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

@@ -1,0 +1,105 @@
+﻿<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="IndentMate.Mobile.Views.SetupPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
+    Title="Initial Setup"
+    BackgroundColor="#1A1A2E">
+
+    <ContentPage.BindingContext>
+        <vm:SetupViewModel />
+    </ContentPage.BindingContext>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="32" Spacing="16" VerticalOptions="FillAndExpand">
+
+            <!-- Logo / Branding -->
+            <Frame BorderColor="#6C63FF" CornerRadius="16" HasShadow="True"
+                   BackgroundColor="#6C63FF" HorizontalOptions="Center"
+                   Margin="0,24,0,0" Padding="0" WidthRequest="80" HeightRequest="80">
+                <Label Text="IM" FontSize="32" FontAttributes="Bold"
+                       TextColor="White" HorizontalTextAlignment="Center"
+                       VerticalTextAlignment="Center" />
+            </Frame>
+
+            <!-- Title -->
+            <Label Text="IndentMate" FontSize="32" FontAttributes="Bold"
+                   TextColor="White" HorizontalOptions="Center" />
+            <Label Text="Initial Setup" FontSize="14"
+                   TextColor="#AAAACC" HorizontalOptions="Center" Margin="0,0,0,24" />
+
+            <!-- LN Environment Picker -->
+            <Label Text="LN Environment" TextColor="White" FontSize="13" FontAttributes="Bold" />
+            <Picker x:Name="EnvironmentPicker"
+                    Title="Select Environment"
+                    TextColor="White"
+                    BackgroundColor="#2A2A3E"
+                    SelectedItem="{Binding LnEnvironment}"
+                    ItemsSource="{Binding LNEnvironmentOptions}">
+            </Picker>
+
+            <!-- Company Code -->
+            <Label Text="Company Code" TextColor="White" FontSize="13" FontAttributes="Bold" />
+            <Entry Placeholder="e.g. 100"
+                   Text="{Binding Company}"
+                   PlaceholderColor="#666" TextColor="White"
+                   BackgroundColor="#2A2A3E"
+                   Keyboard="Numeric"
+                   ClearButtonVisibility="WhileEditing" />
+
+            <!-- Engineer ID -->
+            <Label Text="Engineer ID" TextColor="White" FontSize="13" FontAttributes="Bold" />
+            <Entry Placeholder="Your LN Engineer ID"
+                   Text="{Binding EngineerId}"
+                   PlaceholderColor="#666" TextColor="White"
+                   BackgroundColor="#2A2A3E"
+                   ClearButtonVisibility="WhileEditing" />
+
+            <!-- PIN Entry -->
+            <Label Text="PIN (6 digits)" TextColor="White" FontSize="13" FontAttributes="Bold" />
+            <Entry Placeholder="••••••"
+                   Text="{Binding Pin}"
+                   IsPassword="True"
+                   MaxLength="6"
+                   PlaceholderColor="#666" TextColor="White"
+                   BackgroundColor="#2A2A3E"
+                   Keyboard="Numeric"
+                   ClearButtonVisibility="WhileEditing" />
+
+            <!-- Action Button -->
+            <Button Text="Save &amp; Sync"
+                    Command="{Binding SaveAndSyncCommand}"
+                    IsEnabled="{Binding IsNotBusy}"
+                    BackgroundColor="#6C63FF"
+                    TextColor="White"
+                    CornerRadius="8"
+                    FontSize="16"
+                    FontAttributes="Bold"
+                    Padding="16,12"
+                    Margin="0,24,0,0" />
+
+            <!-- Loading Indicator -->
+            <StackLayout IsVisible="{Binding IsBusy}" HorizontalOptions="Center" Margin="0,16">
+                <ActivityIndicator IsRunning="{Binding IsBusy}"
+                                   Color="#6C63FF"
+                                   Scale="1.2" />
+                <Label Text="{Binding StatusMessage}"
+                       TextColor="#AAAACC"
+                       HorizontalOptions="Center"
+                       FontSize="12"
+                       Margin="0,8,0,0" />
+            </StackLayout>
+
+            <!-- Error Message -->
+            <Label Text="{Binding ErrorMessage}"
+                   TextColor="#FF6B6B"
+                   HorizontalOptions="Center"
+                   IsVisible="{Binding HasError}"
+                   FontSize="13"
+                   FontAttributes="Bold"
+                   Margin="0,16" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>

@@ -1,0 +1,275 @@
+{
+  "Version": 1,
+  "WorkspaceRootPath": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\",
+  "Documents": [
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\Services\\DAY3_IMPLEMENTATION.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IndentMate.Mobile\\Services\\DAY3_IMPLEMENTATION.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\MauiProgram.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IndentMate.Mobile\\MauiProgram.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\COMPLETION_REPORT.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IndentMate.API\\Data\\COMPLETION_REPORT.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\README_DATABASE_SETUP.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IndentMate.API\\Data\\README_DATABASE_SETUP.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\QUICK_REFERENCE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IndentMate.API\\Data\\QUICK_REFERENCE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\00_START_HERE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IndentMate.API\\Data\\00_START_HERE.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\INDEX.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IndentMate.API\\Data\\INDEX.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\DAY2_COMPLETION_SUMMARY.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IndentMate.API\\Data\\DAY2_COMPLETION_SUMMARY.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\VERIFICATION_CHECKLIST.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IndentMate.API\\Data\\VERIFICATION_CHECKLIST.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\WHERE_TO_FIND_EVERYTHING.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IndentMate.API\\Data\\WHERE_TO_FIND_EVERYTHING.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\Services\\LNApiService.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IndentMate.Mobile\\Services\\LNApiService.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\ViewModels\\SetupViewModel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IndentMate.Mobile\\ViewModels\\SetupViewModel.cs||{A6C744A8-0E4A-4FC6-886A-064283054674}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\Views\\SetupPage.xaml||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IndentMate.Mobile\\Views\\SetupPage.xaml||{FA3CD31E-987B-443A-9B81-186104E8DAC1}|"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\Services\\DAY3_SUMMARY.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IndentMate.Mobile\\Services\\DAY3_SUMMARY.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    },
+    {
+      "AbsoluteMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\Services\\DAY3_DELIVERABLES.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}",
+      "RelativeMoniker": "D:0:0:{A2FE74E1-B743-11D0-AE1A-00A0C90FFFC3}|\u003CMiscFiles\u003E|solutionrelative:IndentMate.Mobile\\Services\\DAY3_DELIVERABLES.md||{EFC0BB08-EA7D-40C6-A696-C870411A895B}"
+    }
+  ],
+  "DocumentGroupContainers": [
+    {
+      "Orientation": 0,
+      "VerticalTabListWidth": 256,
+      "DocumentGroups": [
+        {
+          "DockedWidth": 200,
+          "SelectedChildIndex": 5,
+          "Children": [
+            {
+              "$type": "Document",
+              "DocumentIndex": 11,
+              "Title": "SetupViewModel.cs",
+              "DocumentMoniker": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\ViewModels\\SetupViewModel.cs",
+              "RelativeDocumentMoniker": "IndentMate.Mobile\\ViewModels\\SetupViewModel.cs",
+              "ToolTip": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\ViewModels\\SetupViewModel.cs",
+              "RelativeToolTip": "IndentMate.Mobile\\ViewModels\\SetupViewModel.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAMBdwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-05-27T05:15:02.368Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 10,
+              "Title": "LNApiService.cs",
+              "DocumentMoniker": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\Services\\LNApiService.cs",
+              "RelativeDocumentMoniker": "IndentMate.Mobile\\Services\\LNApiService.cs",
+              "ToolTip": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\Services\\LNApiService.cs",
+              "RelativeToolTip": "IndentMate.Mobile\\Services\\LNApiService.cs",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAAkDAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-05-27T05:14:44.152Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 9,
+              "Title": "WHERE_TO_FIND_EVERYTHING.md",
+              "DocumentMoniker": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\WHERE_TO_FIND_EVERYTHING.md",
+              "RelativeDocumentMoniker": "IndentMate.API\\Data\\WHERE_TO_FIND_EVERYTHING.md",
+              "ToolTip": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\WHERE_TO_FIND_EVERYTHING.md",
+              "RelativeToolTip": "IndentMate.API\\Data\\WHERE_TO_FIND_EVERYTHING.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAHYBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-27T05:12:52.759Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 2,
+              "Title": "COMPLETION_REPORT.md",
+              "DocumentMoniker": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\COMPLETION_REPORT.md",
+              "RelativeDocumentMoniker": "IndentMate.API\\Data\\COMPLETION_REPORT.md",
+              "ToolTip": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\COMPLETION_REPORT.md",
+              "RelativeToolTip": "IndentMate.API\\Data\\COMPLETION_REPORT.md",
+              "ViewState": "AgIAAI8BAAAAAAAAAAAAAKQBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-27T05:12:03.371Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 1,
+              "Title": "MauiProgram.cs",
+              "DocumentMoniker": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\MauiProgram.cs",
+              "RelativeDocumentMoniker": "IndentMate.Mobile\\MauiProgram.cs",
+              "ToolTip": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\MauiProgram.cs",
+              "RelativeToolTip": "IndentMate.Mobile\\MauiProgram.cs",
+              "ViewState": "AgIAABIAAAAAAAAAAAAgwA8AAAAkAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.000738|",
+              "WhenOpened": "2026-05-27T05:05:47.595Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 0,
+              "Title": "DAY3_IMPLEMENTATION.md",
+              "DocumentMoniker": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\Services\\DAY3_IMPLEMENTATION.md",
+              "RelativeDocumentMoniker": "IndentMate.Mobile\\Services\\DAY3_IMPLEMENTATION.md",
+              "ToolTip": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\Services\\DAY3_IMPLEMENTATION.md",
+              "RelativeToolTip": "IndentMate.Mobile\\Services\\DAY3_IMPLEMENTATION.md",
+              "ViewState": "AgIAAP4AAAAAAAAAAAAAAAoBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-27T05:16:51.506Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 12,
+              "Title": "SetupPage.xaml",
+              "DocumentMoniker": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\Views\\SetupPage.xaml",
+              "RelativeDocumentMoniker": "IndentMate.Mobile\\Views\\SetupPage.xaml",
+              "ToolTip": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\Views\\SetupPage.xaml",
+              "RelativeToolTip": "IndentMate.Mobile\\Views\\SetupPage.xaml",
+              "ViewState": "AgIAAA0AAAAAAAAAAIBJwAAAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.003549|",
+              "WhenOpened": "2026-05-27T05:15:21.856Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 14,
+              "Title": "DAY3_DELIVERABLES.md",
+              "DocumentMoniker": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\Services\\DAY3_DELIVERABLES.md",
+              "RelativeDocumentMoniker": "IndentMate.Mobile\\Services\\DAY3_DELIVERABLES.md",
+              "ToolTip": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\Services\\DAY3_DELIVERABLES.md",
+              "RelativeToolTip": "IndentMate.Mobile\\Services\\DAY3_DELIVERABLES.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAJUBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-27T05:19:04.221Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 13,
+              "Title": "DAY3_SUMMARY.md",
+              "DocumentMoniker": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\Services\\DAY3_SUMMARY.md",
+              "RelativeDocumentMoniker": "IndentMate.Mobile\\Services\\DAY3_SUMMARY.md",
+              "ToolTip": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.Mobile\\Services\\DAY3_SUMMARY.md",
+              "RelativeToolTip": "IndentMate.Mobile\\Services\\DAY3_SUMMARY.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAOcBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-27T05:17:50.634Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 4,
+              "Title": "QUICK_REFERENCE.md",
+              "DocumentMoniker": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\QUICK_REFERENCE.md",
+              "RelativeDocumentMoniker": "IndentMate.API\\Data\\QUICK_REFERENCE.md",
+              "ToolTip": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\QUICK_REFERENCE.md",
+              "RelativeToolTip": "IndentMate.API\\Data\\QUICK_REFERENCE.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAFYBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-27T05:09:08.379Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 3,
+              "Title": "README_DATABASE_SETUP.md",
+              "DocumentMoniker": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\README_DATABASE_SETUP.md",
+              "RelativeDocumentMoniker": "IndentMate.API\\Data\\README_DATABASE_SETUP.md",
+              "ToolTip": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\README_DATABASE_SETUP.md",
+              "RelativeToolTip": "IndentMate.API\\Data\\README_DATABASE_SETUP.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAALkAAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-27T05:07:13.934Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 5,
+              "Title": "00_START_HERE.md",
+              "DocumentMoniker": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\00_START_HERE.md",
+              "RelativeDocumentMoniker": "IndentMate.API\\Data\\00_START_HERE.md",
+              "ToolTip": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\00_START_HERE.md",
+              "RelativeToolTip": "IndentMate.API\\Data\\00_START_HERE.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAAHUBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-27T05:10:32.829Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 6,
+              "Title": "INDEX.md",
+              "DocumentMoniker": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\INDEX.md",
+              "RelativeDocumentMoniker": "IndentMate.API\\Data\\INDEX.md",
+              "ToolTip": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\INDEX.md",
+              "RelativeToolTip": "IndentMate.API\\Data\\INDEX.md",
+              "ViewState": "AgIAADsBAAAAAAAAAAAAAG8BAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-27T05:11:15.24Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 7,
+              "Title": "DAY2_COMPLETION_SUMMARY.md",
+              "DocumentMoniker": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\DAY2_COMPLETION_SUMMARY.md",
+              "RelativeDocumentMoniker": "IndentMate.API\\Data\\DAY2_COMPLETION_SUMMARY.md",
+              "ToolTip": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\DAY2_COMPLETION_SUMMARY.md",
+              "RelativeToolTip": "IndentMate.API\\Data\\DAY2_COMPLETION_SUMMARY.md",
+              "ViewState": "AgIAABIAAAAAAAAAAAAAAAsAAAA1AAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-27T05:08:47.829Z",
+              "EditorCaption": ""
+            },
+            {
+              "$type": "Document",
+              "DocumentIndex": 8,
+              "Title": "VERIFICATION_CHECKLIST.md",
+              "DocumentMoniker": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\VERIFICATION_CHECKLIST.md",
+              "RelativeDocumentMoniker": "IndentMate.API\\Data\\VERIFICATION_CHECKLIST.md",
+              "ToolTip": "C:\\Users\\Hemanth\\OneDrive\\Desktop\\IndentMate\\IndentMate.API\\Data\\VERIFICATION_CHECKLIST.md",
+              "RelativeToolTip": "IndentMate.API\\Data\\VERIFICATION_CHECKLIST.md",
+              "ViewState": "AgIAAAAAAAAAAAAAAAAAADsBAAAAAAAAAAAAAA==",
+              "Icon": "ae27a6b0-e345-4288-96df-5eaf394ee369.001818|",
+              "WhenOpened": "2026-05-27T05:09:37.655Z",
+              "EditorCaption": ""
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

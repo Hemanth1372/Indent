@@ -1,0 +1,88 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="IndentMate.Mobile.Views.IndentHeaderPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
+    Title="New Indent"
+    BackgroundColor="#1A1A2E">
+
+    <ContentPage.BindingContext>
+        <vm:IndentHeaderViewModel />
+    </ContentPage.BindingContext>
+
+    <ScrollView>
+        <VerticalStackLayout Padding="16" Spacing="14">
+
+            <!-- Engineer Type -->
+            <Label Text="Engineer Type" TextColor="White" FontSize="13" />
+            <Picker Title="Select Type"
+                    ItemsSource="{Binding EngineerTypes}"
+                    SelectedItem="{Binding SelectedEngineerType}"
+                    TextColor="White" BackgroundColor="#2A2A3E" />
+
+            <!-- Project -->
+            <Label Text="Project" TextColor="White" FontSize="13" />
+            <Picker Title="Select Project"
+                    ItemsSource="{Binding Projects}"
+                    SelectedItem="{Binding SelectedProject}"
+                    ItemDisplayBinding="{Binding Description}"
+                    TextColor="White" BackgroundColor="#2A2A3E" />
+
+            <!-- Indent Type (SIE only) -->
+            <Label Text="Type of Indent" TextColor="White" FontSize="13"
+                   IsVisible="{Binding IsSIE}" />
+            <Picker Title="Issue / Issue Return"
+                    ItemsSource="{Binding IndentTypes}"
+                    SelectedItem="{Binding SelectedIndentType}"
+                    TextColor="White" BackgroundColor="#2A2A3E"
+                    IsVisible="{Binding IsSIE}" />
+
+            <!-- Warehouse (SIE only) -->
+            <Label Text="Warehouse" TextColor="White" FontSize="13"
+                   IsVisible="{Binding IsSIE}" />
+            <Picker Title="Select Warehouse"
+                    ItemsSource="{Binding Warehouses}"
+                    SelectedItem="{Binding SelectedWarehouse}"
+                    ItemDisplayBinding="{Binding Description}"
+                    TextColor="White" BackgroundColor="#2A2A3E"
+                    IsVisible="{Binding IsSIE}" />
+
+            <!-- From Location (SIE only) -->
+            <Label Text="From Location" TextColor="White" FontSize="13"
+                   IsVisible="{Binding IsSIE}" />
+            <Picker Title="Select Location"
+                    ItemsSource="{Binding FromLocations}"
+                    SelectedItem="{Binding SelectedFromLocation}"
+                    ItemDisplayBinding="{Binding Description}"
+                    TextColor="White" BackgroundColor="#2A2A3E"
+                    IsVisible="{Binding IsSIE}" />
+
+            <!-- Service/Rental Order (SER only) -->
+            <Label Text="Service / Rental Order" TextColor="White" FontSize="13"
+                   IsVisible="{Binding IsSER}" />
+            <Picker Title="Select Order"
+                    ItemsSource="{Binding ServiceOrders}"
+                    SelectedItem="{Binding SelectedServiceOrder}"
+                    ItemDisplayBinding="{Binding OrderNo}"
+                    TextColor="White" BackgroundColor="#2A2A3E"
+                    IsVisible="{Binding IsSER}" />
+
+            <!-- Equipment (SER, read-only) -->
+            <Label Text="Equipment" TextColor="White" FontSize="13"
+                   IsVisible="{Binding IsSER}" />
+            <Entry Text="{Binding EquipmentDisplay}"
+                   IsReadOnly="True"
+                   TextColor="#AAAACC" BackgroundColor="#1E1E2E"
+                   IsVisible="{Binding IsSER}" />
+
+            <Button Text="Create Request"
+                    Command="{Binding CreateRequestCommand}"
+                    BackgroundColor="#6C63FF"
+                    TextColor="White"
+                    CornerRadius="8"
+                    Margin="0,8,0,0" />
+
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
