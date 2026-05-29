@@ -1,40 +1,25 @@
 import { Button, Card, Form, Input, Typography, message } from 'antd'
 import { useState } from 'react'
 import { useNavigate } from 'react-router-dom'
-import { api } from '../services/api'
-import { useAuthStore } from '../store/useAuthStore'
+import { useAuth } from '../context/AuthContext'
 
 type LoginFormValues = {
   engineerId: string
   password: string
 }
 
-type LoginResponse = {
-  token: string
-  engineer?: {
-    engineerId: string
-    name?: string
-    role?: string
-  }
-}
-
 export default function Login() {
   const [loading, setLoading] = useState(false)
   const navigate = useNavigate()
-  const login = useAuthStore((state) => state.login)
+  const { login } = useAuth()
 
   async function handleSubmit(values: LoginFormValues) {
     setLoading(true)
     try {
-      const { data } = await api.post<LoginResponse>('/api/auth/login', values)
-      login(data.token, {
-        engineerId: data.engineer?.engineerId ?? values.engineerId,
-        name: data.engineer?.name,
-        role: data.engineer?.role,
-      })
-      navigate('/dashboard')
+      login(values)
+      navigate('/')
     } catch {
-      message.error('Login failed. Check your Engineer ID and password.')
+      message.error('Login failed. Check your credentials.')
     } finally {
       setLoading(false)
     }

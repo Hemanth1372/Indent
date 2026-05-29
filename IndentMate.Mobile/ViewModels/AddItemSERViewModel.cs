@@ -174,5 +174,7 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
         {
             Materials.Add(material);
         }
+
+        SelectedMaterial ??= Materials.FirstOrDefault();
     }
 }

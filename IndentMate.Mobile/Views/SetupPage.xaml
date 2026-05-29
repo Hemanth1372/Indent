@@ -69,7 +69,7 @@
                    ClearButtonVisibility="WhileEditing" />
 
             <!-- Action Button -->
-            <Button Text="Save &amp; Sync"
+            <Button Text="Save Local Setup"
                     Command="{Binding SaveAndSyncCommand}"
                     IsEnabled="{Binding IsNotBusy}"
                     BackgroundColor="#6C63FF"

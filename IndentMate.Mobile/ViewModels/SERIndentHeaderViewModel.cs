@@ -106,6 +106,8 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
             {
                 Projects.Add(project);
             }
+
+            SelectedProject ??= Projects.FirstOrDefault();
         });
     }
 
@@ -140,6 +142,8 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
         {
             Orders.Add(order);
         }
+
+        SelectedOrder ??= Orders.FirstOrDefault();
     }
 }
 

@@ -81,6 +81,30 @@ public partial class LoginViewModel : BaseViewModel
     }
 
     [RelayCommand]
+    private void AddDigit(string? digit)
+    {
+        if (string.IsNullOrWhiteSpace(digit) || PinInput.Length >= PinLength)
+        {
+            return;
+        }
+
+        PinInput += digit;
+        ResetInactivityTimer();
+    }
+
+    [RelayCommand]
+    private void Backspace()
+    {
+        if (PinInput.Length == 0)
+        {
+            return;
+        }
+
+        PinInput = PinInput[..^1];
+        ResetInactivityTimer();
+    }
+
+    [RelayCommand]
     private async Task GoToSetupAsync()
     {
         await Shell.Current.GoToAsync("//setup");

@@ -236,6 +236,8 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
         {
             Locations.Add(location);
         }
+
+        SelectedLocation ??= Locations.FirstOrDefault();
     }
 
     private async Task LoadActivitiesAsync()
@@ -259,6 +261,8 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
         {
             Activities.Add(activity);
         }
+
+        SelectedActivity ??= Activities.FirstOrDefault();
     }
 
     private async Task LoadMaterialsAsync()
@@ -277,6 +281,8 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
         {
             Materials.Add(material);
         }
+
+        SelectedMaterial ??= Materials.FirstOrDefault();
     }
 
     private static bool IsReleased(string value) =>

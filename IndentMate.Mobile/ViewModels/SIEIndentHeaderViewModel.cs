@@ -23,9 +23,18 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
     [ObservableProperty] private bool _isVirtualWarehouse;
     [ObservableProperty] private bool _isAutoWarehouse;
     [ObservableProperty] private string _autoWarehouseDisplay = string.Empty;
+    [ObservableProperty] private bool _showProjectOptions;
+    [ObservableProperty] private bool _showIndentTypeOptions;
+    [ObservableProperty] private bool _showWarehouseOptions;
+    [ObservableProperty] private bool _showFromLocationOptions;
+    [ObservableProperty] private bool _showToContractorOptions;
 
     public bool ShowWarehousePicker => !IsAutoWarehouse;
     public bool ShowAutoWarehouse => IsAutoWarehouse;
+    public string SelectedProjectDisplay => FormatProject(SelectedProject);
+    public string SelectedWarehouseDisplay => FormatWarehouse(SelectedWarehouse);
+    public string SelectedFromLocationDisplay => SelectedFromLocation?.DisplayName ?? "Select from location";
+    public string SelectedToContractorDisplay => SelectedToContractor?.DisplayName ?? "Select to contractor";
 
     public SIEIndentHeaderViewModel()
         : this(new DatabaseService(Path.Combine(FileSystem.AppDataDirectory, "indentmate.db")))
@@ -89,20 +98,82 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
         });
     }
 
+    [RelayCommand]
+    private void SelectProject()
+    {
+        if (Projects.Count == 0)
+            return;
+
+        ToggleDropdown(nameof(ShowProjectOptions));
+    }
+
+    [RelayCommand]
+    private void SelectIndentType()
+    {
+        ToggleDropdown(nameof(ShowIndentTypeOptions));
+    }
+
+    [RelayCommand]
+    private void SelectWarehouse()
+    {
+        if (IsAutoWarehouse)
+            return;
+
+        if (Warehouses.Count == 0)
+            return;
+
+        ToggleDropdown(nameof(ShowWarehouseOptions));
+    }
+
+    [RelayCommand]
+    private void SelectFromLocation()
+    {
+        if (FromLocations.Count == 0)
+            return;
+
+        ToggleDropdown(nameof(ShowFromLocationOptions));
+    }
+
+    [RelayCommand]
+    private void SelectToContractor()
+    {
+        if (ToContractors.Count == 0)
+            return;
+
+        ToggleDropdown(nameof(ShowToContractorOptions));
+    }
+
     partial void OnSelectedProjectChanged(LocalProject? value)
     {
+        ShowProjectOptions = false;
+        OnPropertyChanged(nameof(SelectedProjectDisplay));
         _ = ReloadWarehousesAsync();
     }
 
     partial void OnSelectedWarehouseChanged(LocalWarehouse? value)
     {
+        ShowWarehouseOptions = false;
         IsVirtualWarehouse = value?.IsVirtual == true;
+        OnPropertyChanged(nameof(SelectedWarehouseDisplay));
         _ = ReloadFromToOptionsAsync();
     }
 
     partial void OnSelectedIndentTypeChanged(string value)
     {
+        ShowIndentTypeOptions = false;
         _ = ReloadFromToOptionsAsync();
+    }
+
+    partial void OnSelectedFromLocationChanged(SelectionOption? value)
+    {
+        ShowFromLocationOptions = false;
+        OnPropertyChanged(nameof(SelectedFromLocationDisplay));
+    }
+
+    partial void OnSelectedToContractorChanged(SelectionOption? value)
+    {
+        ShowToContractorOptions = false;
+        OnPropertyChanged(nameof(SelectedToContractorDisplay));
     }
 
     partial void OnIsAutoWarehouseChanged(bool value)
@@ -133,6 +204,8 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
             {
                 Projects.Add(project);
             }
+
+            SelectedProject ??= Projects.FirstOrDefault();
         });
     }
 
@@ -172,6 +245,7 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
             IsAutoWarehouse = true;
             SelectedWarehouse = virtualWarehouses[0];
             AutoWarehouseDisplay = $"{SelectedWarehouse.WarehouseCode} - {SelectedWarehouse.Description}";
+            await ReloadFromToOptionsAsync();
             return;
         }
 
@@ -179,6 +253,8 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
         {
             Warehouses.Add(warehouse);
         }
+
+        SelectedWarehouse ??= Warehouses.FirstOrDefault();
 
         await ReloadFromToOptionsAsync();
     }
@@ -230,11 +306,45 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
                 ToContractors.Add(SelectionOption.FromBusinessPartner(partner));
             }
         }
+
+        SelectedFromLocation ??= FromLocations.FirstOrDefault();
+        SelectedToContractor ??= ToContractors.FirstOrDefault();
     }
 
     private static bool IsCategory(LocalWarehouseLocation location, string category)
     {
         return string.Equals(location.Category, category, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static string FormatProject(LocalProject? project)
+    {
+        if (project is null) return "Select project";
+        return string.IsNullOrWhiteSpace(project.Description)
+            ? project.ProjectId
+            : $"{project.ProjectId} - {project.Description}";
+    }
+
+    private static string FormatWarehouse(LocalWarehouse? warehouse)
+    {
+        if (warehouse is null) return "Select warehouse";
+        return string.IsNullOrWhiteSpace(warehouse.Description)
+            ? warehouse.WarehouseCode
+            : $"{warehouse.WarehouseCode} - {warehouse.Description}";
+    }
+
+    private void ToggleDropdown(string dropdownName)
+    {
+        var nextProject = dropdownName == nameof(ShowProjectOptions) && !ShowProjectOptions;
+        var nextIndentType = dropdownName == nameof(ShowIndentTypeOptions) && !ShowIndentTypeOptions;
+        var nextWarehouse = dropdownName == nameof(ShowWarehouseOptions) && !ShowWarehouseOptions;
+        var nextFromLocation = dropdownName == nameof(ShowFromLocationOptions) && !ShowFromLocationOptions;
+        var nextToContractor = dropdownName == nameof(ShowToContractorOptions) && !ShowToContractorOptions;
+
+        ShowProjectOptions = nextProject;
+        ShowIndentTypeOptions = nextIndentType;
+        ShowWarehouseOptions = nextWarehouse;
+        ShowFromLocationOptions = nextFromLocation;
+        ShowToContractorOptions = nextToContractor;
     }
 }
 
