@@ -1,12 +1,10 @@
 import {
   ChevronDown,
   ChevronRight,
-  ClipboardList,
   Grid2X2,
   Home,
   LayoutDashboard,
   LogOut,
-  PieChart,
 } from 'lucide-react'
 import { useState } from 'react'
 import { Link, NavLink, useNavigate } from 'react-router-dom'
@@ -20,12 +18,6 @@ const mastersGroups = [
       'User Master',
       'Role Master',
       'Project Master',
-      'Units Master',
-      'Hindrance Master',
-      'Node Master',
-      'Wire Master',
-      'Addl Item Master',
-      'Dism Item Master',
     ],
   },
   {
@@ -34,11 +26,6 @@ const mastersGroups = [
     items: [
       'State Master',
       'Circle Master',
-      'Division Master',
-      'Sub Division Master',
-      'District Master',
-      'Sub Station Master',
-      'Feeder Master',
     ],
   },
   {
@@ -46,15 +33,6 @@ const mastersGroups = [
     label: 'Project',
     items: [
       'Employee Master',
-      'Erection Supply Link',
-      'Project Activity Master',
-      'Project Activity Wire',
-      'Project Activity Node',
-      'Proj Activity Addl Item',
-      'Proj Activity Dism Item',
-      'Activity Node BOQ',
-      'Activity Addl BOQ',
-      'Activity Dism BOQ',
       'Project BOQ Supply',
       'Project BOQ Erection',
       'Project Hindrance Master',
@@ -180,22 +158,6 @@ export default function Sidebar({ open }: SidebarProps) {
           </div>
         )}
 
-        <NavLink
-          className="flex h-12 items-center gap-4 px-6 text-sm font-semibold text-slate-300 hover:bg-white/5 hover:text-white"
-          to="/transactions"
-        >
-          <ClipboardList size={19} />
-          <span className="flex-1">Transactions</span>
-          <ChevronRight size={16} />
-        </NavLink>
-        <NavLink
-          className="flex h-12 items-center gap-4 px-6 text-sm font-semibold text-slate-300 hover:bg-white/5 hover:text-white"
-          to="/reports"
-        >
-          <PieChart size={19} />
-          <span className="flex-1">Reports</span>
-          <ChevronRight size={16} />
-        </NavLink>
       </nav>
 
       <div className="border-t border-white/5 px-24 py-4 text-[11px] text-slate-400">

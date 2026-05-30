@@ -49,6 +49,278 @@ a {
   font-weight: 800;
 }
 
+.kiosk-login {
+  display: flex;
+  min-height: 100vh;
+  background: #f4f7fb;
+  color: #172033;
+}
+
+.kiosk-sidebar {
+  display: flex;
+  width: 350px;
+  margin: 28px 0 28px 30px;
+  padding: 24px;
+  flex-direction: column;
+  border: 1px solid #e5eaf2;
+  border-radius: 18px;
+  background: #ffffff;
+  box-shadow: 0 1px 4px rgba(15, 23, 42, 0.06);
+}
+
+.kiosk-sidebar h2 {
+  margin: 0 0 20px;
+  color: #6b7280;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0;
+  text-transform: uppercase;
+}
+
+.kiosk-recent-list {
+  display: grid;
+  gap: 8px;
+}
+
+.kiosk-user-card {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 84px;
+  grid-template-columns: 54px 1fr 24px;
+  gap: 14px;
+  align-items: center;
+  padding: 12px 12px 12px 14px;
+  border: 1px solid #e5eaf2;
+  border-radius: 14px;
+  background: #f8fafc;
+  color: inherit;
+  cursor: pointer;
+  font: inherit;
+  text-align: left;
+}
+
+.kiosk-user-card.selected,
+.kiosk-user-card:hover {
+  border-color: #b7d3f6;
+  background: #eef6ff;
+}
+
+.kiosk-avatar {
+  display: grid;
+  width: 54px;
+  height: 54px;
+  place-items: center;
+  border-radius: 999px;
+  background: #edf4ff;
+  color: #1f6bd8;
+}
+
+.kiosk-user-copy {
+  display: grid;
+  min-width: 0;
+  gap: 4px;
+}
+
+.kiosk-user-copy strong,
+.kiosk-user-copy span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.kiosk-user-copy strong {
+  font-size: 18px;
+}
+
+.kiosk-user-copy span {
+  color: #6f7b8c;
+  font-size: 14px;
+}
+
+.kiosk-remove {
+  display: grid;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #a0aec0;
+  cursor: pointer;
+}
+
+.kiosk-remove:hover {
+  background: #e5eaf2;
+  color: #536173;
+}
+
+.kiosk-different-user {
+  display: flex;
+  width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  margin-top: auto;
+  padding: 12px;
+  border: 1px solid #d6dee9;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #1f6bd8;
+  cursor: pointer;
+  font-weight: 800;
+}
+
+.kiosk-main {
+  position: relative;
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.kiosk-topbar {
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 28px 30px;
+  color: #a0aec0;
+}
+
+.kiosk-brand {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  color: #172033;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.kiosk-center {
+  display: flex;
+  width: 420px;
+  max-width: calc(100vw - 48px);
+  margin: auto;
+  flex-direction: column;
+  align-items: center;
+}
+
+.kiosk-large-avatar {
+  display: grid;
+  width: 96px;
+  height: 96px;
+  place-items: center;
+  border-radius: 24px;
+  background: #1f6bd8;
+  color: #ffffff;
+  font-size: 32px;
+  font-weight: 800;
+}
+
+.kiosk-center h1 {
+  margin: 20px 0 6px;
+  font-size: 28px;
+}
+
+.kiosk-center p {
+  margin: 0 0 26px;
+  color: #6f7b8c;
+}
+
+.kiosk-manual {
+  display: grid;
+  width: 100%;
+  gap: 16px;
+  margin-bottom: 40px;
+  text-align: center;
+}
+
+.kiosk-manual input {
+  width: 100%;
+  padding: 16px;
+  border: 1px solid #e5eaf2;
+  border-radius: 8px;
+  color: #172033;
+  font: inherit;
+  font-size: 17px;
+  text-align: center;
+}
+
+.kiosk-pin-label {
+  margin-bottom: 16px;
+  color: #8a94a6;
+  font-size: 13px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.kiosk-dots {
+  display: flex;
+  gap: 14px;
+  margin-bottom: 28px;
+}
+
+.kiosk-dots span {
+  width: 16px;
+  height: 16px;
+  border-radius: 999px;
+  background: #ced6e0;
+}
+
+.kiosk-dots span.filled {
+  background: #1f6bd8;
+}
+
+.kiosk-error {
+  min-height: 20px;
+  margin-bottom: 12px;
+  color: #d92d20;
+  font-weight: 700;
+}
+
+.kiosk-keypad {
+  display: grid;
+  width: 280px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+.kiosk-keypad button {
+  display: grid;
+  height: 60px;
+  place-items: center;
+  border: 1px solid #d6dee9;
+  border-radius: 12px;
+  background: #ffffff;
+  color: #172033;
+  cursor: pointer;
+  font: inherit;
+  font-size: 24px;
+  font-weight: 700;
+}
+
+.kiosk-login-button {
+  width: 280px;
+  height: 56px;
+  margin-top: 28px;
+  border: 0;
+  border-radius: 14px;
+  background: #1f6bd8;
+  color: #ffffff;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.kiosk-login-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
 .app-shell {
   min-height: 100vh;
 }

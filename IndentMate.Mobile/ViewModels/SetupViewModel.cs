@@ -2,6 +2,7 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using IndentMate.Mobile.Data;
 using IndentMate.Mobile.Services;
+using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
 
@@ -13,7 +14,9 @@ namespace IndentMate.Mobile.ViewModels;
 /// </summary>
 public partial class SetupViewModel : BaseViewModel
 {
+    private const string DeviceSetupCompleteKey = "indentmate_device_setup_complete";
     private readonly DatabaseService _databaseService;
+    private readonly HttpClient _httpClient;
 
     [ObservableProperty] private string _lnEnvironment = "TST";
     [ObservableProperty] private string _company = string.Empty;
@@ -32,6 +35,11 @@ public partial class SetupViewModel : BaseViewModel
     public SetupViewModel()
     {
         _databaseService = new DatabaseService(Path.Combine(FileSystem.AppDataDirectory, "indentmate.db"));
+        _httpClient = new HttpClient
+        {
+            BaseAddress = new Uri("http://localhost:4000"),
+            Timeout = TimeSpan.FromSeconds(10)
+        };
         SelectedLNEnvironmentOption = LNEnvironmentOptions.First(option => option.Code == LnEnvironment);
     }
 
@@ -49,7 +57,9 @@ public partial class SetupViewModel : BaseViewModel
             if (string.IsNullOrWhiteSpace(Company))
                 throw new InvalidOperationException("Company code is required (e.g., 100).");
 
-            if (string.IsNullOrWhiteSpace(EngineerId))
+            var normalizedEngineerId = EngineerId.Trim();
+
+            if (string.IsNullOrWhiteSpace(normalizedEngineerId))
                 throw new InvalidOperationException("Engineer ID is required.");
 
             if (string.IsNullOrWhiteSpace(Pin) || Pin.Length < 6)
@@ -59,19 +69,20 @@ public partial class SetupViewModel : BaseViewModel
             var pinHash = LNApiService.ComputeSHA256Hash(Pin);
             await SecureStorage.Default.SetAsync("ln_environment", LnEnvironment);
             await SecureStorage.Default.SetAsync("company", Company);
-            await SecureStorage.Default.SetAsync("engineer_id", EngineerId);
-            await SecureStorage.Default.SetAsync("engineer_name", EngineerId);
+            await SecureStorage.Default.SetAsync("engineer_id", normalizedEngineerId);
+            await SecureStorage.Default.SetAsync("engineer_name", normalizedEngineerId);
             await SecureStorage.Default.SetAsync("pin_hash", pinHash);
             await SecureStorage.Default.SetAsync("jwt_token", "local-development-token");
+            Preferences.Default.Set(DeviceSetupCompleteKey, true);
 
-            var responsibilityCode = EngineerId.StartsWith("SER", StringComparison.OrdinalIgnoreCase)
+            var responsibilityCode = normalizedEngineerId.StartsWith("SER", StringComparison.OrdinalIgnoreCase)
                 ? "SER"
                 : "SIE";
 
             var engineer = new LocalEngineer
             {
-                EngineerId = EngineerId,
-                Name = EngineerId,
+                EngineerId = normalizedEngineerId,
+                Name = normalizedEngineerId,
                 PinHash = pinHash,
                 LNEnvironment = LnEnvironment,
                 Company = Company,
@@ -79,12 +90,31 @@ public partial class SetupViewModel : BaseViewModel
                 LastSyncAt = DateTime.UtcNow
             };
             await _databaseService.SaveAsync(engineer);
+            await TrySyncPinToAdminApiAsync(normalizedEngineerId, Pin);
 
             StatusMessage = "Preparing local data...";
-            await SeedLocalDataAsync(EngineerId);
+            await SeedLocalDataAsync(normalizedEngineerId);
 
             await Shell.Current.GoToAsync("//login");
         });
+    }
+
+    private async Task TrySyncPinToAdminApiAsync(string engineerId, string pin)
+    {
+        try
+        {
+            StatusMessage = "Syncing PIN to admin portal...";
+            await _httpClient.PostAsJsonAsync("/api/users/sync-pin", new
+            {
+                login_name = engineerId,
+                employee_name = engineerId,
+                current_pin = pin
+            });
+        }
+        catch
+        {
+            // Setup remains local-first if the admin API is unavailable.
+        }
     }
 
     partial void OnSelectedLNEnvironmentOptionChanged(LNEnvironmentOption? value)

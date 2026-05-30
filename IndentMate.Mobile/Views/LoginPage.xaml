@@ -54,12 +54,98 @@
                 WidthRequest="44" />
         </Grid>
 
-        <Grid Grid.Row="1" RowDefinitions="*,Auto,*">
-            <VerticalStackLayout Grid.Row="1" Spacing="20">
+        <Grid Grid.Row="1" ColumnDefinitions="Auto,*" ColumnSpacing="24">
+            <Border
+                BackgroundColor="White"
+                IsVisible="{Binding HasRecentEngineers}"
+                Padding="18"
+                Stroke="#E5EAF2"
+                StrokeShape="RoundRectangle 18"
+                StrokeThickness="1"
+                VerticalOptions="Fill"
+                WidthRequest="280">
+                <VerticalStackLayout Spacing="14">
+                    <Label
+                        FontAttributes="Bold"
+                        FontSize="13"
+                        Text="RECENT LOGINS"
+                        TextColor="#6B7280" />
+
+                    <CollectionView
+                        ItemsSource="{Binding RecentEngineers}"
+                        SelectionMode="None">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate>
+                                <Border
+                                    Margin="0,0,0,8"
+                                    Padding="12"
+                                    BackgroundColor="#F8FAFC"
+                                    Stroke="#E5EAF2"
+                                    StrokeShape="RoundRectangle 12"
+                                    StrokeThickness="1">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectEngineerCommand}"
+                                            CommandParameter="{Binding .}" />
+                                    </Border.GestureRecognizers>
+
+                                    <Grid ColumnDefinitions="42,*,Auto" ColumnSpacing="12">
+                                        <Border
+                                            BackgroundColor="#EBF3FF"
+                                            HeightRequest="42"
+                                            StrokeShape="RoundRectangle 21"
+                                            StrokeThickness="0"
+                                            WidthRequest="42">
+                                            <Label
+                                                FontAttributes="Bold"
+                                                FontSize="14"
+                                                HorizontalOptions="Center"
+                                                Text="IM"
+                                                TextColor="#1565D8"
+                                                VerticalOptions="Center" />
+                                        </Border>
+
+                                        <VerticalStackLayout Grid.Column="1" Spacing="2" VerticalOptions="Center">
+                                            <Label
+                                                FontAttributes="Bold"
+                                                FontSize="14"
+                                                LineBreakMode="TailTruncation"
+                                                Text="{Binding Name}"
+                                                TextColor="#172033" />
+                                            <Label
+                                                FontSize="12"
+                                                Text="{Binding EngineerId, StringFormat='ID: {0}'}"
+                                                TextColor="#7B8794" />
+                                        </VerticalStackLayout>
+
+                                        <Button
+                                            Grid.Column="2"
+                                            Padding="0"
+                                            BackgroundColor="Transparent"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.RemoveEngineerCommand}"
+                                            CommandParameter="{Binding .}"
+                                            FontAttributes="Bold"
+                                            FontSize="12"
+                                            HeightRequest="24"
+                                            Text="X"
+                                            TextColor="#A0AEC0"
+                                            VerticalOptions="Center"
+                                            WidthRequest="24" />
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+                </VerticalStackLayout>
+            </Border>
+
+            <Grid Grid.Column="1" RowDefinitions="*,Auto,*">
+                <VerticalStackLayout Grid.Row="1" Spacing="20">
                 <Border
                     BackgroundColor="#1565D8"
                     HeightRequest="112"
                     HorizontalOptions="Center"
+                    IsVisible="{Binding HasSelectedEngineer}"
                     StrokeShape="RoundRectangle 24"
                     StrokeThickness="0"
                     WidthRequest="112">
@@ -67,10 +153,46 @@
                         FontAttributes="Bold"
                         FontSize="36"
                         HorizontalOptions="Center"
-                        Text="IM"
+                        Text="{Binding SelectedInitials}"
                         TextColor="White"
                         VerticalOptions="Center" />
                 </Border>
+
+                <VerticalStackLayout Spacing="3" HorizontalOptions="Center" IsVisible="{Binding HasSelectedEngineer}">
+                    <Label
+                        FontAttributes="Bold"
+                        FontSize="18"
+                        HorizontalOptions="Center"
+                        Text="{Binding EngineerName}"
+                        TextColor="#172033" />
+                    <Label
+                        FontSize="13"
+                        HorizontalOptions="Center"
+                        Text="{Binding EngineerId, StringFormat='User ID: {0}'}"
+                        TextColor="#8A94A6" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout
+                    HorizontalOptions="Center"
+                    IsVisible="{Binding ShowManualEngineerEntry}"
+                    MaximumWidthRequest="420"
+                    Spacing="12"
+                    WidthRequest="420">
+                    <Label
+                        FontAttributes="Bold"
+                        FontSize="22"
+                        HorizontalOptions="Center"
+                        Text="Welcome to IndentMate"
+                        TextColor="#172033" />
+                    <Entry
+                        BackgroundColor="White"
+                        ClearButtonVisibility="WhileEditing"
+                        HorizontalTextAlignment="Center"
+                        Keyboard="Text"
+                        Placeholder="Enter User ID"
+                        Text="{Binding ManualEngineerId, Mode=TwoWay}"
+                        TextColor="#172033" />
+                </VerticalStackLayout>
 
                 <VerticalStackLayout Spacing="16" Margin="0,12,0,0">
                     <Label
@@ -295,6 +417,14 @@
                     </Grid>
 
                     <Button
+                        BackgroundColor="Transparent"
+                        Command="{Binding ForgotPinCommand}"
+                        FontAttributes="Bold"
+                        FontSize="13"
+                        Text="Forgot PIN?"
+                        TextColor="#6B7280" />
+
+                    <Button
                         BackgroundColor="#1565D8"
                         Command="{Binding LoginCommand}"
                         CornerRadius="14"
@@ -311,6 +441,7 @@
                         TextColor="#D92D20" />
                 </VerticalStackLayout>
             </VerticalStackLayout>
+            </Grid>
         </Grid>
     </Grid>
 </ContentPage>

@@ -17,7 +17,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("IndentMate.Mobile")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0+668d13312e52ab3e056977ce415c56492727808c")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0+032a4fa3b3b74fb4d833468106a226549cca4bf8")]
 [assembly: System.Reflection.AssemblyProductAttribute("IndentMate.Mobile")]
 [assembly: System.Reflection.AssemblyTitleAttribute("IndentMate.Mobile")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

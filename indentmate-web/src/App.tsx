@@ -6,6 +6,7 @@ import Dashboard from './pages/Dashboard'
 import IndentDetail from './pages/IndentDetail'
 import IndentList from './pages/IndentList'
 import Login from './pages/Login'
+import UserMaster from './pages/UserMaster'
 
 function ProtectedRoute({ children, title = 'Dashboard' }: { children: ReactNode; title?: string }) {
   const { isAuthenticated } = useAuth()
@@ -36,6 +37,14 @@ export default function App() {
           element={
             <ProtectedRoute>
               <Dashboard />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/masters/admin/user-master"
+          element={
+            <ProtectedRoute title="User Master">
+              <UserMaster />
             </ProtectedRoute>
           }
         />

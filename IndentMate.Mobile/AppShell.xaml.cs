@@ -4,6 +4,8 @@ namespace IndentMate.Mobile;
 
 public partial class AppShell : Shell
 {
+    private const string DeviceSetupCompleteKey = "indentmate_device_setup_complete";
+
     public AppShell()
     {
         InitializeComponent();
@@ -19,5 +21,15 @@ public partial class AppShell : Shell
         Routing.RegisterRoute("indent-details", typeof(IndentDetailsPage));
         Routing.RegisterRoute("add-item", typeof(AddItemPage));
         Routing.RegisterRoute("add-item-ser", typeof(AddItemSERPage));
+
+        Loaded += OnLoaded;
+    }
+
+    private async void OnLoaded(object? sender, EventArgs e)
+    {
+        Loaded -= OnLoaded;
+
+        var isDeviceSetup = Preferences.Default.Get(DeviceSetupCompleteKey, false);
+        await GoToAsync(isDeviceSetup ? "//login" : "//setup");
     }
 }

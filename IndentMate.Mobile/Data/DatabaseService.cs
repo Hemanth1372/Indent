@@ -305,6 +305,27 @@ public class DatabaseService
             .FirstOrDefaultAsync();
     }
 
+    public async Task<List<LocalEngineer>> GetRecentEngineersAsync(int limit = 5)
+    {
+        var db = await GetDbAsync();
+        return await db.Table<LocalEngineer>()
+            .OrderByDescending(e => e.LastSyncAt)
+            .Take(limit)
+            .ToListAsync();
+    }
+
+    public async Task<int> DeleteEngineerAsync(string engineerId)
+    {
+        var db = await GetDbAsync();
+        var engineer = await db.Table<LocalEngineer>()
+            .Where(e => e.EngineerId == engineerId)
+            .FirstOrDefaultAsync();
+
+        if (engineer is null) return 0;
+
+        return await db.DeleteAsync(engineer);
+    }
+
     public async Task UpdateEngineerLastSyncAsync(string engineerId, DateTime lastSyncAt)
     {
         var db = await GetDbAsync();
