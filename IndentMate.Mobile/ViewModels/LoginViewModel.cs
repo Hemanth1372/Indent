@@ -147,8 +147,19 @@ public partial class LoginViewModel : BaseViewModel
                 !string.IsNullOrWhiteSpace(storedHash) &&
                 string.Equals(enteredHash, storedHash, StringComparison.OrdinalIgnoreCase))
             {
-                var authenticatedEngineer = selectedEngineer ?? manualEngineer;
-                authenticatedEngineer ??= await BuildEngineerFromSecureStorageAsync(activeEngineerId, storedHash);
+                var authenticatedEngineer = await AuthenticateManualUserAsync(activeEngineerId, PinInput);
+
+                if (authenticatedEngineer is null)
+                {
+                    if (HasError)
+                    {
+                        return;
+                    }
+
+                    await ShowIncorrectPinAsync(activeEngineerId);
+                    return;
+                }
+
                 await CompleteLoginAsync(authenticatedEngineer);
                 return;
             }
@@ -216,6 +227,19 @@ public partial class LoginViewModel : BaseViewModel
         PinInput = string.Empty;
         HasError = false;
         StatusMessage = string.Empty;
+    }
+
+    [RelayCommand]
+    private void LoginAsDifferentUser()
+    {
+        SelectedEngineer = null;
+        ManualEngineerId = string.Empty;
+        PinInput = string.Empty;
+        HasError = false;
+        StatusMessage = string.Empty;
+        EngineerId = "Not configured";
+        EngineerName = "Engineer";
+        OnPropertyChanged(nameof(SelectedInitials));
     }
 
     [RelayCommand]
@@ -330,6 +354,7 @@ public partial class LoginViewModel : BaseViewModel
 
             if (!response.IsSuccessStatusCode)
             {
+                await HandleFailedBackendLoginAsync(response, engineerId);
                 return null;
             }
 
@@ -340,9 +365,10 @@ public partial class LoginViewModel : BaseViewModel
             }
 
             var loginName = NormalizeEngineerId(loginResponse.User.LoginName ?? engineerId);
-            var employeeName = string.IsNullOrWhiteSpace(loginResponse.User.EmployeeName)
+            var responseName = loginResponse.User.EmployeeName ?? loginResponse.User.Name;
+            var employeeName = string.IsNullOrWhiteSpace(responseName)
                 ? loginName
-                : loginResponse.User.EmployeeName;
+                : responseName.Trim();
 
             await SecureStorage.Default.SetAsync("jwt_token", loginResponse.Token);
 
@@ -365,6 +391,90 @@ public partial class LoginViewModel : BaseViewModel
             StatusMessage = "Connection error. Is the backend running?";
             return null;
         }
+    }
+
+    private async Task HandleFailedBackendLoginAsync(HttpResponseMessage response, string engineerId)
+    {
+        LoginApiError? loginError = null;
+
+        try
+        {
+            loginError = await response.Content.ReadFromJsonAsync<LoginApiError>();
+        }
+        catch
+        {
+            // Fall back to the generic credential message below.
+        }
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden &&
+            string.Equals(loginError?.ErrorCode, "ACCOUNT_DEACTIVATED", StringComparison.OrdinalIgnoreCase))
+        {
+            await PurgeDeactivatedEngineerAsync(engineerId);
+            HasError = true;
+            StatusMessage = "User is deactivated, or no longer in use.";
+            return;
+        }
+
+        if (response.StatusCode == System.Net.HttpStatusCode.NotFound &&
+            string.Equals(loginError?.ErrorCode, "LOGIN_ID_NOT_FOUND", StringComparison.OrdinalIgnoreCase))
+        {
+            await PurgeDeactivatedEngineerAsync(engineerId);
+            HasError = true;
+            StatusMessage = "No login ID found.";
+        }
+    }
+
+    private async Task PurgeDeactivatedEngineerAsync(string engineerId)
+    {
+        var normalizedEngineerId = NormalizeEngineerId(engineerId);
+
+        if (string.IsNullOrWhiteSpace(normalizedEngineerId))
+        {
+            return;
+        }
+
+        HideRecentEngineer(normalizedEngineerId);
+        await _databaseService.DeleteEngineerAsync(normalizedEngineerId);
+
+        var matchingEngineers = RecentEngineers
+            .Where(engineer => string.Equals(
+                NormalizeEngineerId(engineer.EngineerId),
+                normalizedEngineerId,
+                StringComparison.OrdinalIgnoreCase))
+            .ToList();
+
+        foreach (var engineer in matchingEngineers)
+        {
+            RecentEngineers.Remove(engineer);
+        }
+
+        if (string.Equals(
+            NormalizeEngineerId(await SecureStorage.Default.GetAsync("engineer_id")),
+            normalizedEngineerId,
+            StringComparison.OrdinalIgnoreCase))
+        {
+            SecureStorage.Default.Remove("engineer_id");
+            SecureStorage.Default.Remove("engineer_name");
+            SecureStorage.Default.Remove("pin_hash");
+            SecureStorage.Default.Remove("jwt_token");
+            SecureStorage.Default.Remove("session_active");
+        }
+
+        if (string.Equals(
+            NormalizeEngineerId(SelectedEngineer?.EngineerId),
+            normalizedEngineerId,
+            StringComparison.OrdinalIgnoreCase))
+        {
+            SelectedEngineer = null;
+            EngineerId = "Not configured";
+            EngineerName = "Engineer";
+            ManualEngineerId = string.Empty;
+            OnPropertyChanged(nameof(SelectedInitials));
+        }
+
+        PinInput = string.Empty;
+        OnPropertyChanged(nameof(HasRecentEngineers));
+        OnPropertyChanged(nameof(HasNoRecentEngineers));
     }
 
     private async Task<LocalEngineer?> BuildEngineerFromSecureStorageAsync(string engineerId, string? pinHash)
@@ -535,11 +645,23 @@ public partial class LoginViewModel : BaseViewModel
         [JsonPropertyName("login_name")]
         public string? LoginName { get; set; }
 
+        [JsonPropertyName("name")]
+        public string? Name { get; set; }
+
         [JsonPropertyName("employee_name")]
         public string? EmployeeName { get; set; }
 
         [JsonPropertyName("primary_role")]
         public string? PrimaryRole { get; set; }
+    }
+
+    private sealed class LoginApiError
+    {
+        [JsonPropertyName("errorCode")]
+        public string? ErrorCode { get; set; }
+
+        [JsonPropertyName("message")]
+        public string? Message { get; set; }
     }
 
     private static string BuildInitials(string value)

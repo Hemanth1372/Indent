@@ -43,17 +43,23 @@ export async function login(req, res, next) {
     const user = userResult.rows[0]
 
     if (!user) {
-      return res.status(401).json({ message: 'Invalid login name or password' })
+      return res.status(404).json({
+        errorCode: 'LOGIN_ID_NOT_FOUND',
+        message: 'No login ID found.',
+      })
+    }
+
+    if (!user.is_active) {
+      return res.status(403).json({
+        errorCode: 'ACCOUNT_DEACTIVATED',
+        message: 'User is deactivated, or no longer in use.',
+      })
     }
 
     const passwordMatches = await bcrypt.compare(password, user.password_hash)
 
     if (!passwordMatches) {
       return res.status(401).json({ message: 'Invalid login name or password' })
-    }
-
-    if (!user.is_active) {
-      return res.status(403).json({ message: 'Inactive Employee' })
     }
 
     const contextResult = await query(USER_CONTEXT_SQL, [user.user_id])
@@ -65,6 +71,7 @@ export async function login(req, res, next) {
       login_name: context.login_name,
       name: context.employee_name,
       primary_role: context.primary_role,
+      isActive: true,
       assigned_projects: context.assigned_projects,
       assignedProjects: context.assigned_projects,
     }

@@ -32,9 +32,41 @@ const setupAndSeedDatabase = async () => {
 
             CREATE TABLE projects (
                 project_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                site_code VARCHAR(50) UNIQUE,
                 project_name VARCHAR(255) NOT NULL,
                 location VARCHAR(100),
                 status VARCHAR(50) DEFAULT 'Ongoing'
+            );
+
+            CREATE TABLE item_master (
+                item_code VARCHAR(50) PRIMARY KEY,
+                item_name VARCHAR(200) NOT NULL,
+                description TEXT,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE service_orders (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                service_order_no VARCHAR(50) UNIQUE NOT NULL,
+                status VARCHAR(50) NOT NULL,
+                item_code VARCHAR(50) NOT NULL REFERENCES item_master(item_code),
+                serial_number VARCHAR(100),
+                description TEXT,
+                project_site VARCHAR(50) NOT NULL REFERENCES projects(site_code),
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+            );
+
+            CREATE TABLE responsibility_master (
+                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+                project_code VARCHAR(50) NOT NULL REFERENCES projects(site_code),
+                responsibility_code VARCHAR(50) NOT NULL,
+                description VARCHAR(200) NOT NULL,
+                valid_to DATE NOT NULL,
+                end_date DATE NOT NULL,
+                created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
 
             CREATE TABLE user_project_roles (
@@ -71,9 +103,20 @@ const setupAndSeedDatabase = async () => {
 
     // Add some dummy projects just to keep the relational data intact
     await pool.query(`
-            INSERT INTO projects (project_name, location, status) VALUES 
-            ('Alpha Substation Upgrade', 'Hyderabad', 'Ongoing'),
-            ('Metro Electrification Line B', 'Bangalore', 'Planning');
+            INSERT INTO projects (site_code, project_name, location, status) VALUES 
+            ('NUPEDS014', 'Alpha Substation Upgrade', 'Hyderabad', 'Ongoing'),
+            ('NUPEDS015', 'Metro Electrification Line B', 'Bangalore', 'Planning');
+        `);
+
+    await pool.query(`
+            INSERT INTO item_master (item_code, item_name, description) VALUES
+            ('ITM-003', '25 KVA Distribution Transformer', '25 KVA Distribution Transformer'),
+            ('ITM-004', 'Service Cable Kit', 'Service Cable Kit');
+        `);
+
+    await pool.query(`
+            INSERT INTO service_orders (service_order_no, status, item_code, serial_number, description, project_site) VALUES
+            ('SO-1001', 'Released', 'ITM-003', 'SN-DTR-25-001', '25 KVA Distribution Transformer - Installation', 'NUPEDS014');
         `);
 
     await pool.query(`

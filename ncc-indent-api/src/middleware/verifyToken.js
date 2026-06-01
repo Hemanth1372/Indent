@@ -18,13 +18,17 @@ export function verifyToken(req, res, next) {
 }
 
 export function requireAdministrator(req, res, next) {
+  const primaryRole = String(req.user?.primary_role ?? '').toLowerCase()
   const assignedProjects = Array.isArray(req.user?.assigned_projects)
     ? req.user.assigned_projects
     : []
 
-  const isAdministrator = assignedProjects.some((project) =>
-    ['administrator', 'admin'].includes(String(project.role_name).toLowerCase()),
-  )
+  const allowedRoles = ['super admin', 'administrator', 'admin']
+  const isAdministrator =
+    allowedRoles.includes(primaryRole) ||
+    assignedProjects.some((project) =>
+      allowedRoles.includes(String(project.role_name).toLowerCase()),
+    )
 
   if (!isAdministrator) {
     return res.status(403).json({ message: 'Administrator role is required' })

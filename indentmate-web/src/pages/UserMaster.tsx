@@ -5,6 +5,7 @@ import {
   Lock,
   MoreVertical,
   Plus,
+  Trash2,
   ToggleLeft,
 } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
@@ -59,6 +60,10 @@ export default function UserMaster() {
   const canChangePassword = currentUserRoles.some((role) =>
     ['super admin', 'administrator'].includes(role),
   )
+
+  function isProtectedAdminRole(role: string | null) {
+    return ['super admin', 'administrator'].includes(String(role ?? '').toLowerCase())
+  }
 
   function handleTogglePin(userId: string) {
     setVisiblePins((currentVisiblePins) => {
@@ -164,6 +169,11 @@ export default function UserMaster() {
   }
 
   async function handleToggleActive(user: UserRow) {
+    if (isProtectedAdminRole(user.primary_role)) {
+      message.warning('Super Admin and Administrator users cannot be deactivated.')
+      return
+    }
+
     const nextStatus = !user.is_active
     const previousUsers = users
 
@@ -193,6 +203,36 @@ export default function UserMaster() {
       setUsers(previousUsers)
       message.error(requestError.response?.data?.message ?? 'Failed to update user status')
     }
+  }
+
+  function handleDeleteUser(user: UserRow) {
+    setOpenDropdownId(null)
+    setMenuPosition(null)
+
+    Modal.confirm({
+      title: `Delete ${user.employee_name}?`,
+      content: 'This will remove the user from User Master and the database. They will not be able to log in again.',
+      okText: 'Delete User',
+      okButtonProps: { danger: true },
+      cancelText: 'Cancel',
+      async onOk() {
+        try {
+          await api.delete(`/api/users/${user.user_id}`)
+          setUsers((currentUsers) =>
+            currentUsers.filter((currentUser) => currentUser.user_id !== user.user_id),
+          )
+          setVisiblePins((currentVisiblePins) => {
+            const nextVisiblePins = new Set(currentVisiblePins)
+            nextVisiblePins.delete(user.user_id)
+            return nextVisiblePins
+          })
+          message.success('User deleted successfully')
+        } catch (requestError: any) {
+          console.error(requestError)
+          message.error(requestError.response?.data?.message ?? 'Failed to delete user')
+        }
+      },
+    })
   }
 
   async function handlePasswordSubmit(values: PasswordFormValues) {
@@ -276,9 +316,9 @@ export default function UserMaster() {
                         className="grid h-8 w-8 place-items-center rounded-full text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
                         onClick={() => handleTogglePin(user.user_id)}
                         type="button"
-                        title={visiblePins.has(user.user_id) ? 'Hide PIN' : 'Show PIN'}
+                        title={visiblePins.has(user.user_id) ? 'PIN visible' : 'PIN hidden'}
                       >
-                        {visiblePins.has(user.user_id) ? <EyeOff size={16} /> : <Eye size={16} />}
+                        {visiblePins.has(user.user_id) ? <Eye size={16} /> : <EyeOff size={16} />}
                       </button>
                     </div>
                   </td>
@@ -345,15 +385,27 @@ export default function UserMaster() {
                     Change Password
                   </button>
                 )}
+                {!isProtectedAdminRole(user.primary_role) && (
+                  <button
+                    className="flex w-full items-center gap-4 px-4 py-3 text-left text-slate-700 transition hover:bg-slate-50"
+                    onClick={() => handleToggleActive(user)}
+                    type="button"
+                  >
+                    <span className="grid h-9 w-9 place-items-center rounded-lg bg-violet-50 text-violet-500">
+                      <ToggleLeft size={18} />
+                    </span>
+                    {user.is_active ? 'Deactivate User' : 'Activate User'}
+                  </button>
+                )}
                 <button
-                  className="flex w-full items-center gap-4 px-4 py-3 text-left text-slate-700 transition hover:bg-slate-50"
-                  onClick={() => handleToggleActive(user)}
+                  className="flex w-full items-center gap-4 px-4 py-3 text-left text-red-600 transition hover:bg-red-50"
+                  onClick={() => handleDeleteUser(user)}
                   type="button"
                 >
-                  <span className="grid h-9 w-9 place-items-center rounded-lg bg-violet-50 text-violet-500">
-                    <ToggleLeft size={18} />
+                  <span className="grid h-9 w-9 place-items-center rounded-lg bg-red-50 text-red-500">
+                    <Trash2 size={18} />
                   </span>
-                  {user.is_active ? 'Deactivate User' : 'Activate User'}
+                  Delete User
                 </button>
               </>
             )

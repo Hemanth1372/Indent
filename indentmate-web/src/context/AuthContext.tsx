@@ -6,6 +6,7 @@ type AuthUser = {
   login_name?: string
   name: string
   primary_role?: string
+  isActive?: boolean
   assigned_projects?: Array<{
     project_id: string
     project_name: string
@@ -29,6 +30,7 @@ type LoginCredentials = {
 
 type LoginResult = {
   success: boolean
+  errorCode?: string
   message?: string
   token?: string
   user?: AuthUser
@@ -86,6 +88,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           if (!response.ok) {
             return {
               success: false,
+              errorCode: data.errorCode,
               message: data.message ?? 'Login failed',
             }
           }

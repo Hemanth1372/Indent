@@ -18,6 +18,7 @@ const mastersGroups = [
       'User Master',
       'Role Master',
       'Project Master',
+      'Business Partner Master',
     ],
   },
   {
@@ -26,23 +27,62 @@ const mastersGroups = [
     items: [
       'State Master',
       'Circle Master',
+      'Location Master',
+      'Delivery Point Master',
     ],
   },
   {
     key: 'project',
     label: 'Project',
     items: [
-      'Employee Master',
       'Project BOQ Supply',
       'Project BOQ Erection',
       'Project Hindrance Master',
-      'Location Master',
+      'Responsibility Master',
+      'Activity Master',
+      'Service Orders',
+    ],
+  },
+  {
+    key: 'inventory',
+    label: 'Inventory',
+    items: [
+      'Item Master',
+      'Warehouse Master',
+      'Warehouse Bin Master',
     ],
   },
 ]
 
 function slugify(value: string) {
   return value.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')
+}
+
+function getMasterPath(groupKey: string, item: string) {
+  if (item === 'Service Orders') {
+    return '/service-orders'
+  }
+
+  if (item === 'Responsibility Master') {
+    return '/responsibility-master'
+  }
+
+  const realMasterItems = new Set([
+    'Project Master',
+    'Activity Master',
+    'Business Partner Master',
+    'Location Master',
+    'Delivery Point Master',
+    'Item Master',
+    'Warehouse Master',
+    'Warehouse Bin Master',
+  ])
+
+  if (realMasterItems.has(item)) {
+    return `/master-data/${slugify(item)}`
+  }
+
+  return `/masters/${groupKey}/${slugify(item)}`
 }
 
 type SidebarProps = {
@@ -144,7 +184,7 @@ export default function Sidebar({ open }: SidebarProps) {
                             }`
                           }
                           key={item}
-                          to={`/masters/${group.key}/${slugify(item)}`}
+                          to={getMasterPath(group.key, item)}
                         >
                           <span className="h-1.5 w-1.5 rounded-full bg-slate-500" />
                           {item}

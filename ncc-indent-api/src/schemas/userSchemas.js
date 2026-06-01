@@ -33,6 +33,14 @@ export const changeUserPasswordSchema = z.object({
   query: z.object({}).optional(),
 })
 
+export const deleteUserSchema = z.object({
+  body: z.object({}).optional(),
+  params: z.object({
+    userId: z.string().uuid(),
+  }),
+  query: z.object({}).optional(),
+})
+
 export const syncUserPinSchema = z.object({
   body: z.object({
     login_name: z.string().trim().min(1).max(50),

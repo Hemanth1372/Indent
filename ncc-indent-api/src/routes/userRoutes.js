@@ -2,6 +2,7 @@ import { Router } from 'express'
 import {
   changeUserPassword,
   createUser,
+  deleteUser,
   listUsers,
   lookupUser,
   syncUserPin,
@@ -12,6 +13,7 @@ import { validate } from '../middleware/validate.js'
 import {
   changeUserPasswordSchema,
   createUserSchema,
+  deleteUserSchema,
   lookupUserSchema,
   syncUserPinSchema,
   updateUserStatusSchema,
@@ -27,3 +29,4 @@ userRoutes.get('/', listUsers)
 userRoutes.post('/', requireAdministrator, validate(createUserSchema), createUser)
 userRoutes.patch('/:userId/status', requireAdministrator, validate(updateUserStatusSchema), updateUserStatus)
 userRoutes.put('/:userId/password', requirePasswordAdministrator, validate(changeUserPasswordSchema), changeUserPassword)
+userRoutes.delete('/:userId', requireAdministrator, validate(deleteUserSchema), deleteUser)

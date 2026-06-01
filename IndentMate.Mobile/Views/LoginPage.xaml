@@ -64,7 +64,7 @@
                 StrokeThickness="1"
                 VerticalOptions="Fill"
                 WidthRequest="280">
-                <VerticalStackLayout Spacing="14">
+                <Grid RowDefinitions="Auto,*,Auto" RowSpacing="14">
                     <Label
                         FontAttributes="Bold"
                         FontSize="13"
@@ -72,6 +72,7 @@
                         TextColor="#6B7280" />
 
                     <CollectionView
+                        Grid.Row="1"
                         ItemsSource="{Binding RecentEngineers}"
                         SelectionMode="None">
                         <CollectionView.ItemTemplate>
@@ -136,7 +137,19 @@
                             </DataTemplate>
                         </CollectionView.ItemTemplate>
                     </CollectionView>
-                </VerticalStackLayout>
+
+                    <Button
+                        Grid.Row="2"
+                        BackgroundColor="White"
+                        BorderColor="#D6DEE9"
+                        BorderWidth="1"
+                        Command="{Binding LoginAsDifferentUserCommand}"
+                        CornerRadius="12"
+                        FontAttributes="Bold"
+                        HeightRequest="48"
+                        Text="+  Login as different user"
+                        TextColor="#1565D8" />
+                </Grid>
             </Border>
 
             <Grid Grid.Column="1" RowDefinitions="*,Auto,*">
@@ -398,7 +411,7 @@
                             FontAttributes="Bold"
                             FontSize="18"
                             HeightRequest="48"
-                            Text="⌫"
+                            Text="&#x232B;"
                             TextColor="#172033" />
                         <Button
                             Grid.Row="3"

@@ -2,9 +2,11 @@ using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using IndentMate.Mobile.Data;
 using IndentMate.Mobile.Services;
+using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json.Serialization;
 
 namespace IndentMate.Mobile.ViewModels;
 
@@ -65,14 +67,17 @@ public partial class SetupViewModel : BaseViewModel
             if (string.IsNullOrWhiteSpace(Pin) || Pin.Length < 6)
                 throw new InvalidOperationException("PIN must be 6 digits.");
 
+            StatusMessage = "Checking User Master access...";
+            var adminUser = await SyncPinToAdminApiAsync(normalizedEngineerId, Pin);
+
             StatusMessage = "Saving local configuration...";
             var pinHash = LNApiService.ComputeSHA256Hash(Pin);
             await SecureStorage.Default.SetAsync("ln_environment", LnEnvironment);
             await SecureStorage.Default.SetAsync("company", Company);
             await SecureStorage.Default.SetAsync("engineer_id", normalizedEngineerId);
-            await SecureStorage.Default.SetAsync("engineer_name", normalizedEngineerId);
+            await SecureStorage.Default.SetAsync("engineer_name", adminUser.EmployeeName);
             await SecureStorage.Default.SetAsync("pin_hash", pinHash);
-            await SecureStorage.Default.SetAsync("jwt_token", "local-development-token");
+            SecureStorage.Default.Remove("jwt_token");
             Preferences.Default.Set(DeviceSetupCompleteKey, true);
 
             var responsibilityCode = normalizedEngineerId.StartsWith("SER", StringComparison.OrdinalIgnoreCase)
@@ -82,15 +87,16 @@ public partial class SetupViewModel : BaseViewModel
             var engineer = new LocalEngineer
             {
                 EngineerId = normalizedEngineerId,
-                Name = normalizedEngineerId,
+                Name = adminUser.EmployeeName,
                 PinHash = pinHash,
                 LNEnvironment = LnEnvironment,
                 Company = Company,
-                ResponsibilityCode = responsibilityCode,
+                ResponsibilityCode = string.IsNullOrWhiteSpace(adminUser.PrimaryRole)
+                    ? responsibilityCode
+                    : adminUser.PrimaryRole,
                 LastSyncAt = DateTime.UtcNow
             };
             await _databaseService.SaveAsync(engineer);
-            await TrySyncPinToAdminApiAsync(normalizedEngineerId, Pin);
 
             StatusMessage = "Preparing local data...";
             await SeedLocalDataAsync(normalizedEngineerId);
@@ -99,21 +105,49 @@ public partial class SetupViewModel : BaseViewModel
         });
     }
 
-    private async Task TrySyncPinToAdminApiAsync(string engineerId, string pin)
+    private async Task<AdminUserResponse> SyncPinToAdminApiAsync(string engineerId, string pin)
     {
         try
         {
             StatusMessage = "Syncing PIN to admin portal...";
-            await _httpClient.PostAsJsonAsync("/api/users/sync-pin", new
+            var response = await _httpClient.PostAsJsonAsync("/api/users/sync-pin", new
             {
                 login_name = engineerId,
                 employee_name = engineerId,
                 current_pin = pin
             });
+
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            {
+                throw new InvalidOperationException("No login ID found in User Master.");
+            }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                throw new InvalidOperationException("Could not verify this user in User Master.");
+            }
+
+            var syncResponse = await response.Content.ReadFromJsonAsync<SyncPinResponse>();
+            var user = syncResponse?.User ?? syncResponse?.Data;
+
+            if (user is null)
+            {
+                throw new InvalidOperationException("Could not verify this user in User Master.");
+            }
+
+            user.EmployeeName = string.IsNullOrWhiteSpace(user.EmployeeName)
+                ? engineerId
+                : user.EmployeeName.Trim();
+
+            return user;
+        }
+        catch (InvalidOperationException)
+        {
+            throw;
         }
         catch
         {
-            // Setup remains local-first if the admin API is unavailable.
+            throw new InvalidOperationException("Could not connect to User Master. Please check the admin API.");
         }
     }
 
@@ -256,3 +290,21 @@ public partial class SetupViewModel : BaseViewModel
 }
 
 public record LNEnvironmentOption(string Code, string DisplayName);
+
+public sealed class SyncPinResponse
+{
+    [JsonPropertyName("data")]
+    public AdminUserResponse? Data { get; set; }
+
+    [JsonPropertyName("user")]
+    public AdminUserResponse? User { get; set; }
+}
+
+public sealed class AdminUserResponse
+{
+    [JsonPropertyName("employee_name")]
+    public string EmployeeName { get; set; } = string.Empty;
+
+    [JsonPropertyName("primary_role")]
+    public string? PrimaryRole { get; set; }
+}

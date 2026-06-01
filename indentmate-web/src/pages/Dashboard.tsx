@@ -1,9 +1,52 @@
+import { useEffect, useState } from 'react'
+import { api } from '../services/api'
+
+type DashboardStats = {
+  total: number
+  approved: number
+  pending: number
+  issued: number
+}
+
 export default function Dashboard() {
+  const [dashboardStats, setDashboardStats] = useState<DashboardStats>({
+    total: 0,
+    approved: 0,
+    pending: 0,
+    issued: 0,
+  })
+  const [errorMessage, setErrorMessage] = useState('')
+
+  useEffect(() => {
+    let isMounted = true
+
+    async function loadStats() {
+      try {
+        const response = await api.get<{ data: DashboardStats }>('/api/dashboard/stats')
+
+        if (isMounted) {
+          setDashboardStats(response.data.data)
+          setErrorMessage('')
+        }
+      } catch {
+        if (isMounted) {
+          setErrorMessage('Unable to load dashboard stats.')
+        }
+      }
+    }
+
+    loadStats()
+
+    return () => {
+      isMounted = false
+    }
+  }, [])
+
   const stats = [
-    { value: '0', label: 'Survey Allocated', color: 'text-blue-600' },
-    { value: '0', label: 'Completed', color: 'text-green-600' },
-    { value: '0', label: 'In Progress', color: 'text-amber-600' },
-    { value: '0', label: 'Yet to Start', color: 'text-red-500' },
+    { value: dashboardStats.total, label: 'Total Indents', color: 'text-blue-600' },
+    { value: dashboardStats.approved, label: 'Approved Indents', color: 'text-green-600' },
+    { value: dashboardStats.pending, label: 'Pending Indents', color: 'text-amber-600' },
+    { value: dashboardStats.issued, label: 'Issued Indents', color: 'text-cyan-600' },
   ]
 
   return (
@@ -24,13 +67,21 @@ export default function Dashboard() {
         </select>
       </div>
 
+      {errorMessage ? (
+        <div className="mt-4 rounded-lg border border-red-200 bg-red-50 px-4 py-3 text-sm font-medium text-red-700">
+          {errorMessage}
+        </div>
+      ) : null}
+
       <div className="mt-5 grid gap-4 md:grid-cols-2 xl:grid-cols-4">
         {stats.map((stat) => (
           <div
             className="rounded-xl border border-slate-200 bg-white px-6 py-5 text-center shadow-sm"
             key={stat.label}
           >
-            <div className={`text-4xl font-extrabold tracking-wider ${stat.color}`}>{stat.value}</div>
+            <div className={`text-4xl font-extrabold tracking-wider ${stat.color}`}>
+              {stat.value}
+            </div>
             <p className="mt-1 text-sm font-medium text-slate-600">{stat.label}</p>
           </div>
         ))}

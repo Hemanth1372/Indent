@@ -1,8 +1,8 @@
 import { createApp } from './app.js'
 import { env } from './config/env.js'
-import { query } from './db/pool.js'
+import { ensureSchema } from './db/ensureSchema.js'
 
-await query('ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS current_pin VARCHAR(6)')
+await ensureSchema()
 
 const app = createApp()
 

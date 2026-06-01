@@ -68,3 +68,9 @@ C:\Users\Hemanth\OneDrive\Desktop\IndentMate\IndentMate.Shared\.build\verify-rec
 C:\Users\Hemanth\OneDrive\Desktop\IndentMate\IndentMate.Shared\.build\pin-sync\IndentMate.Shared.deps.json
 C:\Users\Hemanth\OneDrive\Desktop\IndentMate\IndentMate.Shared\.build\pin-sync\IndentMate.Shared.dll
 C:\Users\Hemanth\OneDrive\Desktop\IndentMate\IndentMate.Shared\.build\pin-sync\IndentMate.Shared.pdb
+C:\Users\Hemanth\OneDrive\Desktop\IndentMate\IndentMate.Shared\.build\verify-deactivation\IndentMate.Shared.deps.json
+C:\Users\Hemanth\OneDrive\Desktop\IndentMate\IndentMate.Shared\.build\verify-deactivation\IndentMate.Shared.dll
+C:\Users\Hemanth\OneDrive\Desktop\IndentMate\IndentMate.Shared\.build\verify-deactivation\IndentMate.Shared.pdb
+C:\Users\Hemanth\OneDrive\Desktop\IndentMate\IndentMate.Shared\.build\verify-deactivation-2\IndentMate.Shared.deps.json
+C:\Users\Hemanth\OneDrive\Desktop\IndentMate\IndentMate.Shared\.build\verify-deactivation-2\IndentMate.Shared.dll
+C:\Users\Hemanth\OneDrive\Desktop\IndentMate\IndentMate.Shared\.build\verify-deactivation-2\IndentMate.Shared.pdb
