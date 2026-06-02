@@ -109,7 +109,7 @@ public partial class LoginViewModel : BaseViewModel
             if (string.IsNullOrWhiteSpace(activeEngineerId))
             {
                 HasError = true;
-                StatusMessage = "Please select or enter a User ID.";
+                StatusMessage = "Please select or enter an Employee ID.";
                 return;
             }
 
@@ -164,19 +164,16 @@ public partial class LoginViewModel : BaseViewModel
                 return;
             }
 
-            if (selectedEngineer is null)
+            var backendEngineer = await AuthenticateManualUserAsync(activeEngineerId, PinInput);
+            if (backendEngineer is not null)
             {
-                var backendEngineer = await AuthenticateManualUserAsync(activeEngineerId, PinInput);
-                if (backendEngineer is not null)
-                {
-                    await CompleteLoginAsync(backendEngineer);
-                    return;
-                }
+                await CompleteLoginAsync(backendEngineer);
+                return;
+            }
 
-                if (HasError)
-                {
-                    return;
-                }
+            if (HasError)
+            {
+                return;
             }
 
             await ShowIncorrectPinAsync(activeEngineerId);
@@ -337,7 +334,7 @@ public partial class LoginViewModel : BaseViewModel
     private async Task ShowIncorrectPinAsync(string engineerId)
     {
         HasError = true;
-        StatusMessage = $"Incorrect credentials for ID: {engineerId}";
+        StatusMessage = $"Incorrect credentials for Employee ID: {engineerId}";
         await Task.Delay(1000);
         PinInput = string.Empty;
     }
@@ -369,6 +366,7 @@ public partial class LoginViewModel : BaseViewModel
             var employeeName = string.IsNullOrWhiteSpace(responseName)
                 ? loginName
                 : responseName.Trim();
+            var role = NormalizeRole(loginResponse.User.Role ?? loginResponse.User.PrimaryRole);
 
             await SecureStorage.Default.SetAsync("jwt_token", loginResponse.Token);
 
@@ -379,9 +377,7 @@ public partial class LoginViewModel : BaseViewModel
                 Company = await SecureStorage.Default.GetAsync("company") ?? Company,
                 PinHash = LNApiService.ComputeSHA256Hash(password),
                 LNEnvironment = await SecureStorage.Default.GetAsync("ln_environment") ?? string.Empty,
-                ResponsibilityCode = string.IsNullOrWhiteSpace(loginResponse.User.PrimaryRole)
-                    ? (loginName.StartsWith("SER", StringComparison.OrdinalIgnoreCase) ? "SER" : "SIE")
-                    : loginResponse.User.PrimaryRole,
+                ResponsibilityCode = role,
                 LastSyncAt = DateTime.UtcNow
             };
         }
@@ -407,11 +403,31 @@ public partial class LoginViewModel : BaseViewModel
         }
 
         if (response.StatusCode == System.Net.HttpStatusCode.Forbidden &&
-            string.Equals(loginError?.ErrorCode, "ACCOUNT_DEACTIVATED", StringComparison.OrdinalIgnoreCase))
+            (string.Equals(loginError?.ErrorCode, "ACCOUNT_INACTIVE", StringComparison.OrdinalIgnoreCase) ||
+             string.Equals(loginError?.ErrorCode, "ACCOUNT_DEACTIVATED", StringComparison.OrdinalIgnoreCase)))
         {
             await PurgeDeactivatedEngineerAsync(engineerId);
             HasError = true;
             StatusMessage = "User is deactivated, or no longer in use.";
+            PinInput = string.Empty;
+            return;
+        }
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden &&
+            string.Equals(loginError?.ErrorCode, "UNAUTHORIZED_FIELD_ROLE", StringComparison.OrdinalIgnoreCase))
+        {
+            HasError = true;
+            StatusMessage = "Access Denied: This application is restricted to field personnel (SIE/SRE) only.";
+            PinInput = string.Empty;
+            return;
+        }
+
+        if (response.StatusCode == System.Net.HttpStatusCode.Forbidden &&
+            !string.IsNullOrWhiteSpace(loginError?.Message))
+        {
+            HasError = true;
+            StatusMessage = loginError.Message;
+            PinInput = string.Empty;
             return;
         }
 
@@ -421,6 +437,7 @@ public partial class LoginViewModel : BaseViewModel
             await PurgeDeactivatedEngineerAsync(engineerId);
             HasError = true;
             StatusMessage = "No login ID found.";
+            PinInput = string.Empty;
         }
     }
 
@@ -500,6 +517,16 @@ public partial class LoginViewModel : BaseViewModel
 
     private async Task CompleteLoginAsync(LocalEngineer? authenticatedEngineer)
     {
+        var dashboardRoute = ResolveDashboardRoute(authenticatedEngineer?.ResponsibilityCode);
+        if (dashboardRoute is null)
+        {
+            SecureStorage.Default.Remove("session_active");
+            HasError = true;
+            StatusMessage = "Access Denied: No valid role assigned to this user.";
+            PinInput = string.Empty;
+            return;
+        }
+
         if (authenticatedEngineer is not null)
         {
             authenticatedEngineer.EngineerId = NormalizeEngineerId(authenticatedEngineer.EngineerId);
@@ -510,6 +537,7 @@ public partial class LoginViewModel : BaseViewModel
             await SecureStorage.Default.SetAsync("engineer_name", authenticatedEngineer.Name);
             await SecureStorage.Default.SetAsync("company", authenticatedEngineer.Company);
             await SecureStorage.Default.SetAsync("pin_hash", authenticatedEngineer.PinHash);
+            await SecureStorage.Default.SetAsync("user_role", authenticatedEngineer.ResponsibilityCode);
             SelectedEngineer = authenticatedEngineer;
             ManualEngineerId = string.Empty;
             await LoadRecentEngineersAsync();
@@ -519,7 +547,8 @@ public partial class LoginViewModel : BaseViewModel
         StatusMessage = string.Empty;
         await SecureStorage.Default.SetAsync("session_active", "true");
         _inactivityTimer.Start();
-        await Shell.Current.GoToAsync("//home");
+
+        await Shell.Current.GoToAsync(dashboardRoute);
     }
 
     private async Task LoadRecentEngineersAsync()
@@ -580,6 +609,27 @@ public partial class LoginViewModel : BaseViewModel
     private static string NormalizeEngineerId(string? engineerId)
     {
         return (engineerId ?? string.Empty).Trim();
+    }
+
+    private static string NormalizeRole(string? role)
+    {
+        var normalizedRole = (role ?? string.Empty).Trim().ToUpperInvariant();
+
+        return normalizedRole switch
+        {
+            "SRE" => "SER",
+            _ => normalizedRole
+        };
+    }
+
+    private static string? ResolveDashboardRoute(string? role)
+    {
+        return NormalizeRole(role) switch
+        {
+            "SIE" => "//sie-dashboard",
+            "SER" => "//sre-dashboard",
+            _ => null
+        };
     }
 
     private static HashSet<string> ReadHiddenRecentEngineers()
@@ -650,6 +700,15 @@ public partial class LoginViewModel : BaseViewModel
 
         [JsonPropertyName("employee_name")]
         public string? EmployeeName { get; set; }
+
+        [JsonPropertyName("employeeName")]
+        public string? EmployeeNameCamel { set => EmployeeName = value; }
+
+        [JsonPropertyName("employeeId")]
+        public string? EmployeeId { get; set; }
+
+        [JsonPropertyName("role")]
+        public string? Role { get; set; }
 
         [JsonPropertyName("primary_role")]
         public string? PrimaryRole { get; set; }

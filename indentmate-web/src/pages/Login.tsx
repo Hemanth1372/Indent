@@ -17,7 +17,7 @@ export default function Login() {
     const normalizedLoginName = loginName.trim()
 
     if (!normalizedLoginName || !password) {
-      setError('Enter login name and password.')
+      setError('Enter employee ID and password.')
       return
     }
 
@@ -25,7 +25,7 @@ export default function Login() {
     setError('')
 
     const result = await login({
-      login_name: normalizedLoginName,
+      employee_id: normalizedLoginName,
       password,
     })
 
@@ -36,7 +36,7 @@ export default function Login() {
       return
     }
 
-    setError(result.message ?? 'Invalid login name or password.')
+    setError(result.message ?? 'Invalid employee ID or password.')
     setPassword('')
   }
 
@@ -53,7 +53,7 @@ export default function Login() {
 
         <form className="login-form" onSubmit={handleSubmit}>
           <label>
-            <span>Login Name</span>
+            <span>Employee ID</span>
             <div className="login-input">
               <User size={18} />
               <input
@@ -63,7 +63,7 @@ export default function Login() {
                   setLoginName(event.target.value)
                   setError('')
                 }}
-                placeholder="Enter login name"
+                placeholder="Enter Employee ID"
                 value={loginName}
               />
             </div>

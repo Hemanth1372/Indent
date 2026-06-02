@@ -3,8 +3,11 @@ import { createContext, useContext, useMemo, useState, type ReactNode } from 're
 type AuthUser = {
   user_id?: string
   userId?: string
+  employee_id?: string
+  employeeId?: string
   login_name?: string
   name: string
+  role?: string
   primary_role?: string
   isActive?: boolean
   assigned_projects?: Array<{
@@ -24,7 +27,7 @@ type AuthUser = {
 }
 
 type LoginCredentials = {
-  login_name: string
+  employee_id: string
   password: string
 }
 
@@ -76,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       login: async (credentials) => {
         try {
-          const response = await fetch(`${API_BASE_URL}/api/auth/login`, {
+          const response = await fetch(`${API_BASE_URL}/api/auth/portal-login`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

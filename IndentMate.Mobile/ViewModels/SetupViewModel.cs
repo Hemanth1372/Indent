@@ -80,9 +80,15 @@ public partial class SetupViewModel : BaseViewModel
             SecureStorage.Default.Remove("jwt_token");
             Preferences.Default.Set(DeviceSetupCompleteKey, true);
 
-            var responsibilityCode = normalizedEngineerId.StartsWith("SER", StringComparison.OrdinalIgnoreCase)
-                ? "SER"
-                : "SIE";
+            var responsibilityCode = NormalizeRole(adminUser.PrimaryRole);
+
+            if (string.IsNullOrWhiteSpace(responsibilityCode))
+            {
+                responsibilityCode = normalizedEngineerId.StartsWith("SER", StringComparison.OrdinalIgnoreCase) ||
+                    normalizedEngineerId.StartsWith("SRE", StringComparison.OrdinalIgnoreCase)
+                        ? "SER"
+                        : "SIE";
+            }
 
             var engineer = new LocalEngineer
             {
@@ -91,12 +97,11 @@ public partial class SetupViewModel : BaseViewModel
                 PinHash = pinHash,
                 LNEnvironment = LnEnvironment,
                 Company = Company,
-                ResponsibilityCode = string.IsNullOrWhiteSpace(adminUser.PrimaryRole)
-                    ? responsibilityCode
-                    : adminUser.PrimaryRole,
+                ResponsibilityCode = responsibilityCode,
                 LastSyncAt = DateTime.UtcNow
             };
             await _databaseService.SaveAsync(engineer);
+            await SecureStorage.Default.SetAsync("user_role", responsibilityCode);
 
             StatusMessage = "Preparing local data...";
             await SeedLocalDataAsync(normalizedEngineerId);
@@ -286,6 +291,19 @@ public partial class SetupViewModel : BaseViewModel
                 Description = "Air Compressor"
             }
         });
+    }
+
+    private static string NormalizeRole(string? role)
+    {
+        var normalizedRole = (role ?? string.Empty).Trim().ToUpperInvariant();
+
+        return normalizedRole switch
+        {
+            "SRE" => "SER",
+            "SIE" => "SIE",
+            "SER" => "SER",
+            _ => string.Empty
+        };
     }
 }
 

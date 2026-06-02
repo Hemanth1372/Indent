@@ -122,10 +122,15 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
                 _indent.IsSynced = true;
                 await _databaseService.UpdateIndentAsync(_indent);
             }
-            catch
+            catch (Exception ex)
             {
                 _indent.IsSynced = false;
                 await _databaseService.UpdateIndentAsync(_indent);
+                await Shell.Current.DisplayAlert(
+                    "Sync failed",
+                    $"The indent was saved on this device, but it did not reach the admin portal. {ex.Message}",
+                    "OK");
+                return;
             }
 
             await LoadAsync();

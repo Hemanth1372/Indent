@@ -12,7 +12,7 @@ const INDENT_SELECT_SQL = `
     dpm.description AS delivery_location_name,
     i.requirement_type,
     i.item_code,
-    im.item_name,
+    im.item_description AS item_name,
     i.make,
     i.required_qty,
     i.uom,
@@ -50,19 +50,14 @@ export async function createIndent(req, res, next) {
       return res.status(401).json({ message: 'Authenticated user is required' })
     }
 
-    const {
-      project_code,
-      delivery_location,
-      requirement_type,
-      item_code,
-      make = null,
-      required_qty,
-      uom,
-      remarks = null,
-    } = req.validated.body
+    const indentValues = normalizeIndentPayload(req.validated.body)
 
     await client.query('BEGIN')
     await client.query('LOCK TABLE indents IN EXCLUSIVE MODE')
+
+    if (indentValues.source === 'mobile') {
+      await ensureMobileIndentReferences(client, indentValues)
+    }
 
     const indentNo = await generateNextIndentNo(client)
     const insertResult = await client.query(
@@ -86,14 +81,14 @@ export async function createIndent(req, res, next) {
       [
         indentNo,
         createdBy,
-        project_code,
-        delivery_location,
-        requirement_type,
-        item_code,
-        make,
-        required_qty,
-        uom,
-        remarks,
+        indentValues.project_code,
+        indentValues.delivery_location,
+        indentValues.requirement_type,
+        indentValues.item_code,
+        indentValues.make,
+        indentValues.required_qty,
+        indentValues.uom,
+        indentValues.remarks,
       ],
     )
 
@@ -189,6 +184,93 @@ async function generateNextIndentNo(client) {
   const nextSequence = Number.isFinite(latestSequence) ? latestSequence + 1 : 1
 
   return `${prefix}${String(nextSequence).padStart(4, '0')}`
+}
+
+function normalizeIndentPayload(body) {
+  if ('project_code' in body) {
+    return {
+      source: 'admin',
+      project_code: body.project_code,
+      delivery_location: body.delivery_location,
+      requirement_type: body.requirement_type,
+      item_code: body.item_code,
+      make: body.make ?? null,
+      required_qty: body.required_qty,
+      uom: body.uom,
+      remarks: body.remarks ?? null,
+      item_name: null,
+    }
+  }
+
+  const firstItem = body.items[0]
+
+  return {
+    source: 'mobile',
+    project_code: body.projectId,
+    delivery_location: firstItem.locationId || body.warehouseId || body.projectId,
+    requirement_type: body.indentType || firstItem.workType || body.engineerType || 'General',
+    item_code: firstItem.materialCode,
+    make: body.equipmentDisplay || null,
+    required_qty: firstItem.requestedQty,
+    uom: firstItem.uom,
+    remarks: firstItem.remarks || body.requestNo || null,
+    item_name: firstItem.materialDesc || firstItem.materialCode,
+  }
+}
+
+async function ensureMobileIndentReferences(client, indentValues) {
+  await client.query(
+    `
+      INSERT INTO projects (site_code, project_name, location, status)
+      VALUES ($1, $2, $3, 'Active')
+      ON CONFLICT (site_code) DO NOTHING
+    `,
+    [indentValues.project_code, indentValues.project_code, indentValues.project_code],
+  )
+
+  await client.query(
+    `
+      INSERT INTO delivery_point_master (
+        delivery_point_code,
+        address_code,
+        address_description,
+        description
+      )
+      VALUES ($1, $2, $3, $4)
+      ON CONFLICT (delivery_point_code) DO NOTHING
+    `,
+    [
+      indentValues.delivery_location,
+      indentValues.delivery_location,
+      indentValues.delivery_location,
+      indentValues.delivery_location,
+    ],
+  )
+
+  await client.query(
+    `
+      INSERT INTO item_master (
+        project_site,
+        site_description,
+        warehouse_code,
+        warehouse_description,
+        on_hand_qty,
+        item_code,
+        item_description,
+        purchase_unit,
+        item_type
+      )
+      VALUES ($1, $2, NULL, NULL, 0, $3, $4, $5, 'Product')
+      ON CONFLICT (project_site, warehouse_code, item_code) DO NOTHING
+    `,
+    [
+      indentValues.project_code,
+      indentValues.project_code,
+      indentValues.item_code,
+      indentValues.item_name,
+      indentValues.uom,
+    ],
+  )
 }
 
 async function fetchIndentById(id) {

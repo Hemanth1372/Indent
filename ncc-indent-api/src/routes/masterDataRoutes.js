@@ -1,9 +1,16 @@
 import { Router } from 'express'
-import { createMasterData, listMasterData } from '../controllers/masterDataController.js'
-import { requireAdministrator, verifyToken } from '../middleware/verifyToken.js'
+import {
+  createMasterData,
+  listMasterData,
+  updateMasterData,
+  updateMasterStatus,
+} from '../controllers/masterDataController.js'
+import { verifySuperAdmin } from '../middleware/authAdmin.js'
 
 export const masterDataRoutes = Router()
 
-masterDataRoutes.use(verifyToken)
+masterDataRoutes.use(verifySuperAdmin)
 masterDataRoutes.get('/:masterKey', listMasterData)
-masterDataRoutes.post('/:masterKey', requireAdministrator, createMasterData)
+masterDataRoutes.post('/:masterKey', createMasterData)
+masterDataRoutes.put('/:masterKey/:id', updateMasterData)
+masterDataRoutes.patch('/:masterKey/:id/toggle-status', updateMasterStatus)

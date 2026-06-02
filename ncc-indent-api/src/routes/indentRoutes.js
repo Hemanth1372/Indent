@@ -5,7 +5,8 @@ import {
   listIndents,
   updateIndentStatus,
 } from '../controllers/indentController.js'
-import { requireAdministrator, verifyToken } from '../middleware/verifyToken.js'
+import { verifySuperAdmin } from '../middleware/authAdmin.js'
+import { verifyToken } from '../middleware/verifyToken.js'
 import { validate } from '../middleware/validate.js'
 import {
   createIndentSchema,
@@ -15,8 +16,7 @@ import {
 
 export const indentRoutes = Router()
 
-indentRoutes.use(verifyToken)
-indentRoutes.get('/', requireAdministrator, listIndents)
-indentRoutes.post('/', validate(createIndentSchema), createIndent)
-indentRoutes.patch('/:id/status', requireAdministrator, validate(updateIndentStatusSchema), updateIndentStatus)
-indentRoutes.delete('/:id', requireAdministrator, validate(indentIdSchema), deleteIndent)
+indentRoutes.get('/', verifySuperAdmin, listIndents)
+indentRoutes.post('/', verifyToken, validate(createIndentSchema), createIndent)
+indentRoutes.patch('/:id/status', verifySuperAdmin, validate(updateIndentStatusSchema), updateIndentStatus)
+indentRoutes.delete('/:id', verifySuperAdmin, validate(indentIdSchema), deleteIndent)

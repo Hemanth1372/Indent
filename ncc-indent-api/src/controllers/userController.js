@@ -1,45 +1,91 @@
 import bcrypt from 'bcryptjs'
 import { query } from '../db/pool.js'
 
-const USERS_SELECT_SQL = `
-  SELECT user_id, login_name, employee_name, employee_id_str, primary_role, is_active, current_pin, created_at
-  FROM users
-  ORDER BY created_at DESC
+const USER_MASTER_SELECT_SQL = `
+  SELECT
+    id,
+    id::text AS user_id,
+    employee_id,
+    employee_id AS login_name,
+    employee_name,
+    project_id,
+    project_description,
+    responsibility,
+    responsibility AS primary_role,
+    valid_from,
+    valid_to,
+    manual_status,
+    password_hash,
+    password_hash AS current_pin,
+    created_at,
+    updated_at
+  FROM user_master
+  ORDER BY employee_id ASC, project_id ASC, responsibility ASC
 `
 
-const CREATE_USER_SQL = `
-  INSERT INTO users (login_name, employee_name, employee_id_str, primary_role, password_hash, is_active, current_pin)
-  VALUES ($1, $2, $3, $4, $5, $6, $7)
-  RETURNING user_id, login_name, employee_name, employee_id_str, primary_role, is_active, current_pin, created_at
+const USER_MASTER_RETURNING_SQL = `
+  id,
+  id::text AS user_id,
+  employee_id,
+  employee_id AS login_name,
+  employee_name,
+  project_id,
+  project_description,
+  responsibility,
+  responsibility AS primary_role,
+  valid_from,
+  valid_to,
+  manual_status,
+  password_hash,
+  password_hash AS current_pin,
+  created_at,
+  updated_at
 `
 
-const UPDATE_USER_STATUS_SQL = `
-  UPDATE users
-  SET is_active = $1
-  WHERE user_id = $2
-  RETURNING user_id, login_name, employee_name, employee_id_str, primary_role, is_active, current_pin, created_at
+const CREATE_USER_MASTER_SQL = `
+  INSERT INTO user_master (
+    employee_id,
+    employee_name,
+    project_id,
+    project_description,
+    responsibility,
+    valid_from,
+    valid_to,
+    manual_status,
+    password_hash
+  )
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+  RETURNING ${USER_MASTER_RETURNING_SQL}
 `
 
-const CHANGE_USER_PASSWORD_SQL = `
-  UPDATE users
+const UPDATE_USER_MASTER_STATUS_SQL = `
+  UPDATE user_master
+  SET manual_status = $1,
+      updated_at = CURRENT_TIMESTAMP
+  WHERE employee_id = $2
+  RETURNING ${USER_MASTER_RETURNING_SQL}
+`
+
+const UPDATE_USER_MASTER_ROLE_SQL = `
+  UPDATE user_master
+  SET responsibility = $1,
+      updated_at = CURRENT_TIMESTAMP
+  WHERE id = $2
+  RETURNING ${USER_MASTER_RETURNING_SQL}
+`
+
+const CHANGE_USER_MASTER_PASSWORD_SQL = `
+  UPDATE user_master
   SET password_hash = $1,
-      current_pin = $2
-  WHERE user_id = $3
-  RETURNING user_id, login_name, employee_name
+      updated_at = CURRENT_TIMESTAMP
+  WHERE id = $2
+  RETURNING ${USER_MASTER_RETURNING_SQL}
 `
 
-const SYNC_USER_PIN_SQL = `
-  UPDATE users
-  SET password_hash = $2,
-      current_pin = $3
-  WHERE login_name = $1 AND is_active = TRUE
-  RETURNING user_id, login_name, employee_name, employee_id_str, primary_role, is_active, current_pin, created_at
-`
-
-const DELETE_USER_SQL = `
-  DELETE FROM users
-  WHERE user_id = $1
-  RETURNING user_id, login_name, employee_name, primary_role
+const DELETE_USER_MASTER_SQL = `
+  DELETE FROM user_master
+  WHERE id = $1
+  RETURNING id, employee_id, employee_name, responsibility
 `
 
 const LOOKUP_USER_SQL = `
@@ -49,15 +95,135 @@ const LOOKUP_USER_SQL = `
   LIMIT 1
 `
 
-function currentPinFromPassword(password) {
-  const value = String(password ?? '').trim()
-  return /^\d{6}$/.test(value) ? value : null
+const USER_MASTER_SEARCH_FIELDS = {
+  employee_id: 'employee_id',
+  employee_name: 'employee_name',
+  project_id: 'project_id',
+  project_description: 'project_description',
+  responsibility: 'responsibility',
+  manual_status: 'manual_status',
 }
 
-export async function listUsers(_req, res, next) {
+function formatDateOnly(value) {
+  if (!value) {
+    return null
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10)
+  }
+
+  return String(value).slice(0, 10) || null
+}
+
+function computeStatus(user, today = new Date()) {
+  if (String(user.manual_status ?? '').toLowerCase() === 'inactive') {
+    return 'Inactive'
+  }
+
+  const validFrom = formatDateOnly(user.valid_from)
+  const validTo = formatDateOnly(user.valid_to)
+
+  if (!validFrom && !validTo) {
+    return 'Active'
+  }
+
+  const currentDate = today.toISOString().slice(0, 10)
+  const startsOnTime = !validFrom || currentDate >= validFrom
+  const endsOnTime = !validTo || currentDate <= validTo
+
+  return startsOnTime && endsOnTime ? 'Active' : 'Inactive'
+}
+
+function normalizeUser(row) {
+  const status = computeStatus(row)
+
+  return {
+    ...row,
+    valid_from: formatDateOnly(row.valid_from),
+    valid_to: formatDateOnly(row.valid_to),
+    status,
+    is_active: status === 'Active',
+  }
+}
+
+function currentPinFromPassword(password) {
+  const value = String(password ?? '').trim()
+  return /^\d{6}$/.test(value) ? value : '123456'
+}
+
+async function upsertLoginUser({ employee_id, employee_name, responsibility, password }) {
+  const pin = currentPinFromPassword(password)
+  const passwordHash = await bcrypt.hash(pin, 12)
+
+  await query(
+    `
+      INSERT INTO users (login_name, employee_name, primary_role, password_hash, is_active, current_pin)
+      VALUES ($1, $2, $3, $4, TRUE, $5)
+      ON CONFLICT (login_name)
+      DO UPDATE SET
+        employee_name = EXCLUDED.employee_name,
+        primary_role = EXCLUDED.primary_role,
+        password_hash = EXCLUDED.password_hash,
+        current_pin = EXCLUDED.current_pin
+    `,
+    [employee_id, employee_name, responsibility, passwordHash, pin],
+  )
+}
+
+export async function listUsers(req, res, next) {
   try {
-    const result = await query(USERS_SELECT_SQL)
-    return res.json({ data: result.rows })
+    const searchField = String(req.query?.field ?? '').trim()
+    const searchValue = String(req.query?.value ?? '').trim()
+
+    if (!searchField || !searchValue) {
+      const result = await query(USER_MASTER_SELECT_SQL)
+      return res.json({ data: result.rows.map(normalizeUser) })
+    }
+
+    if (searchField === 'status') {
+      const result = await query(USER_MASTER_SELECT_SQL)
+      const normalizedSearchValue = searchValue.toLowerCase()
+      const users = result.rows
+        .map(normalizeUser)
+        .filter((user) => user.status.toLowerCase() === normalizedSearchValue)
+
+      return res.json({ data: users })
+    }
+
+    const columnName = USER_MASTER_SEARCH_FIELDS[searchField]
+
+    if (!columnName) {
+      return res.status(400).json({ message: 'Invalid User Master filter field' })
+    }
+
+    const result = await query(
+      `
+        SELECT
+          id,
+          id::text AS user_id,
+          employee_id,
+          employee_id AS login_name,
+          employee_name,
+          project_id,
+          project_description,
+          responsibility,
+          responsibility AS primary_role,
+          valid_from,
+          valid_to,
+          manual_status,
+          password_hash,
+          password_hash AS current_pin,
+          created_at,
+          updated_at
+        FROM user_master
+        WHERE ${columnName} ILIKE $1
+        ORDER BY employee_id ASC, project_id ASC, responsibility ASC
+      `,
+      [`%${searchValue}%`],
+    )
+
+    return res.json({ data: result.rows.map(normalizeUser) })
   } catch (error) {
     return next(error)
   }
@@ -66,34 +232,45 @@ export async function listUsers(_req, res, next) {
 export async function createUser(req, res, next) {
   try {
     const {
-      login_name,
+      employee_id,
       employee_name,
-      employee_id_str = null,
-      primary_role = null,
-      password = 'ncc1234',
-      is_active = true,
+      project_id,
+      project_description,
+      responsibility,
+      valid_from = null,
+      valid_to = null,
+      manual_status = 'Active',
+      password = '123456',
     } = req.validated.body
-    const passwordHash = await bcrypt.hash(password, 12)
-    const currentPin = currentPinFromPassword(password)
-    const result = await query(CREATE_USER_SQL, [
-      login_name,
+    const pin = currentPinFromPassword(password)
+    const result = await query(CREATE_USER_MASTER_SQL, [
+      employee_id,
       employee_name,
-      employee_id_str,
-      primary_role,
-      passwordHash,
-      is_active,
-      currentPin,
+      project_id,
+      project_description,
+      responsibility,
+      valid_from,
+      valid_to,
+      manual_status,
+      pin,
     ])
 
+    await upsertLoginUser({
+      employee_id,
+      employee_name,
+      responsibility,
+      password: pin,
+    })
+
     return res.status(201).json({
-      message: 'User created successfully',
-      data: result.rows[0],
-      user: result.rows[0],
-      default_password: password === 'ncc1234' ? 'ncc1234' : undefined,
+      message: 'User Master record created successfully',
+      data: normalizeUser(result.rows[0]),
+      user: normalizeUser(result.rows[0]),
+      default_password: pin,
     })
   } catch (error) {
     if (error.code === '23505') {
-      return res.status(409).json({ message: 'A user with this login name already exists' })
+      return res.status(409).json({ message: 'This employee/project/responsibility already exists' })
     }
 
     return next(error)
@@ -102,28 +279,51 @@ export async function createUser(req, res, next) {
 
 export async function updateUserStatus(req, res, next) {
   try {
-    const { userId } = req.validated.params
-    const { is_active } = req.validated.body
-    const userToUpdate = await query('SELECT primary_role FROM users WHERE user_id = $1', [userId])
+    const { employeeId } = req.validated.params
+    const { manual_status } = req.validated.body
+    const result = await query(UPDATE_USER_MASTER_STATUS_SQL, [manual_status, employeeId])
 
-    if (!userToUpdate.rows[0]) {
-      return res.status(404).json({ message: 'User not found' })
+    if (!result.rows.length) {
+      return res.status(404).json({ message: 'User Master record not found' })
     }
 
-    if (!is_active && isProtectedAdminRole(userToUpdate.rows[0].primary_role)) {
-      return res.status(403).json({ message: 'Super Admin and Administrator users cannot be deactivated' })
-    }
+    const users = result.rows.map(normalizeUser)
 
-    const result = await query(UPDATE_USER_STATUS_SQL, [is_active, userId])
-
-    if (!result.rows[0]) {
-      return res.status(404).json({ message: 'User not found' })
-    }
+    await query(
+      'UPDATE users SET is_active = $1 WHERE login_name = $2',
+      [manual_status === 'Active', employeeId],
+    )
 
     return res.json({
-      message: is_active ? 'User activated successfully' : 'User deactivated successfully',
-      data: result.rows[0],
-      user: result.rows[0],
+      message: manual_status === 'Active' ? 'User activated successfully' : 'User deactivated successfully',
+      data: users[0],
+      users,
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function updateUserRole(req, res, next) {
+  try {
+    const { userId } = req.validated.params
+    const { responsibility } = req.validated.body
+    const result = await query(UPDATE_USER_MASTER_ROLE_SQL, [responsibility, userId])
+
+    if (!result.rows[0]) {
+      return res.status(404).json({ message: 'User Master record not found' })
+    }
+
+    const user = normalizeUser(result.rows[0])
+    await query(
+      'UPDATE users SET primary_role = $1 WHERE login_name = $2',
+      [responsibility, user.employee_id],
+    )
+
+    return res.json({
+      message: 'Responsibility updated successfully',
+      data: user,
+      user,
     })
   } catch (error) {
     return next(error)
@@ -134,20 +334,24 @@ export async function changeUserPassword(req, res, next) {
   try {
     const { userId } = req.validated.params
     const { newPassword } = req.validated.body
-    const passwordHash = await bcrypt.hash(newPassword, 12)
-    const result = await query(CHANGE_USER_PASSWORD_SQL, [
-      passwordHash,
-      currentPinFromPassword(newPassword),
-      userId,
-    ])
+    const pin = currentPinFromPassword(newPassword)
+    const result = await query(CHANGE_USER_MASTER_PASSWORD_SQL, [pin, userId])
 
     if (!result.rows[0]) {
-      return res.status(404).json({ message: 'User not found' })
+      return res.status(404).json({ message: 'User Master record not found' })
     }
 
+    const user = normalizeUser(result.rows[0])
+    const passwordHash = await bcrypt.hash(pin, 12)
+    await query(
+      'UPDATE users SET password_hash = $1, current_pin = $2 WHERE login_name = $3',
+      [passwordHash, pin, user.employee_id],
+    )
+
     return res.json({
-      message: 'Password updated successfully',
-      user: result.rows[0],
+      message: 'PIN updated successfully',
+      data: user,
+      user,
     })
   } catch (error) {
     return next(error)
@@ -159,23 +363,33 @@ export async function syncUserPin(req, res, next) {
     const { login_name, current_pin } = req.validated.body
     const normalizedLoginName = login_name.trim()
     const passwordHash = await bcrypt.hash(current_pin, 12)
-    const result = await query(SYNC_USER_PIN_SQL, [
-      normalizedLoginName,
-      passwordHash,
-      current_pin,
-    ])
+    const userResult = await query(
+      `
+        UPDATE users
+        SET password_hash = $2,
+            current_pin = $3
+        WHERE login_name = $1 AND is_active = TRUE
+        RETURNING user_id, login_name, login_name AS employee_id, employee_name, primary_role, is_active, current_pin, current_pin AS password_hash, created_at
+      `,
+      [normalizedLoginName, passwordHash, current_pin],
+    )
 
-    if (!result.rows[0]) {
+    if (!userResult.rows[0]) {
       return res.status(404).json({
         errorCode: 'LOGIN_ID_NOT_FOUND',
         message: 'No login ID found.',
       })
     }
 
+    await query(
+      'UPDATE user_master SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE employee_id = $2',
+      [current_pin, normalizedLoginName],
+    )
+
     return res.json({
       message: 'PIN synchronized successfully',
-      data: result.rows[0],
-      user: result.rows[0],
+      data: userResult.rows[0],
+      user: userResult.rows[0],
     })
   } catch (error) {
     return next(error)
@@ -185,14 +399,23 @@ export async function syncUserPin(req, res, next) {
 export async function deleteUser(req, res, next) {
   try {
     const { userId } = req.validated.params
-    const result = await query(DELETE_USER_SQL, [userId])
+    const result = await query(DELETE_USER_MASTER_SQL, [userId])
 
     if (!result.rows[0]) {
-      return res.status(404).json({ message: 'User not found' })
+      return res.status(404).json({ message: 'User Master record not found' })
+    }
+
+    const remaining = await query(
+      'SELECT 1 FROM user_master WHERE employee_id = $1 LIMIT 1',
+      [result.rows[0].employee_id],
+    )
+
+    if (!remaining.rows[0]) {
+      await query('DELETE FROM users WHERE login_name = $1', [result.rows[0].employee_id])
     }
 
     return res.json({
-      message: 'User deleted successfully',
+      message: 'User Master record deleted successfully',
       user: result.rows[0],
     })
   } catch (error) {
@@ -213,8 +436,4 @@ export async function lookupUser(req, res, next) {
   } catch (error) {
     return next(error)
   }
-}
-
-function isProtectedAdminRole(role) {
-  return ['super admin', 'administrator'].includes(String(role ?? '').toLowerCase())
 }

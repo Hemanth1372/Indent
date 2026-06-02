@@ -9,6 +9,7 @@ public partial class IndentHomeViewModel : BaseViewModel
 {
     private readonly DatabaseService _databaseService;
 
+    [ObservableProperty] private string _dashboardTitle = "Indent Home";
     [ObservableProperty] private int _pendingApprovalCount;
     [ObservableProperty] private int _indentsRaisedCount;
     [ObservableProperty] private int _rejectedIndentsCount;
@@ -32,6 +33,8 @@ public partial class IndentHomeViewModel : BaseViewModel
         await RunBusyAsync(async () =>
         {
             var engineerId = await SecureStorage.Default.GetAsync("engineer_id") ?? string.Empty;
+            DashboardTitle = GetDashboardTitle(await SecureStorage.Default.GetAsync("user_role"));
+
             if (string.IsNullOrWhiteSpace(engineerId))
             {
                 PendingApprovalCount = 0;
@@ -73,11 +76,33 @@ public partial class IndentHomeViewModel : BaseViewModel
             ? null
             : await _databaseService.GetEngineerAsync(engineerId);
 
-        var route = string.Equals(engineer?.ResponsibilityCode, "SER", StringComparison.OrdinalIgnoreCase)
+        var role = NormalizeRole(engineer?.ResponsibilityCode ?? await SecureStorage.Default.GetAsync("user_role"));
+        var route = string.Equals(role, "SER", StringComparison.OrdinalIgnoreCase)
             ? "//ser-indent-header"
             : "//indent-header";
 
         await Shell.Current.GoToAsync(route);
+    }
+
+    private static string GetDashboardTitle(string? role)
+    {
+        return NormalizeRole(role) switch
+        {
+            "SIE" => "SIE Dashboard",
+            "SER" => "SRE Dashboard",
+            _ => "Indent Home"
+        };
+    }
+
+    private static string NormalizeRole(string? role)
+    {
+        var normalizedRole = (role ?? string.Empty).Trim().ToUpperInvariant();
+
+        return normalizedRole switch
+        {
+            "SRE" => "SER",
+            _ => normalizedRole
+        };
     }
 
     [RelayCommand]

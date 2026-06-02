@@ -6,8 +6,8 @@ import {
   LayoutDashboard,
   LogOut,
 } from 'lucide-react'
-import { useState } from 'react'
-import { Link, NavLink, useNavigate } from 'react-router-dom'
+import { useEffect, useState } from 'react'
+import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 
 const mastersGroups = [
@@ -15,18 +15,14 @@ const mastersGroups = [
     key: 'admin',
     label: 'Admin',
     items: [
-      'User Master',
-      'Role Master',
-      'Project Master',
-      'Business Partner Master',
+      'Responsibility Master',
+      'Business Partner Activity Master',
     ],
   },
   {
     key: 'location',
     label: 'Location',
     items: [
-      'State Master',
-      'Circle Master',
       'Location Master',
       'Delivery Point Master',
     ],
@@ -35,10 +31,7 @@ const mastersGroups = [
     key: 'project',
     label: 'Project',
     items: [
-      'Project BOQ Supply',
-      'Project BOQ Erection',
-      'Project Hindrance Master',
-      'Responsibility Master',
+      'Project Master',
       'Activity Master',
       'Service Orders',
     ],
@@ -49,7 +42,7 @@ const mastersGroups = [
     items: [
       'Item Master',
       'Warehouse Master',
-      'Warehouse Bin Master',
+      'Warehouse Location Master',
     ],
   },
 ]
@@ -64,21 +57,29 @@ function getMasterPath(groupKey: string, item: string) {
   }
 
   if (item === 'Responsibility Master') {
-    return '/responsibility-master'
+    return '/admin/responsibility-master'
   }
 
   const realMasterItems = new Set([
     'Project Master',
     'Activity Master',
-    'Business Partner Master',
+    'Business Partner Activity Master',
     'Location Master',
     'Delivery Point Master',
     'Item Master',
     'Warehouse Master',
-    'Warehouse Bin Master',
+    'Warehouse Location Master',
   ])
 
   if (realMasterItems.has(item)) {
+    if (item === 'Business Partner Activity Master') {
+      return '/master-data/business-partner-master'
+    }
+
+    if (item === 'Warehouse Location Master') {
+      return '/master-data/warehouse-bin-master'
+    }
+
     return `/master-data/${slugify(item)}`
   }
 
@@ -90,10 +91,21 @@ type SidebarProps = {
 }
 
 export default function Sidebar({ open }: SidebarProps) {
-  const [mastersOpen, setMastersOpen] = useState(false)
-  const [openGroup, setOpenGroup] = useState<string | null>(null)
+  const location = useLocation()
+  const activeGroup = getActiveGroup(location.pathname)
+  const [mastersOpen, setMastersOpen] = useState(Boolean(activeGroup))
+  const [openGroup, setOpenGroup] = useState<string | null>(activeGroup)
   const { logout } = useAuth()
   const navigate = useNavigate()
+
+  useEffect(() => {
+    const nextActiveGroup = getActiveGroup(location.pathname)
+
+    if (nextActiveGroup) {
+      setMastersOpen(true)
+      setOpenGroup(nextActiveGroup)
+    }
+  }, [location.pathname])
 
   function handleLogout() {
     logout()
@@ -205,4 +217,18 @@ export default function Sidebar({ open }: SidebarProps) {
       </div>
     </aside>
   )
+}
+
+function getActiveGroup(pathname: string) {
+  for (const group of mastersGroups) {
+    if (group.items.some((item) => getMasterPath(group.key, item) === pathname)) {
+      return group.key
+    }
+  }
+
+  if (pathname.startsWith('/master-data/')) {
+    return 'project'
+  }
+
+  return null
 }

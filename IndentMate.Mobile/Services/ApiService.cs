@@ -10,7 +10,7 @@ namespace IndentMate.Mobile.Services;
 public class ApiService
 {
     private readonly HttpClient _httpClient;
-    private const string BaseUrl = "https://localhost:7001"; // Change to deployed URL
+    private const string BaseUrl = "http://localhost:4000";
 
     public ApiService()
     {
@@ -35,6 +35,7 @@ public class ApiService
     /// <summary>Generic GET request. Returns deserialized object or default.</summary>
     public async Task<T?> GetAsync<T>(string endpoint, CancellationToken ct = default)
     {
+        await ApplyStoredAuthTokenAsync();
         var response = await _httpClient.GetAsync(endpoint, ct);
         response.EnsureSuccessStatusCode();
         var json = await response.Content.ReadAsStringAsync(ct);
@@ -45,6 +46,7 @@ public class ApiService
     public async Task<TResponse?> PostAsync<TRequest, TResponse>(
         string endpoint, TRequest payload, CancellationToken ct = default)
     {
+        await ApplyStoredAuthTokenAsync();
         var json = JsonConvert.SerializeObject(payload);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
         var response = await _httpClient.PostAsync(endpoint, content, ct);
@@ -57,9 +59,23 @@ public class ApiService
     public async Task PutAsync<TRequest>(
         string endpoint, TRequest payload, CancellationToken ct = default)
     {
+        await ApplyStoredAuthTokenAsync();
         var json = JsonConvert.SerializeObject(payload);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
         var response = await _httpClient.PutAsync(endpoint, content, ct);
         response.EnsureSuccessStatusCode();
+    }
+
+    private async Task ApplyStoredAuthTokenAsync()
+    {
+        var token = await SecureStorage.Default.GetAsync("jwt_token");
+
+        if (string.IsNullOrWhiteSpace(token))
+        {
+            ClearAuthToken();
+            return;
+        }
+
+        SetAuthToken(token);
     }
 }

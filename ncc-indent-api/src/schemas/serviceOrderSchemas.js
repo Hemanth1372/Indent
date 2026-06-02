@@ -2,8 +2,8 @@ import { z } from 'zod'
 
 const serviceOrderBodySchema = z.object({
   service_order_no: z.string().trim().min(1).max(50),
-  status: z.string().trim().min(1).max(50),
-  item_code: z.string().trim().min(1).max(50),
+  status: z.string().trim().min(1).max(100),
+  item_code: z.string().trim().max(100).optional().nullable(),
   serial_number: z.string().trim().max(100).optional().nullable(),
   description: z.string().trim().max(2000).optional().nullable(),
   project_site: z.string().trim().min(1).max(50),
@@ -20,7 +20,7 @@ export const updateServiceOrderSchema = z.object({
     message: 'At least one field is required',
   }),
   params: z.object({
-    id: z.string().uuid(),
+    id: z.coerce.number().int().positive(),
   }),
   query: z.object({}).optional(),
 })
@@ -28,7 +28,7 @@ export const updateServiceOrderSchema = z.object({
 export const serviceOrderIdSchema = z.object({
   body: z.object({}).optional(),
   params: z.object({
-    id: z.string().uuid(),
+    id: z.coerce.number().int().positive(),
   }),
   query: z.object({}).optional(),
 })

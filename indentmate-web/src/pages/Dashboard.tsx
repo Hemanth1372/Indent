@@ -36,9 +36,13 @@ export default function Dashboard() {
     }
 
     loadStats()
+    const refreshInterval = window.setInterval(loadStats, 15000)
+    window.addEventListener('focus', loadStats)
 
     return () => {
       isMounted = false
+      window.clearInterval(refreshInterval)
+      window.removeEventListener('focus', loadStats)
     }
   }, [])
 

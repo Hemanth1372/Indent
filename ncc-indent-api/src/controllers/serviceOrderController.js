@@ -6,26 +6,78 @@ const SERVICE_ORDER_SELECT_SQL = `
     so.service_order_no,
     so.status,
     so.item_code,
-    im.item_name,
     so.serial_number,
     so.description,
     so.project_site,
-    p.project_name,
     so.created_at,
     so.updated_at
   FROM service_orders so
-  LEFT JOIN item_master im ON im.item_code = so.item_code
-  LEFT JOIN projects p ON p.site_code = so.project_site
 `
 
-export async function listServiceOrders(_req, res, next) {
-  try {
-    const result = await query(`
-      ${SERVICE_ORDER_SELECT_SQL}
-      ORDER BY so.created_at DESC, so.service_order_no ASC
-    `)
+const SEARCHABLE_SERVICE_ORDER_FIELDS = [
+  'service_order_no',
+  'status',
+  'item_code',
+  'serial_number',
+  'project_site',
+  'description',
+]
 
-    return res.json({ data: result.rows })
+export async function listServiceOrders(req, res, next) {
+  try {
+    const requestedPage = Number.parseInt(String(req.query?.page ?? ''), 10)
+    const requestedLimit = Number.parseInt(String(req.query?.limit ?? ''), 10)
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 500)
+      : 100
+    const searchField = String(req.query?.field ?? '').trim()
+    const searchValue = String(req.query?.value ?? '').trim()
+
+    if (searchField || searchValue) {
+      if (!searchField || !searchValue) {
+        return res.status(400).json({ message: 'Both filter field and value are required' })
+      }
+
+      if (!SEARCHABLE_SERVICE_ORDER_FIELDS.includes(searchField)) {
+        return res.status(400).json({ message: 'Invalid filter field' })
+      }
+    }
+
+    const whereClause = searchField && searchValue ? `WHERE so.${searchField} ILIKE $1` : ''
+    const filterParams = searchField && searchValue ? [`%${searchValue}%`] : []
+    const countResult = await query(
+      `
+        SELECT COUNT(*)::int AS total
+        FROM service_orders so
+        ${whereClause}
+      `,
+      filterParams,
+    )
+    const totalRecords = Number(countResult.rows[0]?.total ?? 0)
+    const totalPages = Math.max(1, Math.ceil(totalRecords / limit))
+    const currentPage = Number.isFinite(requestedPage) && requestedPage > 0
+      ? Math.min(requestedPage, totalPages)
+      : 1
+    const offset = (currentPage - 1) * limit
+    const result = await query(
+      `
+        ${SERVICE_ORDER_SELECT_SQL}
+        ${whereClause}
+        ORDER BY so.service_order_no ASC
+        LIMIT $${filterParams.length + 1} OFFSET $${filterParams.length + 2}
+      `,
+      [...filterParams, limit, offset],
+    )
+
+    return res.json({
+      metadata: {
+        totalRecords,
+        totalPages,
+        currentPage,
+        limit,
+      },
+      data: result.rows,
+    })
   } catch (error) {
     return next(error)
   }
@@ -35,7 +87,7 @@ export async function listServiceOrderOptions(_req, res, next) {
   try {
     const [itemsResult, sitesResult] = await Promise.all([
       query(`
-        SELECT item_code, item_name
+        SELECT item_code, item_description AS item_name
         FROM item_master
         ORDER BY item_code ASC
       `),
@@ -61,7 +113,7 @@ export async function createServiceOrder(req, res, next) {
     const {
       service_order_no,
       status,
-      item_code,
+      item_code = null,
       serial_number = null,
       description = null,
       project_site,
@@ -179,7 +231,7 @@ function handleServiceOrderError(error, res, next) {
   }
 
   if (error.code === '23503') {
-    return res.status(400).json({ message: 'Item code or project site was not found' })
+    return res.status(400).json({ message: 'Referenced service order data was not found' })
   }
 
   return next(error)

@@ -2,6 +2,7 @@ import cors from 'cors'
 import express from 'express'
 import { env } from './config/env.js'
 import { authRoutes } from './routes/authRoutes.js'
+import { bpActivityRoutes } from './routes/bpActivityRoutes.js'
 import { dashboardRoutes } from './routes/dashboardRoutes.js'
 import { indentRoutes } from './routes/indentRoutes.js'
 import { masterDataRoutes } from './routes/masterDataRoutes.js'
@@ -9,6 +10,7 @@ import { projectRoutes } from './routes/projectRoutes.js'
 import { responsibilityRoutes } from './routes/responsibilityRoutes.js'
 import { serviceOrderRoutes } from './routes/serviceOrderRoutes.js'
 import { userRoutes } from './routes/userRoutes.js'
+import { warehouseLocationRoutes } from './routes/warehouseLocationRoutes.js'
 
 export function createApp() {
   const app = express()
@@ -39,6 +41,7 @@ export function createApp() {
   })
 
   app.use('/api/auth', authRoutes)
+  app.use('/api/bp-activities', bpActivityRoutes)
   app.use('/api/users', userRoutes)
   app.use('/api/dashboard', dashboardRoutes)
   app.use('/api/indents', indentRoutes)
@@ -46,6 +49,7 @@ export function createApp() {
   app.use('/api/projects', projectRoutes)
   app.use('/api/service-orders', serviceOrderRoutes)
   app.use('/api/responsibilities', responsibilityRoutes)
+  app.use('/api/warehouse-locations', warehouseLocationRoutes)
 
   app.use((_req, res) => {
     res.status(404).json({ message: 'Route not found' })

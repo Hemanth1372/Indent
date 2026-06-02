@@ -6,9 +6,10 @@ import {
   listUsers,
   lookupUser,
   syncUserPin,
+  updateUserRole,
   updateUserStatus,
 } from '../controllers/userController.js'
-import { requireAdministrator, requirePasswordAdministrator, verifyToken } from '../middleware/verifyToken.js'
+import { verifySuperAdmin } from '../middleware/authAdmin.js'
 import { validate } from '../middleware/validate.js'
 import {
   changeUserPasswordSchema,
@@ -16,6 +17,7 @@ import {
   deleteUserSchema,
   lookupUserSchema,
   syncUserPinSchema,
+  updateUserRoleSchema,
   updateUserStatusSchema,
 } from '../schemas/userSchemas.js'
 
@@ -24,9 +26,10 @@ export const userRoutes = Router()
 userRoutes.get('/lookup/:loginName', validate(lookupUserSchema), lookupUser)
 userRoutes.post('/sync-pin', validate(syncUserPinSchema), syncUserPin)
 
-userRoutes.use(verifyToken)
+userRoutes.use(verifySuperAdmin)
 userRoutes.get('/', listUsers)
-userRoutes.post('/', requireAdministrator, validate(createUserSchema), createUser)
-userRoutes.patch('/:userId/status', requireAdministrator, validate(updateUserStatusSchema), updateUserStatus)
-userRoutes.put('/:userId/password', requirePasswordAdministrator, validate(changeUserPasswordSchema), changeUserPassword)
-userRoutes.delete('/:userId', requireAdministrator, validate(deleteUserSchema), deleteUser)
+userRoutes.post('/', validate(createUserSchema), createUser)
+userRoutes.patch('/:employeeId/toggle-status', validate(updateUserStatusSchema), updateUserStatus)
+userRoutes.patch('/:userId/role', validate(updateUserRoleSchema), updateUserRole)
+userRoutes.put('/:userId/password', validate(changeUserPasswordSchema), changeUserPassword)
+userRoutes.delete('/:userId', validate(deleteUserSchema), deleteUser)

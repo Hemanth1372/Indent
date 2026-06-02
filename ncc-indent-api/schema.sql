@@ -21,24 +21,68 @@ CREATE TABLE IF NOT EXISTS projects (
   CONSTRAINT projects_status_chk CHECK (status IN ('Active', 'Inactive', 'Completed', 'On Hold'))
 );
 
+CREATE TABLE IF NOT EXISTS project_master (
+  id SERIAL PRIMARY KEY,
+  project_code VARCHAR(50) UNIQUE NOT NULL,
+  project_description VARCHAR(255) NOT NULL,
+  dpr_engineer_control VARCHAR(50) NOT NULL,
+  multi_location_activity VARCHAR(20) NOT NULL,
+  project_location_linked_activities VARCHAR(20) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 CREATE TABLE IF NOT EXISTS item_master (
-  item_code VARCHAR(50) PRIMARY KEY,
-  item_name VARCHAR(200) NOT NULL,
+  id SERIAL PRIMARY KEY,
+  project_site VARCHAR(50) NOT NULL,
+  site_description VARCHAR(255) NOT NULL,
+  warehouse_code VARCHAR(50) NULL,
+  warehouse_description VARCHAR(255) NULL,
+  on_hand_qty DECIMAL(12, 4) DEFAULT 0.0000,
+  item_code VARCHAR(100) NOT NULL,
+  item_description TEXT NOT NULL,
+  purchase_unit VARCHAR(50) NOT NULL,
+  item_type VARCHAR(100) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_site_warehouse_item UNIQUE (project_site, warehouse_code, item_code)
+);
+
+CREATE TABLE IF NOT EXISTS service_orders (
+  id SERIAL PRIMARY KEY,
+  service_order_no VARCHAR(50) UNIQUE NOT NULL,
+  status VARCHAR(100) NOT NULL,
+  item_code VARCHAR(100) NULL,
+  serial_number VARCHAR(100),
+  project_site VARCHAR(50) NOT NULL,
   description TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE TABLE IF NOT EXISTS service_orders (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  service_order_no VARCHAR(50) UNIQUE NOT NULL,
-  status VARCHAR(50) NOT NULL,
-  item_code VARCHAR(50) NOT NULL REFERENCES item_master(item_code),
-  serial_number VARCHAR(100),
-  description TEXT,
-  project_site VARCHAR(50) NOT NULL REFERENCES projects(site_code),
+CREATE TABLE IF NOT EXISTS warehouse_master (
+  id SERIAL PRIMARY KEY,
+  warehouse_code VARCHAR(50) UNIQUE NOT NULL,
+  warehouse_description VARCHAR(255) NOT NULL,
+  project_site VARCHAR(50) NOT NULL,
+  site_description VARCHAR(255) NOT NULL,
+  is_material_warehouse VARCHAR(10) NOT NULL,
+  is_virtual_warehouse VARCHAR(10) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS warehouse_location_master (
+  id SERIAL PRIMARY KEY,
+  project_code VARCHAR(50) NOT NULL,
+  warehouse_code VARCHAR(50) NOT NULL,
+  warehouse_name VARCHAR(255) NOT NULL,
+  location_code VARCHAR(100) NOT NULL,
+  location_description TEXT NOT NULL,
+  location_category VARCHAR(100) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_wh_location_bin UNIQUE (warehouse_code, location_code)
 );
 
 CREATE TABLE IF NOT EXISTS responsibility_master (
@@ -50,6 +94,43 @@ CREATE TABLE IF NOT EXISTS responsibility_master (
   end_date DATE NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS bp_activity_master (
+  id SERIAL PRIMARY KEY,
+  project_code VARCHAR(50) NOT NULL,
+  project_description VARCHAR(255) NOT NULL,
+  location_code VARCHAR(100) NOT NULL,
+  location_description TEXT NOT NULL,
+  activity_code VARCHAR(100) NULL,
+  activity_description TEXT NULL,
+  business_partner_code VARCHAR(100) NOT NULL,
+  business_partner_name VARCHAR(255) NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_bp_activity_assignment UNIQUE (project_code, location_code, activity_code, business_partner_code)
+);
+
+CREATE TABLE IF NOT EXISTS delivery_point_master (
+  delivery_point_code VARCHAR(80) PRIMARY KEY,
+  address_code VARCHAR(80) NOT NULL,
+  address_description TEXT,
+  description TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS delivery_master (
+  id SERIAL PRIMARY KEY,
+  address_code VARCHAR(100) NOT NULL,
+  address_description TEXT NOT NULL,
+  project_code VARCHAR(50) NOT NULL,
+  project_description VARCHAR(255) NOT NULL,
+  delivery_point VARCHAR(100) NOT NULL,
+  description_1 TEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  CONSTRAINT unique_project_delivery UNIQUE (project_code, address_code, delivery_point)
 );
 
 DO $$
@@ -71,7 +152,7 @@ CREATE TABLE IF NOT EXISTS indents (
   project_code VARCHAR(50) NOT NULL REFERENCES projects(site_code),
   delivery_location VARCHAR(80) NOT NULL REFERENCES delivery_point_master(delivery_point_code),
   requirement_type VARCHAR(80) NOT NULL,
-  item_code VARCHAR(50) NOT NULL REFERENCES item_master(item_code),
+  item_code VARCHAR(50) NOT NULL,
   make VARCHAR(120),
   required_qty NUMERIC(14, 3) NOT NULL,
   uom VARCHAR(50) NOT NULL,
@@ -99,10 +180,22 @@ CREATE TABLE IF NOT EXISTS user_project_roles (
 
 CREATE INDEX IF NOT EXISTS idx_users_login_name ON users(login_name);
 CREATE INDEX IF NOT EXISTS idx_projects_site_code ON projects(site_code);
+CREATE INDEX IF NOT EXISTS idx_project_master_code ON project_master(project_code);
 CREATE INDEX IF NOT EXISTS idx_service_orders_item_code ON service_orders(item_code);
 CREATE INDEX IF NOT EXISTS idx_service_orders_project_site ON service_orders(project_site);
+CREATE INDEX IF NOT EXISTS idx_warehouse_master_site ON warehouse_master(project_site);
+CREATE INDEX IF NOT EXISTS idx_warehouse_master_code ON warehouse_master(warehouse_code);
+CREATE INDEX IF NOT EXISTS idx_warehouse_location_master_project ON warehouse_location_master(project_code);
+CREATE INDEX IF NOT EXISTS idx_warehouse_location_master_warehouse ON warehouse_location_master(warehouse_code);
+CREATE INDEX IF NOT EXISTS idx_warehouse_location_master_location ON warehouse_location_master(location_code);
 CREATE INDEX IF NOT EXISTS idx_responsibility_master_project_code ON responsibility_master(project_code);
 CREATE INDEX IF NOT EXISTS idx_responsibility_master_code ON responsibility_master(responsibility_code);
+CREATE INDEX IF NOT EXISTS idx_bp_activity_master_project ON bp_activity_master(project_code);
+CREATE INDEX IF NOT EXISTS idx_bp_activity_master_location ON bp_activity_master(location_code);
+CREATE INDEX IF NOT EXISTS idx_bp_activity_master_bp ON bp_activity_master(business_partner_code);
+CREATE INDEX IF NOT EXISTS idx_delivery_point_master_address ON delivery_point_master(address_code);
+CREATE INDEX IF NOT EXISTS idx_delivery_master_project ON delivery_master(project_code);
+CREATE INDEX IF NOT EXISTS idx_delivery_master_address ON delivery_master(address_code);
 CREATE INDEX IF NOT EXISTS idx_indents_status ON indents(status);
 CREATE INDEX IF NOT EXISTS idx_indents_created_by ON indents(created_by);
 CREATE INDEX IF NOT EXISTS idx_indents_project_code ON indents(project_code);

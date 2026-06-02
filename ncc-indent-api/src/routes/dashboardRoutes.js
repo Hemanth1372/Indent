@@ -1,8 +1,8 @@
 import { Router } from 'express'
 import { getDashboardStats } from '../controllers/dashboardController.js'
-import { requireAdministrator, verifyToken } from '../middleware/verifyToken.js'
+import { verifySuperAdmin } from '../middleware/authAdmin.js'
 
 export const dashboardRoutes = Router()
 
-dashboardRoutes.use(verifyToken)
-dashboardRoutes.get('/stats', requireAdministrator, getDashboardStats)
+dashboardRoutes.use(verifySuperAdmin)
+dashboardRoutes.get('/stats', getDashboardStats)

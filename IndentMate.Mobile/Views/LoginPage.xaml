@@ -115,7 +115,7 @@
                                                 TextColor="#172033" />
                                             <Label
                                                 FontSize="12"
-                                                Text="{Binding EngineerId, StringFormat='ID: {0}'}"
+                                                Text="{Binding EngineerId, StringFormat='Employee ID: {0}'}"
                                                 TextColor="#7B8794" />
                                         </VerticalStackLayout>
 
@@ -181,7 +181,7 @@
                     <Label
                         FontSize="13"
                         HorizontalOptions="Center"
-                        Text="{Binding EngineerId, StringFormat='User ID: {0}'}"
+                        Text="{Binding EngineerId, StringFormat='Employee ID: {0}'}"
                         TextColor="#8A94A6" />
                 </VerticalStackLayout>
 
@@ -202,7 +202,7 @@
                         ClearButtonVisibility="WhileEditing"
                         HorizontalTextAlignment="Center"
                         Keyboard="Text"
-                        Placeholder="Enter User ID"
+                        Placeholder="Enter Employee ID (e.g. 10075)"
                         Text="{Binding ManualEngineerId, Mode=TwoWay}"
                         TextColor="#172033" />
                 </VerticalStackLayout>

@@ -16,7 +16,7 @@
             <Label
                 FontAttributes="Bold"
                 FontSize="24"
-                Text="Indent Home"
+                Text="{Binding DashboardTitle}"
                 TextColor="#172033"
                 VerticalOptions="Center" />
             <Button

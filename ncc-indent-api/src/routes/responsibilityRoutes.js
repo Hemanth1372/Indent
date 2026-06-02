@@ -6,7 +6,7 @@ import {
   listResponsibilityOptions,
   updateResponsibility,
 } from '../controllers/responsibilityController.js'
-import { requireAdministrator, verifyToken } from '../middleware/verifyToken.js'
+import { verifySuperAdmin } from '../middleware/authAdmin.js'
 import { validate } from '../middleware/validate.js'
 import {
   createResponsibilitySchema,
@@ -16,9 +16,9 @@ import {
 
 export const responsibilityRoutes = Router()
 
-responsibilityRoutes.use(verifyToken)
+responsibilityRoutes.use(verifySuperAdmin)
 responsibilityRoutes.get('/options', listResponsibilityOptions)
 responsibilityRoutes.get('/', listResponsibilities)
-responsibilityRoutes.post('/', requireAdministrator, validate(createResponsibilitySchema), createResponsibility)
-responsibilityRoutes.put('/:id', requireAdministrator, validate(updateResponsibilitySchema), updateResponsibility)
-responsibilityRoutes.delete('/:id', requireAdministrator, validate(responsibilityIdSchema), deleteResponsibility)
+responsibilityRoutes.post('/', validate(createResponsibilitySchema), createResponsibility)
+responsibilityRoutes.put('/:id', validate(updateResponsibilitySchema), updateResponsibility)
+responsibilityRoutes.delete('/:id', validate(responsibilityIdSchema), deleteResponsibility)

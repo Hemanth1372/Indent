@@ -55,3 +55,22 @@ export function requirePasswordAdministrator(req, res, next) {
 
   return next()
 }
+
+export function requireSuperAdmin(req, res, next) {
+  const primaryRole = String(req.user?.primary_role ?? '').toLowerCase()
+  const assignedProjects = Array.isArray(req.user?.assigned_projects)
+    ? req.user.assigned_projects
+    : []
+
+  const isSuperAdmin =
+    primaryRole === 'super admin' ||
+    assignedProjects.some((project) =>
+      String(project.role_name).toLowerCase() === 'super admin',
+    )
+
+  if (!isSuperAdmin) {
+    return res.status(403).json({ message: 'Super Admin role is required' })
+  }
+
+  return next()
+}

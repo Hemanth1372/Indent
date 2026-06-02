@@ -15,14 +15,71 @@ const RESPONSIBILITY_SELECT_SQL = `
   LEFT JOIN projects p ON p.site_code = r.project_code
 `
 
-export async function listResponsibilities(_req, res, next) {
-  try {
-    const result = await query(`
-      ${RESPONSIBILITY_SELECT_SQL}
-      ORDER BY r.created_at DESC, r.project_code ASC, r.responsibility_code ASC
-    `)
+const SEARCHABLE_RESPONSIBILITY_FIELDS = {
+  project_code: 'r.project_code',
+  project_description: 'p.project_name',
+  responsibility_code: 'r.responsibility_code',
+  description: 'r.description',
+}
 
-    return res.json({ data: result.rows })
+export async function listResponsibilities(req, res, next) {
+  try {
+    const requestedPage = Number.parseInt(String(req.query?.page ?? ''), 10)
+    const requestedLimit = Number.parseInt(String(req.query?.limit ?? ''), 10)
+    const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
+      ? Math.min(requestedLimit, 500)
+      : 100
+    const searchField = String(req.query?.field ?? '').trim()
+    const searchValue = String(req.query?.value ?? '').trim()
+
+    if (searchField || searchValue) {
+      if (!searchField || !searchValue) {
+        return res.status(400).json({ message: 'Both filter field and value are required' })
+      }
+
+      if (!Object.prototype.hasOwnProperty.call(SEARCHABLE_RESPONSIBILITY_FIELDS, searchField)) {
+        return res.status(400).json({ message: 'Invalid filter field' })
+      }
+    }
+
+    const whereClause = searchField && searchValue
+      ? `WHERE ${SEARCHABLE_RESPONSIBILITY_FIELDS[searchField]} ILIKE $1`
+      : ''
+    const filterParams = searchField && searchValue ? [`%${searchValue}%`] : []
+    const countResult = await query(
+      `
+        SELECT COUNT(*)::int AS total
+        FROM responsibility_master r
+        LEFT JOIN projects p ON p.site_code = r.project_code
+        ${whereClause}
+      `,
+      filterParams,
+    )
+    const totalRecords = Number(countResult.rows[0]?.total ?? 0)
+    const totalPages = Math.max(1, Math.ceil(totalRecords / limit))
+    const currentPage = Number.isFinite(requestedPage) && requestedPage > 0
+      ? Math.min(requestedPage, totalPages)
+      : 1
+    const offset = (currentPage - 1) * limit
+    const result = await query(
+      `
+        ${RESPONSIBILITY_SELECT_SQL}
+        ${whereClause}
+        ORDER BY r.project_code ASC, r.responsibility_code ASC
+        LIMIT $${filterParams.length + 1} OFFSET $${filterParams.length + 2}
+      `,
+      [...filterParams, limit, offset],
+    )
+
+    return res.json({
+      metadata: {
+        totalRecords,
+        totalPages,
+        currentPage,
+        limit,
+      },
+      data: result.rows,
+    })
   } catch (error) {
     return next(error)
   }

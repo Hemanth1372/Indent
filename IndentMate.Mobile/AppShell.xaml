@@ -24,6 +24,16 @@
         ContentTemplate="{DataTemplate views:IndentHomePage}"
         Title="IndentMate" />
 
+    <ShellContent
+        Route="sie-dashboard"
+        ContentTemplate="{DataTemplate views:IndentHomePage}"
+        Title="SIE Dashboard" />
+
+    <ShellContent
+        Route="sre-dashboard"
+        ContentTemplate="{DataTemplate views:IndentHomePage}"
+        Title="SRE Dashboard" />
+
     <!-- Indent Header (SIE / SER selection) -->
     <ShellContent
         Route="indent-header"

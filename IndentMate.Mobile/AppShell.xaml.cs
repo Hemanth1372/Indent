@@ -15,6 +15,8 @@ public partial class AppShell : Shell
         Routing.RegisterRoute("login", typeof(LoginPage));
         Routing.RegisterRoute("home", typeof(IndentHomePage));
         Routing.RegisterRoute("indent-home", typeof(IndentHomePage));
+        Routing.RegisterRoute("sie-dashboard", typeof(IndentHomePage));
+        Routing.RegisterRoute("sre-dashboard", typeof(IndentHomePage));
         Routing.RegisterRoute("indent-header", typeof(SIEIndentHeaderPage));
         Routing.RegisterRoute("sie-indent-header", typeof(SIEIndentHeaderPage));
         Routing.RegisterRoute("ser-indent-header", typeof(SERIndentHeaderPage));

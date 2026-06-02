@@ -1,7 +1,8 @@
 import type { ReactNode } from 'react'
 import { Navigate, Route, Routes, useParams } from 'react-router-dom'
 import AdminLayout from './components/AdminLayout'
-import { AuthProvider, useAuth } from './context/AuthContext'
+import SuperAdminRoute from './components/SuperAdminRoute'
+import { AuthProvider } from './context/AuthContext'
 import Dashboard from './pages/Dashboard'
 import GenericMasterPage from './pages/GenericMasterPage'
 import IndentDetail from './pages/IndentDetail'
@@ -9,16 +10,13 @@ import IndentList from './pages/IndentList'
 import Login from './pages/Login'
 import ResponsibilityMaster from './pages/ResponsibilityMaster'
 import ServiceOrdersTable from './pages/ServiceOrdersTable'
-import UserMaster from './pages/UserMaster'
 
 function ProtectedRoute({ children, title = 'Dashboard' }: { children: ReactNode; title?: string }) {
-  const { isAuthenticated } = useAuth()
-
-  if (!isAuthenticated) {
-    return <Navigate to="/login" replace />
-  }
-
-  return <AdminLayout title={title}>{children}</AdminLayout>
+  return (
+    <SuperAdminRoute>
+      <AdminLayout title={title}>{children}</AdminLayout>
+    </SuperAdminRoute>
+  )
 }
 
 function PlaceholderPage({ title }: { title: string }) {
@@ -81,10 +79,10 @@ export default function App() {
           }
         />
         <Route
-          path="/masters/admin/user-master"
+          path="/admin/responsibility-master"
           element={
-            <ProtectedRoute title="User Master">
-              <UserMaster />
+            <ProtectedRoute title="Responsibility Master">
+              <ResponsibilityMaster />
             </ProtectedRoute>
           }
         />
@@ -107,9 +105,7 @@ export default function App() {
         <Route
           path="/responsibility-master"
           element={
-            <ProtectedRoute title="Responsibility Master">
-              <ResponsibilityMaster />
-            </ProtectedRoute>
+            <Navigate to="/admin/responsibility-master" replace />
           }
         />
         <Route

@@ -3,6 +3,8 @@ import { MoreVertical, Plus } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { api } from '../services/api'
 
+const PAGE_SIZE = 100
+
 type ResponsibilityRow = {
   id: string
   project_code: string
@@ -28,6 +30,23 @@ type ResponsibilityOptions = {
   }>
 }
 
+type ResponsibilityListResponse = {
+  data: ResponsibilityRow[]
+  metadata: {
+    totalRecords: number
+    totalPages: number
+    currentPage: number
+    limit: number
+  }
+}
+
+const searchFields = [
+  { label: 'Project Code', value: 'project_code', placeholder: 'Enter Project Code...' },
+  { label: 'Project Description', value: 'project_description', placeholder: 'Enter Project Description...' },
+  { label: 'Responsibility', value: 'responsibility_code', placeholder: 'Enter Responsibility...' },
+  { label: 'Description', value: 'description', placeholder: 'Enter Description...' },
+]
+
 function formatDate(value: string) {
   if (!value) {
     return '-'
@@ -49,14 +68,30 @@ export default function ResponsibilityMaster() {
   const [creating, setCreating] = useState(false)
   const [modalOpen, setModalOpen] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalPages, setTotalPages] = useState(1)
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [searchField, setSearchField] = useState('')
+  const [searchQuery, setSearchQuery] = useState('')
+  const [isFilterActive, setIsFilterActive] = useState(false)
 
-  async function loadResponsibilities() {
+  async function loadResponsibilities(params?: { page?: number; field?: string; value?: string }) {
     setLoading(true)
     setError(null)
 
     try {
-      const { data } = await api.get<{ data: ResponsibilityRow[] }>('/api/responsibilities')
+      const requestParams = {
+        page: params?.page ?? currentPage,
+        limit: PAGE_SIZE,
+        ...(params?.field && params?.value ? { field: params.field, value: params.value } : {}),
+      }
+      const { data } = await api.get<ResponsibilityListResponse>('/api/responsibilities', {
+        params: requestParams,
+      })
       setResponsibilities(data.data)
+      setCurrentPage(data.metadata.currentPage)
+      setTotalPages(data.metadata.totalPages)
+      setTotalRecords(data.metadata.totalRecords)
     } catch (requestError) {
       console.error(requestError)
       setError('Could not load Responsibility Master data. Check that the backend is running and you are logged in.')
@@ -80,8 +115,10 @@ export default function ResponsibilityMaster() {
   }
 
   useEffect(() => {
-    loadResponsibilities()
-  }, [])
+    loadResponsibilities(isFilterActive && searchField && searchQuery.trim()
+      ? { page: currentPage, field: searchField, value: searchQuery.trim() }
+      : { page: currentPage })
+  }, [currentPage])
 
   async function openCreateModal() {
     setModalOpen(true)
@@ -102,11 +139,14 @@ export default function ResponsibilityMaster() {
         valid_to: values.valid_to,
         end_date: values.end_date,
       }
-      const { data } = await api.post<{ data: ResponsibilityRow }>('/api/responsibilities', payload)
+      await api.post<{ data: ResponsibilityRow }>('/api/responsibilities', payload)
 
-      setResponsibilities((currentRows) => [data.data, ...currentRows])
       form.resetFields()
       setModalOpen(false)
+      setCurrentPage(1)
+      await loadResponsibilities(isFilterActive && searchField && searchQuery.trim()
+        ? { page: 1, field: searchField, value: searchQuery.trim() }
+        : { page: 1 })
       message.success('Responsibility created successfully')
     } catch (requestError: any) {
       console.error(requestError)
@@ -116,16 +156,77 @@ export default function ResponsibilityMaster() {
     }
   }
 
+  async function handleSearch() {
+    const trimmedQuery = searchQuery.trim()
+
+    if (!searchField || !trimmedQuery) {
+      message.warning('Select a filter field and enter a search value.')
+      return
+    }
+
+    setIsFilterActive(true)
+    setCurrentPage(1)
+    await loadResponsibilities({ page: 1, field: searchField, value: trimmedQuery })
+  }
+
+  async function handleClearSearch() {
+    setSearchField('')
+    setSearchQuery('')
+    setIsFilterActive(false)
+    setCurrentPage(1)
+    await loadResponsibilities({ page: 1 })
+  }
+
+  const showingStart = totalRecords === 0 ? 0 : ((currentPage - 1) * PAGE_SIZE) + 1
+  const showingEnd = Math.min(currentPage * PAGE_SIZE, totalRecords)
+
   return (
     <section className="rounded-lg border border-slate-200 bg-white shadow-sm">
-      <div className="flex items-center justify-between border-b border-slate-200 px-5 py-4">
+      <div className="border-b border-slate-200 px-5 py-4">
         <div>
           <h3 className="text-lg font-bold text-slate-800">Responsibility Master</h3>
           <p className="mt-1 text-sm text-slate-500">Project roles and operational ownership periods</p>
         </div>
-        <div className="flex items-center gap-3">
+
+        <div className="mt-4 flex flex-wrap items-center gap-[15px]">
+          <Select
+            allowClear
+            className="min-w-[220px]"
+            onChange={(value) => {
+              setSearchField(value ?? '')
+              setSearchQuery('')
+            }}
+            options={searchFields.map((field) => ({
+              label: field.label,
+              value: field.value,
+            }))}
+            placeholder="Select Field"
+            value={searchField || undefined}
+          />
+          <Input
+            className="max-w-[360px]"
+            disabled={!searchField}
+            onChange={(event) => setSearchQuery(event.target.value)}
+            onPressEnter={handleSearch}
+            placeholder={
+              searchFields.find((field) => field.value === searchField)?.placeholder ??
+              'Select a field first...'
+            }
+            value={searchQuery}
+          />
+          <Button onClick={handleSearch} type="primary">
+            Search
+          </Button>
+          {isFilterActive && (
+            <Button onClick={handleClearSearch} type="text">
+              Clear
+            </Button>
+          )}
+        </div>
+
+        <div className="mt-4 flex items-center justify-between gap-3">
           <span className="rounded-md bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
-            {responsibilities.length} Responsibilities
+            {totalRecords} Records
           </span>
           <Button icon={<Plus size={16} />} onClick={openCreateModal} type="primary">
             Add Responsibility
@@ -144,8 +245,9 @@ export default function ResponsibilityMaster() {
           <Spin />
         </div>
       ) : (
-        <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
+        <>
+          <div className="overflow-x-auto">
+            <table className="min-w-full divide-y divide-slate-200 text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
                 <th className="px-5 py-3 font-semibold">Project</th>
@@ -180,14 +282,38 @@ export default function ResponsibilityMaster() {
                 </tr>
               ))}
             </tbody>
-          </table>
+            </table>
 
-          {!responsibilities.length && (
-            <div className="px-5 py-10 text-center text-sm text-slate-500">
-              No responsibilities found.
+            {!responsibilities.length && (
+              <div className="px-5 py-10 text-center text-sm text-slate-500">
+                No responsibilities found.
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-3 text-sm text-slate-600">
+            <span>
+              Showing records {showingStart}-{showingEnd} of {totalRecords}
+            </span>
+            <div className="flex items-center gap-3">
+              <Button
+                disabled={currentPage === 1 || loading}
+                onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
+              >
+                Previous
+              </Button>
+              <span className="min-w-[110px] text-center font-semibold text-slate-700">
+                Page {currentPage} of {totalPages}
+              </span>
+              <Button
+                disabled={currentPage === totalPages || loading}
+                onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
+              >
+                Next
+              </Button>
             </div>
-          )}
-        </div>
+          </div>
+        </>
       )}
 
       <Modal
