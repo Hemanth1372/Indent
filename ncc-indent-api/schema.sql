@@ -86,12 +86,16 @@ CREATE TABLE IF NOT EXISTS warehouse_location_master (
 );
 
 CREATE TABLE IF NOT EXISTS responsibility_master (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  project_code VARCHAR(50) NOT NULL REFERENCES projects(site_code),
-  responsibility_code VARCHAR(50) NOT NULL,
-  description VARCHAR(200) NOT NULL,
-  valid_to DATE NOT NULL,
-  end_date DATE NOT NULL,
+  id SERIAL PRIMARY KEY,
+  project_id VARCHAR(50) NOT NULL,
+  project_description VARCHAR(255) NOT NULL,
+  responsibility TEXT NOT NULL,
+  employee_id VARCHAR(50) NOT NULL,
+  employee_name VARCHAR(150) NOT NULL,
+  valid_from DATE NULL,
+  valid_to DATE NULL,
+  manual_status VARCHAR(20) DEFAULT 'Active',
+  password_hash VARCHAR(255) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -188,8 +192,8 @@ CREATE INDEX IF NOT EXISTS idx_warehouse_master_code ON warehouse_master(warehou
 CREATE INDEX IF NOT EXISTS idx_warehouse_location_master_project ON warehouse_location_master(project_code);
 CREATE INDEX IF NOT EXISTS idx_warehouse_location_master_warehouse ON warehouse_location_master(warehouse_code);
 CREATE INDEX IF NOT EXISTS idx_warehouse_location_master_location ON warehouse_location_master(location_code);
-CREATE INDEX IF NOT EXISTS idx_responsibility_master_project_code ON responsibility_master(project_code);
-CREATE INDEX IF NOT EXISTS idx_responsibility_master_code ON responsibility_master(responsibility_code);
+CREATE INDEX IF NOT EXISTS idx_responsibility_master_project_id ON responsibility_master(project_id);
+CREATE INDEX IF NOT EXISTS idx_responsibility_master_employee_id ON responsibility_master(employee_id);
 CREATE INDEX IF NOT EXISTS idx_bp_activity_master_project ON bp_activity_master(project_code);
 CREATE INDEX IF NOT EXISTS idx_bp_activity_master_location ON bp_activity_master(location_code);
 CREATE INDEX IF NOT EXISTS idx_bp_activity_master_bp ON bp_activity_master(business_partner_code);

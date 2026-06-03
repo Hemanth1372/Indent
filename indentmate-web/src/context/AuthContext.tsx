@@ -79,7 +79,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       user,
       login: async (credentials) => {
         try {
-          const response = await fetch(`${API_BASE_URL}/api/auth/portal-login`, {
+          const response = await fetch(`${API_BASE_URL}/api/auth/web-login`, {
             method: 'POST',
             headers: {
               'Content-Type': 'application/json',

@@ -13,12 +13,10 @@ export function verifySuperAdmin(req, res, next) {
     const payload = jwt.verify(token, env.jwtSecret)
     const role = String(payload.role ?? payload.primary_role ?? '').trim().toUpperCase()
 
-    const allowedRoles = ['SUPER ADMIN', 'ADMINISTRATOR', 'ADMIN']
-
-    if (!allowedRoles.includes(role)) {
+    if (role !== 'SUPER ADMIN') {
       return res.status(403).json({
-        errorCode: 'UNAUTHORIZED_PORTAL_ACCESS',
-        message: 'Access Denied: Only Administrators can access the Admin Portal.',
+        errorCode: 'WEB_ACCESS_DENIED',
+        message: 'Unauthorized Access: Web Admin Portal access is strictly restricted to Super Admin accounts.',
       })
     }
 
@@ -27,4 +25,16 @@ export function verifySuperAdmin(req, res, next) {
   } catch {
     return res.status(401).json({ message: 'Invalid or expired token' })
   }
+}
+
+export function checkSuperAdmin(req, res, next) {
+  const role = String(req.user?.role ?? req.user?.primary_role ?? '').trim()
+
+  if (role === 'Super Admin') {
+    return next()
+  }
+
+  return res.status(403).json({
+    message: 'Unauthorized System Action',
+  })
 }

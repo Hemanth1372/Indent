@@ -59,6 +59,89 @@ export async function portalLogin(req, res, next) {
   return handleLogin(req, res, next, { requirePortalAccess: true })
 }
 
+export async function webLogin(req, res, next) {
+  try {
+    const { login_name, password } = req.validated.body
+    const result = await query(
+      `
+        SELECT
+          id,
+          employee_id,
+          employee_name,
+          project_id,
+          project_description,
+          responsibility,
+          manual_status,
+          valid_from,
+          valid_to,
+          password_hash
+        FROM responsibility_master
+        WHERE employee_id = $1
+        ORDER BY project_id ASC, responsibility ASC
+      `,
+      [login_name],
+    )
+    const assignments = result.rows
+
+    if (!assignments.length) {
+      return res.status(401).json({ message: 'Invalid employee ID or password' })
+    }
+
+    const passwordMatches = await verifyFieldPin(password, assignments)
+
+    if (!passwordMatches) {
+      return res.status(401).json({ message: 'Invalid employee ID or password' })
+    }
+
+    const activeAssignments = assignments.filter((assignment) => computeUserMasterStatus(assignment) === 'Active')
+
+    if (!activeAssignments.length) {
+      return res.status(403).json({
+        errorCode: 'ACCOUNT_INACTIVE',
+        message: 'User is deactivated, or no longer in use.',
+      })
+    }
+
+    const superAdminAssignment = activeAssignments.find((assignment) =>
+      String(assignment.responsibility ?? '').trim() === 'Super Admin'
+    )
+
+    if (!superAdminAssignment) {
+      return res.status(403).json({
+        errorCode: 'WEB_ACCESS_DENIED',
+        message: 'Unauthorized Access: Web Admin Portal access is strictly restricted to Super Admin accounts.',
+      })
+    }
+
+    const payload = {
+      user_id: String(superAdminAssignment.id),
+      userId: String(superAdminAssignment.id),
+      employeeId: superAdminAssignment.employee_id,
+      employee_id: superAdminAssignment.employee_id,
+      login_name: superAdminAssignment.employee_id,
+      employeeName: superAdminAssignment.employee_name,
+      name: superAdminAssignment.employee_name,
+      role: 'Super Admin',
+      primary_role: 'Super Admin',
+      responsibility: superAdminAssignment.responsibility,
+      isActive: true,
+      assigned_projects: [],
+      assignedProjects: [],
+    }
+
+    const token = jwt.sign(payload, env.jwtSecret, {
+      expiresIn: env.jwtExpiresIn,
+    })
+
+    return res.json({
+      token,
+      user: payload,
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
 async function handleLogin(req, res, next, { requirePortalAccess }) {
   try {
     const { login_name, password } = req.validated.body

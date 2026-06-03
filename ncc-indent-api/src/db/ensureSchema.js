@@ -114,19 +114,23 @@ export async function ensureSchema() {
 
   await query(`
     CREATE TABLE IF NOT EXISTS responsibility_master (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      project_code VARCHAR(50) NOT NULL REFERENCES projects(site_code),
-      responsibility_code VARCHAR(50) NOT NULL,
-      description VARCHAR(200) NOT NULL,
-      valid_to DATE NOT NULL,
-      end_date DATE NOT NULL,
+      id SERIAL PRIMARY KEY,
+      project_id VARCHAR(50) NOT NULL,
+      project_description VARCHAR(255) NOT NULL,
+      responsibility TEXT NOT NULL,
+      employee_id VARCHAR(50) NOT NULL,
+      employee_name VARCHAR(150) NOT NULL,
+      valid_from DATE NULL,
+      valid_to DATE NULL,
+      manual_status VARCHAR(20) DEFAULT 'Active',
+      password_hash VARCHAR(255) NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `)
 
-  await query('CREATE INDEX IF NOT EXISTS idx_responsibility_master_project_code ON responsibility_master(project_code)')
-  await query('CREATE INDEX IF NOT EXISTS idx_responsibility_master_code ON responsibility_master(responsibility_code)')
+  await query('CREATE INDEX IF NOT EXISTS idx_responsibility_master_project_id ON responsibility_master(project_id)')
+  await query('CREATE INDEX IF NOT EXISTS idx_responsibility_master_employee_id ON responsibility_master(employee_id)')
 
   await query(`
     CREATE TABLE IF NOT EXISTS activity_master (

@@ -116,12 +116,16 @@ const setupAndSeedDatabase = async () => {
             );
 
             CREATE TABLE responsibility_master (
-                id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-                project_code VARCHAR(50) NOT NULL REFERENCES projects(site_code),
-                responsibility_code VARCHAR(50) NOT NULL,
-                description VARCHAR(200) NOT NULL,
-                valid_to DATE NOT NULL,
-                end_date DATE NOT NULL,
+                id SERIAL PRIMARY KEY,
+                project_id VARCHAR(50) NOT NULL,
+                project_description VARCHAR(255) NOT NULL,
+                responsibility TEXT NOT NULL,
+                employee_id VARCHAR(50) NOT NULL,
+                employee_name VARCHAR(150) NOT NULL,
+                valid_from DATE NULL,
+                valid_to DATE NULL,
+                manual_status VARCHAR(20) DEFAULT 'Active',
+                password_hash VARCHAR(255) NOT NULL,
                 created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
                 updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
             );
