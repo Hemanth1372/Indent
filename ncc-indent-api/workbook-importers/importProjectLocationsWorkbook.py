@@ -80,7 +80,7 @@ def read_workbook_rows(path: Path) -> list[dict[str, str]]:
             for item in root.findall("a:si", NS):
                 shared_strings.append("".join(text.text or "" for text in item.findall(".//a:t", NS)))
 
-        sheet_root = ET.fromstring(archive.read(workbook_target(archive, "Projects")))
+        sheet_root = ET.fromstring(archive.read(workbook_target(archive, "Project Locations")))
         parsed_rows: list[list[str]] = []
 
         for row in sheet_root.findall("a:sheetData/a:row", NS):
@@ -112,10 +112,9 @@ def build_sql(rows: list[dict[str, str]]) -> str:
         writer.writerow(
             [
                 row.get("Project", "").strip(),
-                row.get("Project Description", "").strip(),
-                row.get("DPR Engineer Control", "").strip(),
-                row.get("Multi Location Activity", "").strip(),
-                row.get("Project Location Linked to Activities", "").strip(),
+                row.get("Project Name", "").strip(),
+                row.get("Location", "").strip(),
+                row.get("Description", "").strip(),
             ]
         )
 
@@ -123,97 +122,95 @@ def build_sql(rows: list[dict[str, str]]) -> str:
 \\set ON_ERROR_STOP on
 BEGIN;
 
-DROP TABLE IF EXISTS project_master CASCADE;
-
-CREATE TABLE project_master (
+CREATE TABLE IF NOT EXISTS location_master (
   id SERIAL PRIMARY KEY,
-  project_code VARCHAR(50) UNIQUE NOT NULL,
-  project_description VARCHAR(255) NOT NULL,
-  dpr_engineer_control VARCHAR(50) NOT NULL,
-  multi_location_activity VARCHAR(20) NOT NULL,
-  project_location_linked_activities VARCHAR(20) NOT NULL,
+  project_code VARCHAR(50) NOT NULL,
+  project_name VARCHAR(255) NOT NULL,
+  location_code VARCHAR(50) NOT NULL,
+  description VARCHAR(255) NOT NULL,
+  status VARCHAR(20) DEFAULT 'Active',
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_project_master_code ON project_master(project_code);
+ALTER TABLE IF EXISTS location_master DROP CONSTRAINT IF EXISTS location_master_pkey;
+ALTER TABLE IF EXISTS location_master ADD COLUMN IF NOT EXISTS id SERIAL;
+ALTER TABLE IF EXISTS location_master ADD COLUMN IF NOT EXISTS project_code VARCHAR(50);
+ALTER TABLE IF EXISTS location_master ADD COLUMN IF NOT EXISTS project_name VARCHAR(255);
+ALTER TABLE IF EXISTS location_master ADD COLUMN IF NOT EXISTS status VARCHAR(20) DEFAULT 'Active';
+ALTER TABLE IF EXISTS location_master ALTER COLUMN location_code TYPE VARCHAR(50);
+ALTER TABLE IF EXISTS location_master ALTER COLUMN description TYPE VARCHAR(255);
 
-CREATE TEMP TABLE project_import (
+DO $$
+BEGIN
+  IF NOT EXISTS (
+    SELECT 1
+    FROM pg_constraint
+    WHERE conname = 'location_master_pkey'
+  ) THEN
+    ALTER TABLE location_master ADD CONSTRAINT location_master_pkey PRIMARY KEY (id);
+  END IF;
+END
+$$;
+
+DROP INDEX IF EXISTS unique_project_location;
+CREATE UNIQUE INDEX unique_project_location
+  ON location_master (project_code, location_code);
+
+TRUNCATE TABLE location_master RESTART IDENTITY CASCADE;
+
+CREATE TEMP TABLE location_import (
   project_code TEXT,
-  project_description TEXT,
-  dpr_engineer_control TEXT,
-  multi_location_activity TEXT,
-  project_location_linked_activities TEXT
+  project_name TEXT,
+  location_code TEXT,
+  description TEXT
 ) ON COMMIT DROP;
 
-COPY project_import (
+COPY location_import (
   project_code,
-  project_description,
-  dpr_engineer_control,
-  multi_location_activity,
-  project_location_linked_activities
+  project_name,
+  location_code,
+  description
 ) FROM STDIN WITH CSV;
 {csv_buffer.getvalue()}\\.
 
-INSERT INTO project_master (
+INSERT INTO location_master (
   project_code,
-  project_description,
-  dpr_engineer_control,
-  multi_location_activity,
-  project_location_linked_activities
-)
-SELECT DISTINCT ON (project_code)
-  project_code,
-  project_description,
-  dpr_engineer_control,
-  multi_location_activity,
-  project_location_linked_activities
-FROM project_import
-WHERE project_code <> ''
-  AND project_description <> ''
-  AND dpr_engineer_control <> ''
-  AND multi_location_activity <> ''
-  AND project_location_linked_activities <> ''
-ORDER BY project_code;
-
-INSERT INTO projects (
-  site_code,
   project_name,
-  location,
+  location_code,
+  description,
   status
 )
-SELECT
+SELECT DISTINCT ON (project_code, location_code)
   project_code,
-  project_description,
-  project_description,
+  project_name,
+  location_code,
+  description,
   'Active'
-FROM project_master
-ON CONFLICT (site_code)
-DO UPDATE SET
-  project_name = EXCLUDED.project_name,
-  location = COALESCE(projects.location, EXCLUDED.location),
-  status = COALESCE(projects.status, EXCLUDED.status);
+FROM location_import
+WHERE project_code <> '' AND project_name <> '' AND location_code <> '' AND description <> ''
+ORDER BY project_code, location_code;
 
 SELECT
-  (SELECT COUNT(*) FROM project_import) AS workbook_rows,
-  (SELECT COUNT(*) FROM project_master) AS imported_rows,
-  (SELECT COUNT(*) FROM projects WHERE site_code IN (SELECT project_code FROM project_master)) AS synced_projects;
+  (SELECT COUNT(*) FROM location_import) AS workbook_rows,
+  (SELECT COUNT(*) FROM location_master) AS imported_rows,
+  (SELECT COUNT(DISTINCT project_code) FROM location_master) AS projects;
 
 COMMIT;
 """
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Import Projects.xlsx into project_master.")
+    parser = argparse.ArgumentParser(description="Import Project_Locations.xlsx into location_master.")
     parser.add_argument(
         "workbook",
         nargs="?",
-        default=r"c:\Users\Hemanth\Downloads\Projects.xlsx",
-        help="Path to Projects.xlsx",
+        default=r"c:\Users\Hemanth\Downloads\Project_Locations.xlsx",
+        help="Path to Project_Locations.xlsx",
     )
     args = parser.parse_args()
 
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     database_url = os.environ.get("DATABASE_URL") or read_dotenv(root / ".env").get("DATABASE_URL")
 
     if not database_url:
@@ -222,20 +219,15 @@ def main() -> int:
 
     rows = read_workbook_rows(Path(args.workbook))
     if not rows:
-        print("No project rows found.", file=sys.stderr)
+        print("No project location rows found.", file=sys.stderr)
         return 1
 
-    env = os.environ.copy()
-    env["PGCLIENTENCODING"] = "UTF8"
-
     result = subprocess.run(
-        ["psql", database_url],
-        input=build_sql(rows),
-        text=True,
-        encoding="utf-8",
-        env=env,
-        capture_output=True,
-        cwd=root,
+      ["psql", database_url],
+      input=build_sql(rows),
+      text=True,
+      capture_output=True,
+      cwd=root,
     )
 
     if result.stdout:

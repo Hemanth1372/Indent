@@ -52,24 +52,22 @@ def cell_value(cell: ET.Element, shared_strings: list[str]) -> str:
     return value.strip()
 
 
-def workbook_target(archive: ZipFile, sheet_name: str) -> str:
+def workbook_sheet_target(archive: ZipFile) -> str:
     workbook = ET.fromstring(archive.read("xl/workbook.xml"))
     relationships = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
     target_by_id = {relationship.attrib["Id"]: relationship.attrib["Target"] for relationship in relationships}
+    first_sheet = workbook.find("a:sheets/a:sheet", NS)
 
-    for sheet in workbook.findall("a:sheets/a:sheet", NS):
-        if sheet.attrib["name"] != sheet_name:
-            continue
+    if first_sheet is None:
+        raise ValueError("Workbook does not contain any sheets.")
 
-        relationship_id = sheet.attrib["{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"]
-        target = target_by_id[relationship_id]
+    relationship_id = first_sheet.attrib["{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"]
+    target = target_by_id[relationship_id]
 
-        if target.startswith("/"):
-            return target.lstrip("/")
+    if target.startswith("/"):
+        return target.lstrip("/")
 
-        return f"xl/{target}" if not target.startswith("xl/") else target
-
-    raise ValueError(f"Sheet not found: {sheet_name}")
+    return f"xl/{target}" if not target.startswith("xl/") else target
 
 
 def read_workbook_rows(path: Path) -> list[dict[str, str]]:
@@ -80,7 +78,7 @@ def read_workbook_rows(path: Path) -> list[dict[str, str]]:
             for item in root.findall("a:si", NS):
                 shared_strings.append("".join(text.text or "" for text in item.findall(".//a:t", NS)))
 
-        sheet_root = ET.fromstring(archive.read(workbook_target(archive, "Warehouse Locations")))
+        sheet_root = ET.fromstring(archive.read(workbook_sheet_target(archive)))
         parsed_rows: list[list[str]] = []
 
         for row in sheet_root.findall("a:sheetData/a:row", NS):
@@ -111,12 +109,12 @@ def build_sql(rows: list[dict[str, str]]) -> str:
     for row in rows:
         writer.writerow(
             [
-                row.get("Project", "").strip(),
-                row.get("Warehouse", "").strip(),
-                row.get("Warehouse Location", "").strip(),
-                row.get("Location", "").strip(),
-                row.get("Location Description", "").strip(),
-                row.get("Location Category", "").strip(),
+                row.get("Address Code", "").strip(),
+                row.get("Address Code Description", "").strip(),
+                row.get("Project Code", "").strip(),
+                row.get("Project Description", "").strip(),
+                row.get("Delivery Point", "").strip(),
+                row.get("Description I", "").strip(),
             ]
         )
 
@@ -124,91 +122,88 @@ def build_sql(rows: list[dict[str, str]]) -> str:
 \\set ON_ERROR_STOP on
 BEGIN;
 
-DROP TABLE IF EXISTS warehouse_bin CASCADE;
-DROP TABLE IF EXISTS warehouse_location_master CASCADE;
+DROP TABLE IF EXISTS delivery_master CASCADE;
 
-CREATE TABLE warehouse_location_master (
+CREATE TABLE delivery_master (
   id SERIAL PRIMARY KEY,
+  address_code VARCHAR(100) NOT NULL,
+  address_description TEXT NOT NULL,
   project_code VARCHAR(50) NOT NULL,
-  warehouse_code VARCHAR(50) NOT NULL,
-  warehouse_name VARCHAR(255) NOT NULL,
-  location_code VARCHAR(100) NOT NULL,
-  location_description TEXT NOT NULL,
-  location_category VARCHAR(100) NOT NULL,
+  project_description VARCHAR(255) NOT NULL,
+  delivery_point VARCHAR(100) NOT NULL,
+  description_1 TEXT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT unique_wh_location_bin UNIQUE (warehouse_code, location_code)
+  CONSTRAINT unique_project_delivery UNIQUE (project_code, address_code, delivery_point)
 );
 
-CREATE INDEX idx_warehouse_location_master_project ON warehouse_location_master(project_code);
-CREATE INDEX idx_warehouse_location_master_warehouse ON warehouse_location_master(warehouse_code);
-CREATE INDEX idx_warehouse_location_master_location ON warehouse_location_master(location_code);
+CREATE INDEX idx_delivery_master_project ON delivery_master(project_code);
+CREATE INDEX idx_delivery_master_address ON delivery_master(address_code);
+CREATE INDEX idx_delivery_master_point ON delivery_master(delivery_point);
 
-CREATE TEMP TABLE warehouse_location_import (
+CREATE TEMP TABLE delivery_import (
+  address_code TEXT,
+  address_description TEXT,
   project_code TEXT,
-  warehouse_code TEXT,
-  warehouse_name TEXT,
-  location_code TEXT,
-  location_description TEXT,
-  location_category TEXT
+  project_description TEXT,
+  delivery_point TEXT,
+  description_1 TEXT
 ) ON COMMIT DROP;
 
-COPY warehouse_location_import (
+COPY delivery_import (
+  address_code,
+  address_description,
   project_code,
-  warehouse_code,
-  warehouse_name,
-  location_code,
-  location_description,
-  location_category
+  project_description,
+  delivery_point,
+  description_1
 ) FROM STDIN WITH CSV;
 {csv_buffer.getvalue()}\\.
 
-INSERT INTO warehouse_location_master (
+INSERT INTO delivery_master (
+  address_code,
+  address_description,
   project_code,
-  warehouse_code,
-  warehouse_name,
-  location_code,
-  location_description,
-  location_category
+  project_description,
+  delivery_point,
+  description_1
 )
-SELECT DISTINCT ON (warehouse_code, location_code)
+SELECT DISTINCT ON (project_code, address_code, delivery_point)
+  address_code,
+  address_description,
   project_code,
-  warehouse_code,
-  warehouse_name,
-  location_code,
-  location_description,
-  location_category
-FROM warehouse_location_import
-WHERE project_code <> ''
-  AND warehouse_code <> ''
-  AND warehouse_name <> ''
-  AND location_code <> ''
-  AND location_description <> ''
-  AND location_category <> ''
-ORDER BY warehouse_code, location_code, project_code;
+  project_description,
+  delivery_point,
+  NULLIF(description_1, '')
+FROM delivery_import
+WHERE address_code <> ''
+  AND address_description <> ''
+  AND project_code <> ''
+  AND project_description <> ''
+  AND delivery_point <> ''
+ORDER BY project_code, address_code, delivery_point;
 
 SELECT
-  (SELECT COUNT(*) FROM warehouse_location_import) AS workbook_rows,
-  (SELECT COUNT(*) FROM warehouse_location_master) AS imported_rows,
-  (SELECT COUNT(DISTINCT project_code) FROM warehouse_location_master) AS project_count,
-  (SELECT COUNT(DISTINCT warehouse_code) FROM warehouse_location_master) AS warehouse_count,
-  (SELECT COUNT(DISTINCT location_category) FROM warehouse_location_master) AS category_count;
+  (SELECT COUNT(*) FROM delivery_import) AS workbook_rows,
+  (SELECT COUNT(*) FROM delivery_master) AS imported_rows,
+  (SELECT COUNT(*) FROM delivery_master WHERE description_1 IS NULL) AS rows_without_description_1,
+  (SELECT COUNT(DISTINCT project_code) FROM delivery_master) AS projects;
 
 COMMIT;
 """
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Import Warehouse_Location.xlsx into warehouse_location_master.")
+    parser = argparse.ArgumentParser(description="Import Delivery_Master.xlsx into delivery_master.")
     parser.add_argument(
         "workbook",
         nargs="?",
-        default=r"c:\Users\Hemanth\Downloads\Warehouse_Location.xlsx",
-        help="Path to Warehouse_Location.xlsx",
+        default=r"c:\Users\Hemanth\Downloads\Delivery_Master.xlsx",
+        help="Path to Delivery_Master.xlsx",
     )
     args = parser.parse_args()
 
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     database_url = os.environ.get("DATABASE_URL") or read_dotenv(root / ".env").get("DATABASE_URL")
 
     if not database_url:
@@ -217,7 +212,7 @@ def main() -> int:
 
     rows = read_workbook_rows(Path(args.workbook))
     if not rows:
-        print("No warehouse location rows found.", file=sys.stderr)
+        print("No delivery master rows found.", file=sys.stderr)
         return 1
 
     env = os.environ.copy()

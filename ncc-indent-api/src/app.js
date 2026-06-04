@@ -8,7 +8,6 @@ import { indentRoutes } from './routes/indentRoutes.js'
 import { masterDataRoutes } from './routes/masterDataRoutes.js'
 import { projectRoutes } from './routes/projectRoutes.js'
 import { responsibilityRoutes } from './routes/responsibilityRoutes.js'
-import { serviceOrderRoutes } from './routes/serviceOrderRoutes.js'
 import { userRoutes } from './routes/userRoutes.js'
 import { warehouseLocationRoutes } from './routes/warehouseLocationRoutes.js'
 
@@ -47,7 +46,6 @@ export function createApp() {
   app.use('/api/indents', indentRoutes)
   app.use('/api/master-data', masterDataRoutes)
   app.use('/api/projects', projectRoutes)
-  app.use('/api/service-orders', serviceOrderRoutes)
   app.use('/api/responsibilities', responsibilityRoutes)
   app.use('/api/warehouse-locations', warehouseLocationRoutes)
 

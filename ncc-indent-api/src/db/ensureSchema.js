@@ -3,6 +3,47 @@ import { query } from './pool.js'
 export async function ensureSchema() {
   await query('CREATE EXTENSION IF NOT EXISTS pgcrypto')
   await query(`
+    CREATE TABLE IF NOT EXISTS users (
+      user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      login_name VARCHAR(50) UNIQUE NOT NULL,
+      employee_name VARCHAR(100) NOT NULL,
+      primary_role VARCHAR(50),
+      is_active BOOLEAN DEFAULT TRUE,
+      password_hash VARCHAR(255) NOT NULL,
+      current_pin VARCHAR(6),
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+  await query(`
+    CREATE TABLE IF NOT EXISTS projects (
+      project_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      site_code VARCHAR(50) UNIQUE,
+      project_name VARCHAR(255) NOT NULL,
+      location VARCHAR(200),
+      status VARCHAR(50) DEFAULT 'Active',
+      address_code VARCHAR(50),
+      address_description TEXT
+    )
+  `)
+  await query(`
+    CREATE TABLE IF NOT EXISTS user_project_roles (
+      user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
+      project_id UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      role_name VARCHAR(80) NOT NULL,
+      assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+      PRIMARY KEY (user_id, project_id)
+    )
+  `)
+  await query(`
+    CREATE TABLE IF NOT EXISTS activities (
+      activity_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      project_id UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
+      description TEXT NOT NULL,
+      status VARCHAR(50) NOT NULL DEFAULT 'Not Started',
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+  await query(`
     CREATE TABLE IF NOT EXISTS user_master (
       id SERIAL PRIMARY KEY,
       employee_id VARCHAR(50) NOT NULL,
@@ -64,6 +105,10 @@ export async function ensureSchema() {
     )
   `)
   await query('CREATE INDEX IF NOT EXISTS idx_project_master_code ON project_master(project_code)')
+  await query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_project_master_project_code_unique
+    ON project_master (project_code)
+  `)
 
   await query(`
     CREATE TABLE IF NOT EXISTS item_master (

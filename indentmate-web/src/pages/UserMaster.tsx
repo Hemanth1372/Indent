@@ -23,6 +23,9 @@ type UserRow = {
   current_pin?: string | null
 }
 
+const TABLE_HEADER_CELL_CLASS = 'bg-[#1b2e4b] px-4 py-[14px] text-[13px] font-semibold text-white tracking-[0.5px] normal-case border-b-2 border-[#0f1c30]'
+const TABLE_HEADER_ACTIONS_CLASS = `${TABLE_HEADER_CELL_CLASS} text-center w-20`
+
 type CreateUserValues = {
   employee_id: string
   employee_name: string
@@ -42,6 +45,11 @@ type PasswordFormValues = {
 
 type RoleFormValues = {
   responsibility: string
+}
+
+type ProjectOption = {
+  code: string
+  description: string
 }
 
 const SYSTEM_ROLES = [
@@ -105,6 +113,8 @@ export default function UserMaster() {
   const [roleForm] = Form.useForm<RoleFormValues>()
   const { user: currentUser } = useAuth()
   const [users, setUsers] = useState<UserRow[]>([])
+  const [projectOptions, setProjectOptions] = useState<ProjectOption[]>([])
+  const [projectOptionsLoading, setProjectOptionsLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [creating, setCreating] = useState(false)
   const [updatingPassword, setUpdatingPassword] = useState(false)
@@ -162,8 +172,60 @@ export default function UserMaster() {
     }
   }
 
+  async function loadProjectOptions() {
+    setProjectOptionsLoading(true)
+
+    try {
+      const { data } = await api.get<{ data: Array<Record<string, unknown>> }>('/api/master-data/project-master', {
+        params: { limit: 500 },
+      })
+      const options = data.data
+        .map((project) => ({
+          code: String(project.project_code ?? '').trim(),
+          description: String(project.project_description ?? '').trim(),
+        }))
+        .filter((project) => project.code || project.description)
+
+      setProjectOptions(options)
+    } catch (requestError) {
+      console.error(requestError)
+      message.error('Could not load project options')
+    } finally {
+      setProjectOptionsLoading(false)
+    }
+  }
+
+  function handleProjectIdChange(value?: string) {
+    form.setFieldValue('project_id', value)
+
+    if (!value) {
+      form.setFieldValue('project_description', undefined)
+      return
+    }
+
+    const selectedProject = projectOptions.find((project) => project.code === value)
+    if (selectedProject?.description) {
+      form.setFieldValue('project_description', selectedProject.description)
+    }
+  }
+
+  function handleProjectDescriptionChange(value?: string) {
+    form.setFieldValue('project_description', value)
+
+    if (!value) {
+      form.setFieldValue('project_id', undefined)
+      return
+    }
+
+    const selectedProject = projectOptions.find((project) => project.description === value)
+    if (selectedProject?.code) {
+      form.setFieldValue('project_id', selectedProject.code)
+    }
+  }
+
   useEffect(() => {
     loadUsers()
+    loadProjectOptions()
   }, [])
 
   useEffect(() => {
@@ -207,6 +269,10 @@ export default function UserMaster() {
   function openCreateModal() {
     form.setFieldsValue({ manual_status: 'Active', password: '123456' })
     setModalOpen(true)
+
+    if (!projectOptions.length) {
+      loadProjectOptions()
+    }
   }
 
   async function handleSearch() {
@@ -416,16 +482,16 @@ export default function UserMaster() {
       ) : (
         <div className="overflow-x-auto">
           <table className="min-w-[1240px] divide-y divide-slate-200 text-left text-sm">
-            <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
+            <thead>
               <tr>
-                <th className="px-4 py-3 font-semibold">Employee ID</th>
-                <th className="px-4 py-3 font-semibold">Employee Name</th>
-                <th className="px-4 py-3 font-semibold">Project ID</th>
-                <th className="px-4 py-3 font-semibold">Project Description</th>
-                <th className="px-4 py-3 font-semibold">Responsibility</th>
-                <th className="px-4 py-3 font-semibold">PIN</th>
-                <th className="px-4 py-3 font-semibold">Status</th>
-                <th className="px-4 py-3 text-right font-semibold">Actions</th>
+                <th className={TABLE_HEADER_CELL_CLASS}>Employee Id</th>
+                <th className={TABLE_HEADER_CELL_CLASS}>Employee Name</th>
+                <th className={TABLE_HEADER_CELL_CLASS}>Project Id</th>
+                <th className={TABLE_HEADER_CELL_CLASS}>Project Description</th>
+                <th className={TABLE_HEADER_CELL_CLASS}>Responsibility</th>
+                <th className={TABLE_HEADER_CELL_CLASS}>Pin</th>
+                <th className={TABLE_HEADER_CELL_CLASS}>Status</th>
+                <th className={TABLE_HEADER_ACTIONS_CLASS}>Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100 bg-white">
@@ -603,7 +669,18 @@ export default function UserMaster() {
               name="project_id"
               rules={[{ required: true, message: 'Project ID is required' }]}
             >
-              <Input placeholder="Example: EODBHS001" />
+              <Select
+                allowClear
+                loading={projectOptionsLoading}
+                onChange={handleProjectIdChange}
+                optionFilterProp="label"
+                options={projectOptions.map((project) => ({
+                  label: project.description ? `${project.code} - ${project.description}` : project.code,
+                  value: project.code,
+                }))}
+                placeholder="Select Project ID"
+                showSearch
+              />
             </Form.Item>
 
             <Form.Item
@@ -611,7 +688,18 @@ export default function UserMaster() {
               name="project_description"
               rules={[{ required: true, message: 'Project description is required' }]}
             >
-              <Input placeholder="Example: BDA - BHUBANESWAR" />
+              <Select
+                allowClear
+                loading={projectOptionsLoading}
+                onChange={handleProjectDescriptionChange}
+                optionFilterProp="label"
+                options={projectOptions.map((project) => ({
+                  label: project.code ? `${project.description} - ${project.code}` : project.description,
+                  value: project.description,
+                }))}
+                placeholder="Select Project Description"
+                showSearch
+              />
             </Form.Item>
 
             <Form.Item

@@ -13,7 +13,7 @@ using System.Reflection;
 [assembly: System.Reflection.AssemblyCompanyAttribute("IndentMate.Shared")]
 [assembly: System.Reflection.AssemblyConfigurationAttribute("Debug")]
 [assembly: System.Reflection.AssemblyFileVersionAttribute("1.0.0.0")]
-[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+98e2cc25357a4db7cd0764628b8eb778f08ccde0")]
+[assembly: System.Reflection.AssemblyInformationalVersionAttribute("1.0.0+e554f33debf1eea1100f1efabd3a23ee89d2dc8b")]
 [assembly: System.Reflection.AssemblyProductAttribute("IndentMate.Shared")]
 [assembly: System.Reflection.AssemblyTitleAttribute("IndentMate.Shared")]
 [assembly: System.Reflection.AssemblyVersionAttribute("1.0.0.0")]

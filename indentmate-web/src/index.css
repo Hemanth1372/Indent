@@ -116,6 +116,13 @@ a {
   font-weight: 700;
 }
 
+.login-success {
+  margin: 0;
+  color: #15803d;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .login-submit {
   display: flex;
   height: 50px;
@@ -132,6 +139,22 @@ a {
 }
 
 .login-submit:disabled {
+  cursor: not-allowed;
+  opacity: 0.65;
+}
+
+.login-link {
+  justify-self: center;
+  border: 0;
+  background: transparent;
+  color: #1565d8;
+  cursor: pointer;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.login-link:disabled {
   cursor: not-allowed;
   opacity: 0.65;
 }

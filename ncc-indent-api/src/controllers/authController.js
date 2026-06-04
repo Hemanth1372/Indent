@@ -142,6 +142,58 @@ export async function webLogin(req, res, next) {
   }
 }
 
+export async function resetAdminPassword(req, res, next) {
+  try {
+    const employeeId = req.validated.body.employee_id
+    const password = req.validated.body.password
+    const adminResult = await query(
+      `
+        SELECT id
+        FROM responsibility_master
+        WHERE employee_id = $1
+          AND LOWER(TRIM(responsibility)) = 'super admin'
+          AND COALESCE(manual_status, 'Active') <> 'Inactive'
+        LIMIT 1
+      `,
+      [employeeId],
+    )
+
+    if (!adminResult.rows.length) {
+      return res.status(404).json({
+        message: 'No active Super Admin account found for this Employee ID.',
+      })
+    }
+
+    await query(
+      `
+        UPDATE responsibility_master
+        SET password_hash = $2,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE employee_id = $1
+          AND LOWER(TRIM(responsibility)) = 'super admin'
+      `,
+      [employeeId, password],
+    )
+
+    const hashedPassword = await bcrypt.hash(password, 10)
+    await query(
+      `
+        UPDATE users
+        SET password_hash = $2,
+            current_pin = $3
+        WHERE login_name = $1
+      `,
+      [employeeId, hashedPassword, password],
+    )
+
+    return res.json({
+      message: 'Admin password updated successfully. You can login with the new password now.',
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
 async function handleLogin(req, res, next, { requirePortalAccess }) {
   try {
     const { login_name, password } = req.validated.body

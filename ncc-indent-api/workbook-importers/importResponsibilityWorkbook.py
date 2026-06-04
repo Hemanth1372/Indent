@@ -337,7 +337,7 @@ def main() -> int:
         print("Default PIN must be exactly 6 digits.", file=sys.stderr)
         return 1
 
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     database_url = os.environ.get("DATABASE_URL") or read_dotenv(root / ".env").get("DATABASE_URL")
     if not database_url:
         print("DATABASE_URL was not found in the environment or ncc-indent-api/.env.", file=sys.stderr)

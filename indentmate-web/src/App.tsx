@@ -9,7 +9,6 @@ import IndentDetail from './pages/IndentDetail'
 import IndentList from './pages/IndentList'
 import Login from './pages/Login'
 import ResponsibilityMaster from './pages/ResponsibilityMaster'
-import ServiceOrdersTable from './pages/ServiceOrdersTable'
 
 function ProtectedRoute({ children, title = 'Dashboard' }: { children: ReactNode; title?: string }) {
   return (
@@ -96,11 +95,7 @@ export default function App() {
         />
         <Route
           path="/service-orders"
-          element={
-            <ProtectedRoute title="Service Orders">
-              <ServiceOrdersTable />
-            </ProtectedRoute>
-          }
+          element={<Navigate to="/master-data/service-order-master" replace />}
         />
         <Route
           path="/responsibility-master"

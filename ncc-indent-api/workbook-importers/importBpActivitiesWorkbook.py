@@ -52,22 +52,24 @@ def cell_value(cell: ET.Element, shared_strings: list[str]) -> str:
     return value.strip()
 
 
-def workbook_sheet_target(archive: ZipFile) -> str:
+def workbook_target(archive: ZipFile, sheet_name: str) -> str:
     workbook = ET.fromstring(archive.read("xl/workbook.xml"))
     relationships = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
     target_by_id = {relationship.attrib["Id"]: relationship.attrib["Target"] for relationship in relationships}
-    first_sheet = workbook.find("a:sheets/a:sheet", NS)
 
-    if first_sheet is None:
-        raise ValueError("Workbook does not contain any sheets.")
+    for sheet in workbook.findall("a:sheets/a:sheet", NS):
+        if sheet.attrib["name"] != sheet_name:
+            continue
 
-    relationship_id = first_sheet.attrib["{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"]
-    target = target_by_id[relationship_id]
+        relationship_id = sheet.attrib["{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"]
+        target = target_by_id[relationship_id]
 
-    if target.startswith("/"):
-        return target.lstrip("/")
+        if target.startswith("/"):
+            return target.lstrip("/")
 
-    return f"xl/{target}" if not target.startswith("xl/") else target
+        return f"xl/{target}" if not target.startswith("xl/") else target
+
+    raise ValueError(f"Sheet not found: {sheet_name}")
 
 
 def read_workbook_rows(path: Path) -> list[dict[str, str]]:
@@ -78,7 +80,7 @@ def read_workbook_rows(path: Path) -> list[dict[str, str]]:
             for item in root.findall("a:si", NS):
                 shared_strings.append("".join(text.text or "" for text in item.findall(".//a:t", NS)))
 
-        sheet_root = ET.fromstring(archive.read(workbook_sheet_target(archive)))
+        sheet_root = ET.fromstring(archive.read(workbook_target(archive, "BP By Activity")))
         parsed_rows: list[list[str]] = []
 
         for row in sheet_root.findall("a:sheetData/a:row", NS):
@@ -102,6 +104,10 @@ def read_workbook_rows(path: Path) -> list[dict[str, str]]:
     return rows
 
 
+def blank_to_null(value: str) -> str:
+    return r"\N" if not value.strip() else value.strip()
+
+
 def build_sql(rows: list[dict[str, str]]) -> str:
     csv_buffer = StringIO()
     writer = csv.writer(csv_buffer, lineterminator="\n")
@@ -109,12 +115,14 @@ def build_sql(rows: list[dict[str, str]]) -> str:
     for row in rows:
         writer.writerow(
             [
-                row.get("Address Code", "").strip(),
-                row.get("Address Code Description", "").strip(),
-                row.get("Project Code", "").strip(),
+                row.get("Project", "").strip(),
                 row.get("Project Description", "").strip(),
-                row.get("Delivery Point", "").strip(),
-                row.get("Description I", "").strip(),
+                row.get("Location", "").strip(),
+                row.get("Location Description", "").strip(),
+                blank_to_null(row.get("Activity", "")),
+                blank_to_null(row.get("Activity Description", "")),
+                row.get("Business Partner", "").strip(),
+                row.get("BP Name", "").strip(),
             ]
         )
 
@@ -122,88 +130,100 @@ def build_sql(rows: list[dict[str, str]]) -> str:
 \\set ON_ERROR_STOP on
 BEGIN;
 
-DROP TABLE IF EXISTS delivery_master CASCADE;
-
-CREATE TABLE delivery_master (
+CREATE TABLE IF NOT EXISTS bp_activity_master (
   id SERIAL PRIMARY KEY,
-  address_code VARCHAR(100) NOT NULL,
-  address_description TEXT NOT NULL,
   project_code VARCHAR(50) NOT NULL,
   project_description VARCHAR(255) NOT NULL,
-  delivery_point VARCHAR(100) NOT NULL,
-  description_1 TEXT NULL,
+  location_code VARCHAR(100) NOT NULL,
+  location_description TEXT NOT NULL,
+  activity_code VARCHAR(100) NULL,
+  activity_description TEXT NULL,
+  business_partner_code VARCHAR(100) NOT NULL,
+  business_partner_name VARCHAR(255) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT unique_project_delivery UNIQUE (project_code, address_code, delivery_point)
+  CONSTRAINT unique_bp_activity_assignment UNIQUE (project_code, location_code, activity_code, business_partner_code)
 );
 
-CREATE INDEX idx_delivery_master_project ON delivery_master(project_code);
-CREATE INDEX idx_delivery_master_address ON delivery_master(address_code);
-CREATE INDEX idx_delivery_master_point ON delivery_master(delivery_point);
+TRUNCATE TABLE bp_activity_master RESTART IDENTITY CASCADE;
 
-CREATE TEMP TABLE delivery_import (
-  address_code TEXT,
-  address_description TEXT,
+CREATE INDEX IF NOT EXISTS idx_bp_activity_master_project ON bp_activity_master(project_code);
+CREATE INDEX IF NOT EXISTS idx_bp_activity_master_location ON bp_activity_master(location_code);
+CREATE INDEX IF NOT EXISTS idx_bp_activity_master_bp ON bp_activity_master(business_partner_code);
+
+CREATE TEMP TABLE bp_activity_import (
   project_code TEXT,
   project_description TEXT,
-  delivery_point TEXT,
-  description_1 TEXT
+  location_code TEXT,
+  location_description TEXT,
+  activity_code TEXT,
+  activity_description TEXT,
+  business_partner_code TEXT,
+  business_partner_name TEXT
 ) ON COMMIT DROP;
 
-COPY delivery_import (
-  address_code,
-  address_description,
+COPY bp_activity_import (
   project_code,
   project_description,
-  delivery_point,
-  description_1
-) FROM STDIN WITH CSV;
+  location_code,
+  location_description,
+  activity_code,
+  activity_description,
+  business_partner_code,
+  business_partner_name
+) FROM STDIN WITH CSV NULL '\\N';
 {csv_buffer.getvalue()}\\.
 
-INSERT INTO delivery_master (
-  address_code,
-  address_description,
+INSERT INTO bp_activity_master (
   project_code,
   project_description,
-  delivery_point,
-  description_1
+  location_code,
+  location_description,
+  activity_code,
+  activity_description,
+  business_partner_code,
+  business_partner_name
 )
-SELECT DISTINCT ON (project_code, address_code, delivery_point)
-  address_code,
-  address_description,
+SELECT
   project_code,
   project_description,
-  delivery_point,
-  NULLIF(description_1, '')
-FROM delivery_import
-WHERE address_code <> ''
-  AND address_description <> ''
-  AND project_code <> ''
+  location_code,
+  location_description,
+  NULLIF(activity_code, ''),
+  NULLIF(activity_description, ''),
+  business_partner_code,
+  business_partner_name
+FROM bp_activity_import
+WHERE project_code <> ''
   AND project_description <> ''
-  AND delivery_point <> ''
-ORDER BY project_code, address_code, delivery_point;
+  AND location_code <> ''
+  AND location_description <> ''
+  AND business_partner_code <> ''
+  AND business_partner_name <> '';
 
 SELECT
-  (SELECT COUNT(*) FROM delivery_import) AS workbook_rows,
-  (SELECT COUNT(*) FROM delivery_master) AS imported_rows,
-  (SELECT COUNT(*) FROM delivery_master WHERE description_1 IS NULL) AS rows_without_description_1,
-  (SELECT COUNT(DISTINCT project_code) FROM delivery_master) AS projects;
+  (SELECT COUNT(*) FROM bp_activity_import) AS workbook_rows,
+  (SELECT COUNT(*) FROM bp_activity_master) AS imported_rows,
+  (SELECT COUNT(DISTINCT project_code) FROM bp_activity_master) AS project_count,
+  (SELECT COUNT(DISTINCT location_code) FROM bp_activity_master) AS location_count,
+  (SELECT COUNT(DISTINCT business_partner_code) FROM bp_activity_master) AS partner_count,
+  (SELECT COUNT(*) FROM bp_activity_master WHERE activity_code IS NULL) AS location_level_assignments;
 
 COMMIT;
 """
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Import Delivery_Master.xlsx into delivery_master.")
+    parser = argparse.ArgumentParser(description="Import BP_By_Activity.xlsx into bp_activity_master.")
     parser.add_argument(
         "workbook",
         nargs="?",
-        default=r"c:\Users\Hemanth\Downloads\Delivery_Master.xlsx",
-        help="Path to Delivery_Master.xlsx",
+        default=r"c:\Users\Hemanth\Downloads\BP_By_Activity.xlsx",
+        help="Path to BP_By_Activity.xlsx",
     )
     args = parser.parse_args()
 
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     database_url = os.environ.get("DATABASE_URL") or read_dotenv(root / ".env").get("DATABASE_URL")
 
     if not database_url:
@@ -212,7 +232,7 @@ def main() -> int:
 
     rows = read_workbook_rows(Path(args.workbook))
     if not rows:
-        print("No delivery master rows found.", file=sys.stderr)
+        print("No BP activity rows found.", file=sys.stderr)
         return 1
 
     env = os.environ.copy()

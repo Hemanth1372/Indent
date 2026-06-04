@@ -1,4 +1,4 @@
-import { Lock, LogIn, User } from 'lucide-react'
+import { KeyRound, Lock, LogIn, User } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -6,10 +6,14 @@ import { useAuth } from '../context/AuthContext'
 export default function Login() {
   const [loginName, setLoginName] = useState('')
   const [password, setPassword] = useState('')
+  const [confirmPassword, setConfirmPassword] = useState('')
   const [error, setError] = useState('')
+  const [success, setSuccess] = useState('')
   const [loading, setLoading] = useState(false)
+  const [resetMode, setResetMode] = useState(false)
   const navigate = useNavigate()
   const { login } = useAuth()
+  const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -23,6 +27,7 @@ export default function Login() {
 
     setLoading(true)
     setError('')
+    setSuccess('')
 
     const result = await login({
       employee_id: normalizedLoginName,
@@ -40,6 +45,69 @@ export default function Login() {
     setPassword('')
   }
 
+  async function handleForgotPasswordSubmit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault()
+
+    const normalizedLoginName = loginName.trim()
+
+    if (!normalizedLoginName || !password || !confirmPassword) {
+      setError('Enter employee ID, new password, and confirmation.')
+      return
+    }
+
+    if (!/^\d{6}$/.test(password)) {
+      setError('Password must be exactly 6 digits.')
+      return
+    }
+
+    if (password !== confirmPassword) {
+      setError('Both password fields must match.')
+      return
+    }
+
+    setLoading(true)
+    setError('')
+    setSuccess('')
+
+    try {
+      const response = await fetch(`${apiBaseUrl}/api/auth/admin-forgot-password`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          employee_id: normalizedLoginName,
+          password,
+          confirm_password: confirmPassword,
+        }),
+      })
+      const data = await response.json()
+
+      if (!response.ok) {
+        setError(data.message ?? 'Could not update password.')
+        return
+      }
+
+      setSuccess(data.message ?? 'Password updated successfully. You can login now.')
+      setPassword('')
+      setConfirmPassword('')
+      setResetMode(false)
+    } catch (requestError) {
+      console.error('Forgot password error:', requestError)
+      setError('Could not connect to the server. Is the backend running?')
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  function switchMode(nextResetMode: boolean) {
+    setResetMode(nextResetMode)
+    setPassword('')
+    setConfirmPassword('')
+    setError('')
+    setSuccess('')
+  }
+
   return (
     <main className="login-page">
       <section className="login-panel">
@@ -47,11 +115,11 @@ export default function Login() {
           <span className="brand-mark">IM</span>
           <div>
             <h1>IndentMate Admin</h1>
-            <p>Sign in to continue</p>
+            <p>{resetMode ? 'Change admin password' : 'Sign in to continue'}</p>
           </div>
         </div>
 
-        <form className="login-form" onSubmit={handleSubmit}>
+        <form className="login-form" onSubmit={resetMode ? handleForgotPasswordSubmit : handleSubmit}>
           <label>
             <span>Employee ID</span>
             <div className="login-input">
@@ -62,6 +130,7 @@ export default function Login() {
                 onChange={(event) => {
                   setLoginName(event.target.value)
                   setError('')
+                  setSuccess('')
                 }}
                 placeholder="Enter Employee ID"
                 value={loginName}
@@ -70,27 +139,58 @@ export default function Login() {
           </label>
 
           <label>
-            <span>Password</span>
+            <span>{resetMode ? 'New Password' : 'Password'}</span>
             <div className="login-input">
               <Lock size={18} />
               <input
-                autoComplete="current-password"
+                autoComplete={resetMode ? 'new-password' : 'current-password'}
                 onChange={(event) => {
                   setPassword(event.target.value)
                   setError('')
+                  setSuccess('')
                 }}
-                placeholder="Enter password"
+                placeholder={resetMode ? 'Enter 6-digit password' : 'Enter password'}
                 type="password"
                 value={password}
               />
             </div>
           </label>
 
+          {resetMode && (
+            <label>
+              <span>Confirm Password</span>
+              <div className="login-input">
+                <Lock size={18} />
+                <input
+                  autoComplete="new-password"
+                  onChange={(event) => {
+                    setConfirmPassword(event.target.value)
+                    setError('')
+                    setSuccess('')
+                  }}
+                  placeholder="Re-enter 6-digit password"
+                  type="password"
+                  value={confirmPassword}
+                />
+              </div>
+            </label>
+          )}
+
           {error && <p className="login-error">{error}</p>}
+          {success && <p className="login-success">{success}</p>}
 
           <button className="login-submit" disabled={loading} type="submit">
-            <LogIn size={18} />
-            {loading ? 'Signing in...' : 'Login'}
+            {resetMode ? <KeyRound size={18} /> : <LogIn size={18} />}
+            {loading ? (resetMode ? 'Updating...' : 'Signing in...') : (resetMode ? 'Update Password' : 'Login')}
+          </button>
+
+          <button
+            className="login-link"
+            disabled={loading}
+            onClick={() => switchMode(!resetMode)}
+            type="button"
+          >
+            {resetMode ? 'Back to login' : 'Forgot password?'}
           </button>
         </form>
       </section>

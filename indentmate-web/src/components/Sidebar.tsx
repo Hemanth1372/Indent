@@ -52,10 +52,6 @@ function slugify(value: string) {
 }
 
 function getMasterPath(groupKey: string, item: string) {
-  if (item === 'Service Orders') {
-    return '/service-orders'
-  }
-
   if (item === 'Responsibility Master') {
     return '/admin/responsibility-master'
   }
@@ -63,6 +59,7 @@ function getMasterPath(groupKey: string, item: string) {
   const realMasterItems = new Set([
     'Project Master',
     'Activity Master',
+    'Service Orders',
     'Business Partner Activity Master',
     'Location Master',
     'Delivery Point Master',
@@ -78,6 +75,10 @@ function getMasterPath(groupKey: string, item: string) {
 
     if (item === 'Warehouse Location Master') {
       return '/master-data/warehouse-bin-master'
+    }
+
+    if (item === 'Service Orders') {
+      return '/master-data/service-order-master'
     }
 
     return `/master-data/${slugify(item)}`

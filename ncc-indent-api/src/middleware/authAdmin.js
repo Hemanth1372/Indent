@@ -28,13 +28,14 @@ export function verifySuperAdmin(req, res, next) {
 }
 
 export function checkSuperAdmin(req, res, next) {
-  const role = String(req.user?.role ?? req.user?.primary_role ?? '').trim()
+  const role = String(req.user?.role ?? req.user?.primary_role ?? '').trim().toUpperCase()
 
-  if (role === 'Super Admin') {
+  if (role === 'SUPER ADMIN') {
     return next()
   }
 
   return res.status(403).json({
-    message: 'Unauthorized System Action',
+    errorCode: 'WEB_PORTAL_UNAUTHORIZED',
+    message: 'Unauthorized Access: Web Admin Portal environments are strictly restricted to Super Admin sessions.',
   })
 }

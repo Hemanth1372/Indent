@@ -52,22 +52,24 @@ def cell_value(cell: ET.Element, shared_strings: list[str]) -> str:
     return value.strip()
 
 
-def workbook_sheet_target(archive: ZipFile) -> str:
+def workbook_target(archive: ZipFile, sheet_name: str) -> str:
     workbook = ET.fromstring(archive.read("xl/workbook.xml"))
     relationships = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
     target_by_id = {relationship.attrib["Id"]: relationship.attrib["Target"] for relationship in relationships}
-    first_sheet = workbook.find("a:sheets/a:sheet", NS)
 
-    if first_sheet is None:
-        raise ValueError("Workbook does not contain any sheets.")
+    for sheet in workbook.findall("a:sheets/a:sheet", NS):
+        if sheet.attrib["name"] != sheet_name:
+            continue
 
-    relationship_id = first_sheet.attrib["{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"]
-    target = target_by_id[relationship_id]
+        relationship_id = sheet.attrib["{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"]
+        target = target_by_id[relationship_id]
 
-    if target.startswith("/"):
-        return target.lstrip("/")
+        if target.startswith("/"):
+            return target.lstrip("/")
 
-    return f"xl/{target}" if not target.startswith("xl/") else target
+        return f"xl/{target}" if not target.startswith("xl/") else target
+
+    raise ValueError(f"Sheet not found: {sheet_name}")
 
 
 def read_workbook_rows(path: Path) -> list[dict[str, str]]:
@@ -78,7 +80,7 @@ def read_workbook_rows(path: Path) -> list[dict[str, str]]:
             for item in root.findall("a:si", NS):
                 shared_strings.append("".join(text.text or "" for text in item.findall(".//a:t", NS)))
 
-        sheet_root = ET.fromstring(archive.read(workbook_sheet_target(archive)))
+        sheet_root = ET.fromstring(archive.read(workbook_target(archive, "Warehouse Locations")))
         parsed_rows: list[list[str]] = []
 
         for row in sheet_root.findall("a:sheetData/a:row", NS):
@@ -109,15 +111,12 @@ def build_sql(rows: list[dict[str, str]]) -> str:
     for row in rows:
         writer.writerow(
             [
-                row.get("SITE", "").strip(),
-                row.get("SITE Description", "").strip(),
+                row.get("Project", "").strip(),
                 row.get("Warehouse", "").strip(),
-                row.get("Warehouse Description", "").strip(),
-                row.get("On Hand", "").strip() or "0",
-                row.get("ITEM CODE", "").strip(),
-                row.get("Item Description", "").strip(),
-                row.get("Purchase Unit", "").strip(),
-                row.get("Item Type", "").strip(),
+                row.get("Warehouse Location", "").strip(),
+                row.get("Location", "").strip(),
+                row.get("Location Description", "").strip(),
+                row.get("Location Category", "").strip(),
             ]
         )
 
@@ -125,105 +124,91 @@ def build_sql(rows: list[dict[str, str]]) -> str:
 \\set ON_ERROR_STOP on
 BEGIN;
 
-DROP TABLE IF EXISTS item_master CASCADE;
+DROP TABLE IF EXISTS warehouse_bin CASCADE;
+DROP TABLE IF EXISTS warehouse_location_master CASCADE;
 
-CREATE TABLE item_master (
+CREATE TABLE warehouse_location_master (
   id SERIAL PRIMARY KEY,
-  project_site VARCHAR(50) NOT NULL,
-  site_description VARCHAR(255) NOT NULL,
-  warehouse_code VARCHAR(50) NULL,
-  warehouse_description VARCHAR(255) NULL,
-  on_hand_qty DECIMAL(12, 4) DEFAULT 0.0000,
-  item_code VARCHAR(100) NOT NULL,
-  item_description TEXT NOT NULL,
-  purchase_unit VARCHAR(50) NOT NULL,
-  item_type VARCHAR(100) NOT NULL,
+  project_code VARCHAR(50) NOT NULL,
+  warehouse_code VARCHAR(50) NOT NULL,
+  warehouse_name VARCHAR(255) NOT NULL,
+  location_code VARCHAR(100) NOT NULL,
+  location_description TEXT NOT NULL,
+  location_category VARCHAR(100) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT unique_site_warehouse_item UNIQUE (project_site, warehouse_code, item_code)
+  CONSTRAINT unique_wh_location_bin UNIQUE (warehouse_code, location_code)
 );
 
-CREATE INDEX idx_item_master_site ON item_master(project_site);
-CREATE INDEX idx_item_master_code ON item_master(item_code);
-CREATE INDEX idx_item_master_type ON item_master(item_type);
+CREATE INDEX idx_warehouse_location_master_project ON warehouse_location_master(project_code);
+CREATE INDEX idx_warehouse_location_master_warehouse ON warehouse_location_master(warehouse_code);
+CREATE INDEX idx_warehouse_location_master_location ON warehouse_location_master(location_code);
 
-CREATE TEMP TABLE item_import (
-  project_site TEXT,
-  site_description TEXT,
+CREATE TEMP TABLE warehouse_location_import (
+  project_code TEXT,
   warehouse_code TEXT,
-  warehouse_description TEXT,
-  on_hand_qty TEXT,
-  item_code TEXT,
-  item_description TEXT,
-  purchase_unit TEXT,
-  item_type TEXT
+  warehouse_name TEXT,
+  location_code TEXT,
+  location_description TEXT,
+  location_category TEXT
 ) ON COMMIT DROP;
 
-COPY item_import (
-  project_site,
-  site_description,
+COPY warehouse_location_import (
+  project_code,
   warehouse_code,
-  warehouse_description,
-  on_hand_qty,
-  item_code,
-  item_description,
-  purchase_unit,
-  item_type
+  warehouse_name,
+  location_code,
+  location_description,
+  location_category
 ) FROM STDIN WITH CSV;
 {csv_buffer.getvalue()}\\.
 
-INSERT INTO item_master (
-  project_site,
-  site_description,
+INSERT INTO warehouse_location_master (
+  project_code,
   warehouse_code,
-  warehouse_description,
-  on_hand_qty,
-  item_code,
-  item_description,
-  purchase_unit,
-  item_type
+  warehouse_name,
+  location_code,
+  location_description,
+  location_category
 )
-SELECT DISTINCT ON (project_site, COALESCE(warehouse_code, ''), item_code)
-  project_site,
-  site_description,
-  NULLIF(warehouse_code, ''),
-  NULLIF(warehouse_description, ''),
-  COALESCE(NULLIF(on_hand_qty, '')::decimal, 0),
-  item_code,
-  item_description,
-  purchase_unit,
-  item_type
-FROM item_import
-WHERE project_site <> ''
-  AND site_description <> ''
-  AND item_code <> ''
-  AND item_description <> ''
-  AND purchase_unit <> ''
-  AND item_type <> ''
-ORDER BY project_site, COALESCE(warehouse_code, ''), item_code;
+SELECT DISTINCT ON (warehouse_code, location_code)
+  project_code,
+  warehouse_code,
+  warehouse_name,
+  location_code,
+  location_description,
+  location_category
+FROM warehouse_location_import
+WHERE project_code <> ''
+  AND warehouse_code <> ''
+  AND warehouse_name <> ''
+  AND location_code <> ''
+  AND location_description <> ''
+  AND location_category <> ''
+ORDER BY warehouse_code, location_code, project_code;
 
 SELECT
-  (SELECT COUNT(*) FROM item_import) AS workbook_rows,
-  (SELECT COUNT(*) FROM item_master) AS imported_rows,
-  (SELECT COUNT(*) FROM item_master WHERE warehouse_code IS NULL) AS rows_without_warehouse,
-  (SELECT COUNT(DISTINCT project_site) FROM item_master) AS project_sites,
-  (SELECT SUM(on_hand_qty) FROM item_master) AS total_on_hand_qty;
+  (SELECT COUNT(*) FROM warehouse_location_import) AS workbook_rows,
+  (SELECT COUNT(*) FROM warehouse_location_master) AS imported_rows,
+  (SELECT COUNT(DISTINCT project_code) FROM warehouse_location_master) AS project_count,
+  (SELECT COUNT(DISTINCT warehouse_code) FROM warehouse_location_master) AS warehouse_count,
+  (SELECT COUNT(DISTINCT location_category) FROM warehouse_location_master) AS category_count;
 
 COMMIT;
 """
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Import Items.xlsx into item_master.")
+    parser = argparse.ArgumentParser(description="Import Warehouse_Location.xlsx into warehouse_location_master.")
     parser.add_argument(
         "workbook",
         nargs="?",
-        default=r"c:\Users\Hemanth\Downloads\Items.xlsx",
-        help="Path to Items.xlsx",
+        default=r"c:\Users\Hemanth\Downloads\Warehouse_Location.xlsx",
+        help="Path to Warehouse_Location.xlsx",
     )
     args = parser.parse_args()
 
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     database_url = os.environ.get("DATABASE_URL") or read_dotenv(root / ".env").get("DATABASE_URL")
 
     if not database_url:
@@ -232,7 +217,7 @@ def main() -> int:
 
     rows = read_workbook_rows(Path(args.workbook))
     if not rows:
-        print("No item rows found.", file=sys.stderr)
+        print("No warehouse location rows found.", file=sys.stderr)
         return 1
 
     env = os.environ.copy()

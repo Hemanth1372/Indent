@@ -80,7 +80,7 @@ def read_workbook_rows(path: Path) -> list[dict[str, str]]:
             for item in root.findall("a:si", NS):
                 shared_strings.append("".join(text.text or "" for text in item.findall(".//a:t", NS)))
 
-        sheet_root = ET.fromstring(archive.read(workbook_target(archive, "BP By Activity")))
+        sheet_root = ET.fromstring(archive.read(workbook_target(archive, "Warehouse Extract")))
         parsed_rows: list[list[str]] = []
 
         for row in sheet_root.findall("a:sheetData/a:row", NS):
@@ -104,8 +104,8 @@ def read_workbook_rows(path: Path) -> list[dict[str, str]]:
     return rows
 
 
-def blank_to_null(value: str) -> str:
-    return r"\N" if not value.strip() else value.strip()
+def yes_no(value: str) -> str:
+    return "Yes" if str(value or "").strip().lower() == "yes" else "No"
 
 
 def build_sql(rows: list[dict[str, str]]) -> str:
@@ -115,14 +115,12 @@ def build_sql(rows: list[dict[str, str]]) -> str:
     for row in rows:
         writer.writerow(
             [
-                row.get("Project", "").strip(),
-                row.get("Project Description", "").strip(),
-                row.get("Location", "").strip(),
-                row.get("Location Description", "").strip(),
-                blank_to_null(row.get("Activity", "")),
-                blank_to_null(row.get("Activity Description", "")),
-                row.get("Business Partner", "").strip(),
-                row.get("BP Name", "").strip(),
+                row.get("Warehouse", "").strip(),
+                row.get("Warehouse Description", "").strip(),
+                row.get("Site", "").strip(),
+                row.get("Site Description", "").strip(),
+                yes_no(row.get("Material Warehouse (Yes/No)", "")),
+                yes_no(row.get("Virtual Warehouse (Yes/No)", "")),
             ]
         )
 
@@ -130,100 +128,86 @@ def build_sql(rows: list[dict[str, str]]) -> str:
 \\set ON_ERROR_STOP on
 BEGIN;
 
-CREATE TABLE IF NOT EXISTS bp_activity_master (
+DROP TABLE IF EXISTS warehouse_master CASCADE;
+
+CREATE TABLE warehouse_master (
   id SERIAL PRIMARY KEY,
-  project_code VARCHAR(50) NOT NULL,
-  project_description VARCHAR(255) NOT NULL,
-  location_code VARCHAR(100) NOT NULL,
-  location_description TEXT NOT NULL,
-  activity_code VARCHAR(100) NULL,
-  activity_description TEXT NULL,
-  business_partner_code VARCHAR(100) NOT NULL,
-  business_partner_name VARCHAR(255) NOT NULL,
+  warehouse_code VARCHAR(50) UNIQUE NOT NULL,
+  warehouse_description VARCHAR(255) NOT NULL,
+  project_site VARCHAR(50) NOT NULL,
+  site_description VARCHAR(255) NOT NULL,
+  is_material_warehouse VARCHAR(10) NOT NULL,
+  is_virtual_warehouse VARCHAR(10) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT unique_bp_activity_assignment UNIQUE (project_code, location_code, activity_code, business_partner_code)
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-TRUNCATE TABLE bp_activity_master RESTART IDENTITY CASCADE;
+CREATE INDEX idx_warehouse_master_site ON warehouse_master(project_site);
+CREATE INDEX idx_warehouse_master_code ON warehouse_master(warehouse_code);
 
-CREATE INDEX IF NOT EXISTS idx_bp_activity_master_project ON bp_activity_master(project_code);
-CREATE INDEX IF NOT EXISTS idx_bp_activity_master_location ON bp_activity_master(location_code);
-CREATE INDEX IF NOT EXISTS idx_bp_activity_master_bp ON bp_activity_master(business_partner_code);
-
-CREATE TEMP TABLE bp_activity_import (
-  project_code TEXT,
-  project_description TEXT,
-  location_code TEXT,
-  location_description TEXT,
-  activity_code TEXT,
-  activity_description TEXT,
-  business_partner_code TEXT,
-  business_partner_name TEXT
+CREATE TEMP TABLE warehouse_import (
+  warehouse_code TEXT,
+  warehouse_description TEXT,
+  project_site TEXT,
+  site_description TEXT,
+  is_material_warehouse TEXT,
+  is_virtual_warehouse TEXT
 ) ON COMMIT DROP;
 
-COPY bp_activity_import (
-  project_code,
-  project_description,
-  location_code,
-  location_description,
-  activity_code,
-  activity_description,
-  business_partner_code,
-  business_partner_name
-) FROM STDIN WITH CSV NULL '\\N';
+COPY warehouse_import (
+  warehouse_code,
+  warehouse_description,
+  project_site,
+  site_description,
+  is_material_warehouse,
+  is_virtual_warehouse
+) FROM STDIN WITH CSV;
 {csv_buffer.getvalue()}\\.
 
-INSERT INTO bp_activity_master (
-  project_code,
-  project_description,
-  location_code,
-  location_description,
-  activity_code,
-  activity_description,
-  business_partner_code,
-  business_partner_name
+INSERT INTO warehouse_master (
+  warehouse_code,
+  warehouse_description,
+  project_site,
+  site_description,
+  is_material_warehouse,
+  is_virtual_warehouse
 )
-SELECT
-  project_code,
-  project_description,
-  location_code,
-  location_description,
-  NULLIF(activity_code, ''),
-  NULLIF(activity_description, ''),
-  business_partner_code,
-  business_partner_name
-FROM bp_activity_import
-WHERE project_code <> ''
-  AND project_description <> ''
-  AND location_code <> ''
-  AND location_description <> ''
-  AND business_partner_code <> ''
-  AND business_partner_name <> '';
+SELECT DISTINCT ON (warehouse_code)
+  warehouse_code,
+  warehouse_description,
+  project_site,
+  site_description,
+  is_material_warehouse,
+  is_virtual_warehouse
+FROM warehouse_import
+WHERE warehouse_code <> ''
+  AND warehouse_description <> ''
+  AND project_site <> ''
+  AND site_description <> ''
+ORDER BY warehouse_code;
 
 SELECT
-  (SELECT COUNT(*) FROM bp_activity_import) AS workbook_rows,
-  (SELECT COUNT(*) FROM bp_activity_master) AS imported_rows,
-  (SELECT COUNT(DISTINCT project_code) FROM bp_activity_master) AS project_count,
-  (SELECT COUNT(DISTINCT location_code) FROM bp_activity_master) AS location_count,
-  (SELECT COUNT(DISTINCT business_partner_code) FROM bp_activity_master) AS partner_count,
-  (SELECT COUNT(*) FROM bp_activity_master WHERE activity_code IS NULL) AS location_level_assignments;
+  (SELECT COUNT(*) FROM warehouse_import) AS workbook_rows,
+  (SELECT COUNT(*) FROM warehouse_master) AS imported_rows,
+  (SELECT COUNT(*) FROM warehouse_master WHERE is_material_warehouse = 'Yes') AS material_warehouses,
+  (SELECT COUNT(*) FROM warehouse_master WHERE is_virtual_warehouse = 'Yes') AS virtual_warehouses,
+  (SELECT COUNT(DISTINCT project_site) FROM warehouse_master) AS project_sites;
 
 COMMIT;
 """
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Import BP_By_Activity.xlsx into bp_activity_master.")
+    parser = argparse.ArgumentParser(description="Import Warehouse_Extract.xlsx into warehouse_master.")
     parser.add_argument(
         "workbook",
         nargs="?",
-        default=r"c:\Users\Hemanth\Downloads\BP_By_Activity.xlsx",
-        help="Path to BP_By_Activity.xlsx",
+        default=r"c:\Users\Hemanth\Downloads\Warehouse_Extract.xlsx",
+        help="Path to Warehouse_Extract.xlsx",
     )
     args = parser.parse_args()
 
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     database_url = os.environ.get("DATABASE_URL") or read_dotenv(root / ".env").get("DATABASE_URL")
 
     if not database_url:
@@ -232,7 +216,7 @@ def main() -> int:
 
     rows = read_workbook_rows(Path(args.workbook))
     if not rows:
-        print("No BP activity rows found.", file=sys.stderr)
+        print("No warehouse rows found.", file=sys.stderr)
         return 1
 
     env = os.environ.copy()

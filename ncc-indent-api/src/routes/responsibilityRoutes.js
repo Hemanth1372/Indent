@@ -1,9 +1,12 @@
 import { Router } from 'express'
+import multer from 'multer'
 import {
   changeResponsibilityPassword,
   changeResponsibilityRole,
   createResponsibility,
   deleteResponsibility,
+  exportResponsibilities,
+  importResponsibilities,
   listResponsibilities,
   listResponsibilityOptions,
   updateResponsibility,
@@ -21,8 +24,16 @@ import {
 } from '../schemas/responsibilitySchemas.js'
 
 export const responsibilityRoutes = Router()
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: {
+    fileSize: 10 * 1024 * 1024,
+  },
+})
 
 responsibilityRoutes.use(verifySuperAdmin)
+responsibilityRoutes.get('/export', checkSuperAdmin, exportResponsibilities)
+responsibilityRoutes.post('/import', checkSuperAdmin, upload.single('file'), importResponsibilities)
 responsibilityRoutes.get('/options', listResponsibilityOptions)
 responsibilityRoutes.get('/', listResponsibilities)
 responsibilityRoutes.post('/', checkSuperAdmin, validate(createResponsibilitySchema), createResponsibility)

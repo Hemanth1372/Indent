@@ -52,24 +52,22 @@ def cell_value(cell: ET.Element, shared_strings: list[str]) -> str:
     return value.strip()
 
 
-def workbook_target(archive: ZipFile, sheet_name: str) -> str:
+def workbook_sheet_target(archive: ZipFile) -> str:
     workbook = ET.fromstring(archive.read("xl/workbook.xml"))
     relationships = ET.fromstring(archive.read("xl/_rels/workbook.xml.rels"))
     target_by_id = {relationship.attrib["Id"]: relationship.attrib["Target"] for relationship in relationships}
+    first_sheet = workbook.find("a:sheets/a:sheet", NS)
 
-    for sheet in workbook.findall("a:sheets/a:sheet", NS):
-        if sheet.attrib["name"] != sheet_name:
-            continue
+    if first_sheet is None:
+        raise ValueError("Workbook does not contain any sheets.")
 
-        relationship_id = sheet.attrib["{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"]
-        target = target_by_id[relationship_id]
+    relationship_id = first_sheet.attrib["{http://schemas.openxmlformats.org/officeDocument/2006/relationships}id"]
+    target = target_by_id[relationship_id]
 
-        if target.startswith("/"):
-            return target.lstrip("/")
+    if target.startswith("/"):
+        return target.lstrip("/")
 
-        return f"xl/{target}" if not target.startswith("xl/") else target
-
-    raise ValueError(f"Sheet not found: {sheet_name}")
+    return f"xl/{target}" if not target.startswith("xl/") else target
 
 
 def read_workbook_rows(path: Path) -> list[dict[str, str]]:
@@ -80,7 +78,7 @@ def read_workbook_rows(path: Path) -> list[dict[str, str]]:
             for item in root.findall("a:si", NS):
                 shared_strings.append("".join(text.text or "" for text in item.findall(".//a:t", NS)))
 
-        sheet_root = ET.fromstring(archive.read(workbook_target(archive, "Activities")))
+        sheet_root = ET.fromstring(archive.read(workbook_sheet_target(archive)))
         parsed_rows: list[list[str]] = []
 
         for row in sheet_root.findall("a:sheetData/a:row", NS):
@@ -111,15 +109,12 @@ def build_sql(rows: list[dict[str, str]]) -> str:
     for row in rows:
         writer.writerow(
             [
-                row.get("Activity", "").strip(),
-                row.get("Project", "").strip(),
+                row.get("Service Order", "").strip(),
+                row.get("Status", "").strip(),
+                row.get("Item Code", "").strip(),
+                row.get("Serial Number", "").strip(),
+                row.get("Site", "").strip(),
                 row.get("Description", "").strip(),
-                row.get("Activity Type", "").strip(),
-                row.get("Critical Capacity Type", "").strip(),
-                row.get("Work Auth. Status", "").strip(),
-                row.get("Resource Required", "").strip(),
-                row.get("Scheduled Start Date", "").strip(),
-                row.get("Scheduled Finish Date", "").strip(),
             ]
         )
 
@@ -127,104 +122,86 @@ def build_sql(rows: list[dict[str, str]]) -> str:
 \\set ON_ERROR_STOP on
 BEGIN;
 
-DROP TABLE IF EXISTS activity_master CASCADE;
+DROP TABLE IF EXISTS service_orders CASCADE;
 
-CREATE TABLE activity_master (
+CREATE TABLE service_orders (
   id SERIAL PRIMARY KEY,
-  activity_code VARCHAR(50) NOT NULL,
-  project_code VARCHAR(50) NOT NULL,
-  description TEXT NOT NULL,
-  activity_type VARCHAR(100) NOT NULL,
-  critical_capacity_type VARCHAR(100) NOT NULL,
-  work_auth_status VARCHAR(100) NOT NULL,
-  resource_required VARCHAR(20) NOT NULL,
-  scheduled_start_date TIMESTAMP NULL,
-  scheduled_finish_date TIMESTAMP NULL,
+  service_order_no VARCHAR(50) UNIQUE NOT NULL,
+  status VARCHAR(100) NOT NULL,
+  item_code VARCHAR(100) NULL,
+  serial_number VARCHAR(100) NULL,
+  project_site VARCHAR(50) NOT NULL,
+  description TEXT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-  CONSTRAINT unique_project_activity UNIQUE (project_code, activity_code)
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
-CREATE INDEX idx_activity_master_code ON activity_master(activity_code);
-CREATE INDEX idx_activity_master_project ON activity_master(project_code);
+CREATE INDEX idx_service_orders_item_code ON service_orders(item_code);
+CREATE INDEX idx_service_orders_project_site ON service_orders(project_site);
+CREATE INDEX idx_service_orders_status ON service_orders(status);
 
-CREATE TEMP TABLE activity_import (
-  activity_code TEXT,
-  project_code TEXT,
-  description TEXT,
-  activity_type TEXT,
-  critical_capacity_type TEXT,
-  work_auth_status TEXT,
-  resource_required TEXT,
-  scheduled_start_date TEXT,
-  scheduled_finish_date TEXT
+CREATE TEMP TABLE service_order_import (
+  service_order_no TEXT,
+  status TEXT,
+  item_code TEXT,
+  serial_number TEXT,
+  project_site TEXT,
+  description TEXT
 ) ON COMMIT DROP;
 
-COPY activity_import (
-  activity_code,
-  project_code,
-  description,
-  activity_type,
-  critical_capacity_type,
-  work_auth_status,
-  resource_required,
-  scheduled_start_date,
-  scheduled_finish_date
+COPY service_order_import (
+  service_order_no,
+  status,
+  item_code,
+  serial_number,
+  project_site,
+  description
 ) FROM STDIN WITH CSV;
 {csv_buffer.getvalue()}\\.
 
-INSERT INTO activity_master (
-  activity_code,
-  project_code,
-  description,
-  activity_type,
-  critical_capacity_type,
-  work_auth_status,
-  resource_required,
-  scheduled_start_date,
-  scheduled_finish_date
+INSERT INTO service_orders (
+  service_order_no,
+  status,
+  item_code,
+  serial_number,
+  project_site,
+  description
 )
-SELECT DISTINCT ON (project_code, activity_code)
-  activity_code,
-  project_code,
-  description,
-  activity_type,
-  critical_capacity_type,
-  work_auth_status,
-  resource_required,
-  NULLIF(scheduled_start_date, '')::timestamp,
-  NULLIF(scheduled_finish_date, '')::timestamp
-FROM activity_import
-WHERE activity_code <> ''
-  AND project_code <> ''
-  AND description <> ''
-  AND activity_type <> ''
-  AND critical_capacity_type <> ''
-  AND work_auth_status <> ''
-  AND resource_required <> ''
-ORDER BY project_code, activity_code;
+SELECT DISTINCT ON (service_order_no)
+  service_order_no,
+  status,
+  NULLIF(item_code, ''),
+  NULLIF(serial_number, ''),
+  project_site,
+  NULLIF(description, '')
+FROM service_order_import
+WHERE service_order_no <> ''
+  AND status <> ''
+  AND project_site <> ''
+ORDER BY service_order_no;
 
 SELECT
-  (SELECT COUNT(*) FROM activity_import) AS workbook_rows,
-  (SELECT COUNT(*) FROM activity_master) AS imported_rows,
-  (SELECT COUNT(DISTINCT project_code) FROM activity_master) AS projects,
-  (SELECT COUNT(*) FROM activity_import) - (SELECT COUNT(*) FROM activity_master) AS skipped_or_duplicate_rows;
+  (SELECT COUNT(*) FROM service_order_import) AS workbook_rows,
+  (SELECT COUNT(*) FROM service_orders) AS imported_rows,
+  (SELECT COUNT(*) FROM service_orders WHERE item_code IS NULL) AS rows_without_item_code,
+  (SELECT COUNT(*) FROM service_orders WHERE serial_number IS NULL) AS rows_without_serial_number,
+  (SELECT COUNT(DISTINCT project_site) FROM service_orders) AS project_sites;
 
 COMMIT;
 """
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Import Activities_timestamps.xlsx into activity_master.")
+    parser = argparse.ArgumentParser(description="Import Service_Orders_Serials_Filled.xlsx into service_orders.")
     parser.add_argument(
         "workbook",
         nargs="?",
-        default=r"c:\Users\Hemanth\Downloads\Activities_timestamps .xlsx",
-        help="Path to Activities_timestamps .xlsx",
+        default=r"c:\Users\Hemanth\Downloads\Service_Orders_Serials_Filled.xlsx",
+        help="Path to Service_Orders_Serials_Filled.xlsx",
     )
     args = parser.parse_args()
 
-    root = Path(__file__).resolve().parent
+    root = Path(__file__).resolve().parents[1]
     database_url = os.environ.get("DATABASE_URL") or read_dotenv(root / ".env").get("DATABASE_URL")
 
     if not database_url:
@@ -233,7 +210,7 @@ def main() -> int:
 
     rows = read_workbook_rows(Path(args.workbook))
     if not rows:
-        print("No activity rows found.", file=sys.stderr)
+        print("No service order rows found.", file=sys.stderr)
         return 1
 
     env = os.environ.copy()

@@ -1,5 +1,7 @@
 import bcrypt from 'bcryptjs'
-import { query } from '../db/pool.js'
+import ExcelJS from 'exceljs'
+import xlsx from 'xlsx'
+import { pool, query } from '../db/pool.js'
 
 const SELECT_COLUMNS = `
   id,
@@ -24,6 +26,18 @@ const SEARCHABLE_RESPONSIBILITY_FIELDS = {
   employee_name: 'employee_name',
 }
 
+const RESPONSIBILITY_IMPORT_COLUMNS = [
+  { label: 'Employee Id', excelHeader: 'Employee ID', dbColumn: 'employee_id', type: 'string', isReadOnly: true },
+  { label: 'Employee Name', excelHeader: 'Employee Name', dbColumn: 'employee_name', type: 'string' },
+  { label: 'Project Id', excelHeader: 'Project ID', dbColumn: 'project_id', type: 'string' },
+  { label: 'Project Desc', excelHeader: 'Project Description', dbColumn: 'project_description', type: 'text' },
+  { label: 'Responsibility', excelHeader: 'Responsibility', dbColumn: 'responsibility', type: 'string' },
+  { label: 'Valid From', excelHeader: 'Valid From', dbColumn: 'valid_from', type: 'date' },
+  { label: 'Valid To', excelHeader: 'Valid To', dbColumn: 'valid_to', type: 'date' },
+]
+
+const RESPONSIBILITY_REQUIRED_HEADERS = ['Employee ID', 'Employee Name', 'Project ID', 'Project Description', 'Responsibility']
+
 function formatDateOnly(value) {
   if (!value) {
     return null
@@ -33,7 +47,7 @@ function formatDateOnly(value) {
     return value.toISOString().slice(0, 10)
   }
 
-  return String(value).slice(0, 10) || null
+  return String(value).slice(0, 10) ||   null
 }
 
 function computeStatus(row) {
@@ -66,6 +80,189 @@ function normalizeRow(row) {
 function normalizedPin(value) {
   const pin = String(value ?? '').trim()
   return /^\d{6}$/.test(pin) ? pin : '123456'
+}
+
+function responsibilityCompositeKey(row) {
+  return [
+    String(row.employee_id ?? '').trim(),
+    String(row.project_id ?? '').trim(),
+    String(row.responsibility ?? '').trim(),
+  ].join('|')
+}
+
+function parseResponsibilityFieldsMapping(value) {
+  if (!value) {
+    return Object.fromEntries(RESPONSIBILITY_IMPORT_COLUMNS.map((column) => [column.excelHeader, true]))
+  }
+
+  try {
+    const parsed = JSON.parse(value)
+    return Object.fromEntries(
+      RESPONSIBILITY_IMPORT_COLUMNS.map((column) => [
+        column.excelHeader,
+        column.excelHeader === 'Employee ID' || Boolean(parsed[column.excelHeader]),
+      ]),
+    )
+  } catch {
+    throwBadRequest('Invalid fieldsMapping payload')
+  }
+}
+
+function parseResponsibilityWorkbook(file) {
+  const workbook = xlsx.read(file.buffer, {
+    type: 'buffer',
+    raw: true,
+    cellDates: true,
+  })
+  const firstSheetName = workbook.SheetNames[0]
+
+  if (!firstSheetName) {
+    throwBadRequest('Import file does not contain a worksheet')
+  }
+
+  const rows = xlsx.utils.sheet_to_json(workbook.Sheets[firstSheetName], {
+    defval: '',
+    blankrows: false,
+  })
+
+  if (!rows.length) {
+    throwBadRequest('Spreadsheet contains no data')
+  }
+
+  const headers = new Set(Object.keys(rows[0] ?? {}).map((header) => String(header).trim()))
+  const missingHeader = RESPONSIBILITY_REQUIRED_HEADERS.find((header) => !headers.has(header))
+
+  if (missingHeader) {
+    throwBadRequest(`Invalid template. Required column: ${missingHeader}`)
+  }
+
+  return rows
+    .map((row) => ({
+      employee_id: cleanString(row['Employee ID']),
+      employee_name: cleanString(row['Employee Name']),
+      project_id: cleanString(row['Project ID']),
+      project_description: cleanString(row['Project Description']),
+      responsibility: cleanString(row.Responsibility),
+      valid_from: cleanDate(row['Valid From']),
+      valid_to: cleanDate(row['Valid To']),
+    }))
+    .filter((row) => Object.values(row).some((value) => value !== null && value !== ''))
+}
+
+function buildResponsibilityInsertRow(row, fieldsMapping) {
+  return {
+    employee_id: row.employee_id,
+    employee_name: fieldsMapping['Employee Name'] ? row.employee_name : '',
+    project_id: fieldsMapping['Project ID'] ? row.project_id : '',
+    project_description: fieldsMapping['Project Description'] ? row.project_description : '',
+    responsibility: fieldsMapping.Responsibility ? row.responsibility : '',
+    valid_from: fieldsMapping['Valid From'] ? row.valid_from : null,
+    valid_to: fieldsMapping['Valid To'] ? row.valid_to : null,
+    manual_status: 'Active',
+    password_hash: '123456',
+  }
+}
+
+function buildResponsibilityUpdate(row, existingRow, fieldsMapping) {
+  const fields = [
+    ['Employee Name', 'employee_name'],
+    ['Project Description', 'project_description'],
+    ['Valid From', 'valid_from'],
+    ['Valid To', 'valid_to'],
+  ]
+  const assignments = []
+  const values = []
+  const nextRow = {
+    employee_name: existingRow.employee_name,
+    project_description: existingRow.project_description,
+    valid_from: formatDateOnly(existingRow.valid_from),
+    valid_to: formatDateOnly(existingRow.valid_to),
+  }
+
+  for (const [excelHeader, dbColumn] of fields) {
+    if (!fieldsMapping[excelHeader]) {
+      continue
+    }
+
+    const nextValue = row[dbColumn]
+    nextRow[dbColumn] = nextValue
+    const currentValue = ['valid_from', 'valid_to'].includes(dbColumn)
+      ? formatDateOnly(existingRow[dbColumn])
+      : cleanString(existingRow[dbColumn])
+    const nextComparable = nextValue === null ? '' : String(nextValue).trim()
+    const currentComparable = currentValue === null ? '' : String(currentValue).trim()
+
+    if (nextComparable !== currentComparable) {
+      values.push(nextValue)
+      assignments.push(`${dbColumn} = $${values.length}`)
+    }
+  }
+
+  if (!assignments.length) {
+    return null
+  }
+
+  return {
+    id: existingRow.id,
+    employee_id: existingRow.employee_id,
+    assignments,
+    nextRow,
+    values,
+  }
+}
+
+function cleanString(value) {
+  if (value === null || value === undefined) {
+    return ''
+  }
+
+  return String(value).trim()
+}
+
+function cleanDate(value) {
+  if (value === null || value === undefined || String(value).trim() === '') {
+    return null
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10)
+  }
+
+  if (typeof value === 'number') {
+    const parsedDate = xlsx.SSF.parse_date_code(value)
+    if (parsedDate) {
+      return `${parsedDate.y}-${String(parsedDate.m).padStart(2, '0')}-${String(parsedDate.d).padStart(2, '0')}`
+    }
+  }
+
+  const textValue = String(value).trim()
+  const isoMatch = textValue.match(/^(\d{4})-(\d{2})-(\d{2})/)
+  if (isoMatch) {
+    return `${isoMatch[1]}-${isoMatch[2]}-${isoMatch[3]}`
+  }
+
+  const slashMatch = textValue.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/)
+  if (slashMatch) {
+    const first = Number(slashMatch[1])
+    const second = Number(slashMatch[2])
+    const year = slashMatch[3].length === 2 ? `20${slashMatch[3]}` : slashMatch[3]
+    const day = first > 12 ? first : second
+    const month = first > 12 ? second : first
+    return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+  }
+
+  const parsed = new Date(textValue)
+  if (!Number.isNaN(parsed.getTime())) {
+    return parsed.toISOString().slice(0, 10)
+  }
+
+  return null
+}
+
+function throwBadRequest(message) {
+  const error = new Error(message)
+  error.statusCode = 400
+  throw error
 }
 
 async function syncLoginUser(row) {
@@ -128,6 +325,188 @@ async function syncUserMaster(row) {
   )
 
   await syncLoginUser(row)
+}
+
+async function bulkInsertResponsibilities(client, rows) {
+  await client.query(
+    `
+      INSERT INTO responsibility_master (
+        employee_id,
+        employee_name,
+        project_id,
+        project_description,
+        responsibility,
+        valid_from,
+        valid_to,
+        manual_status,
+        password_hash
+      )
+      SELECT *
+      FROM UNNEST(
+        $1::text[],
+        $2::text[],
+        $3::text[],
+        $4::text[],
+        $5::text[],
+        $6::date[],
+        $7::date[],
+        $8::text[],
+        $9::text[]
+      )
+    `,
+    [
+      rows.map((row) => row.employee_id),
+      rows.map((row) => row.employee_name),
+      rows.map((row) => row.project_id),
+      rows.map((row) => row.project_description),
+      rows.map((row) => row.responsibility),
+      rows.map((row) => row.valid_from),
+      rows.map((row) => row.valid_to),
+      rows.map((row) => row.manual_status),
+      rows.map((row) => row.password_hash),
+    ],
+  )
+}
+
+async function bulkUpdateResponsibilities(client, updates) {
+  await client.query(
+    `
+      UPDATE responsibility_master AS rm
+      SET employee_name = incoming.employee_name,
+          project_description = incoming.project_description,
+          valid_from = incoming.valid_from,
+          valid_to = incoming.valid_to,
+          updated_at = CURRENT_TIMESTAMP
+      FROM (
+        SELECT *
+        FROM UNNEST(
+          $1::int[],
+          $2::text[],
+          $3::text[],
+          $4::date[],
+          $5::date[]
+        ) AS data(id, employee_name, project_description, valid_from, valid_to)
+      ) AS incoming
+      WHERE rm.id = incoming.id
+    `,
+    [
+      updates.map((update) => update.id),
+      updates.map((update) => update.nextRow.employee_name),
+      updates.map((update) => update.nextRow.project_description),
+      updates.map((update) => update.nextRow.valid_from),
+      updates.map((update) => update.nextRow.valid_to),
+    ],
+  )
+}
+
+async function syncUserMasters(rows) {
+  if (!rows.length) {
+    return
+  }
+
+  const uniqueRows = [
+    ...new Map(rows.map((row) => [responsibilityCompositeKey(row), row])).values(),
+  ]
+  await query(
+    `
+      INSERT INTO user_master (
+        employee_id,
+        employee_name,
+        project_id,
+        project_description,
+        responsibility,
+        valid_from,
+        valid_to,
+        manual_status,
+        password_hash
+      )
+      SELECT *
+      FROM UNNEST(
+        $1::text[],
+        $2::text[],
+        $3::text[],
+        $4::text[],
+        $5::text[],
+        $6::date[],
+        $7::date[],
+        $8::text[],
+        $9::text[]
+      )
+      ON CONFLICT (employee_id, project_id, responsibility)
+      DO UPDATE SET
+        employee_name = EXCLUDED.employee_name,
+        project_description = EXCLUDED.project_description,
+        valid_from = EXCLUDED.valid_from,
+        valid_to = EXCLUDED.valid_to,
+        manual_status = EXCLUDED.manual_status,
+        password_hash = EXCLUDED.password_hash,
+        updated_at = CURRENT_TIMESTAMP
+    `,
+    [
+      uniqueRows.map((row) => row.employee_id),
+      uniqueRows.map((row) => row.employee_name),
+      uniqueRows.map((row) => row.project_id),
+      uniqueRows.map((row) => row.project_description),
+      uniqueRows.map((row) => row.responsibility),
+      uniqueRows.map((row) => row.valid_from),
+      uniqueRows.map((row) => row.valid_to),
+      uniqueRows.map((row) => row.manual_status),
+      uniqueRows.map((row) => row.password_hash),
+    ],
+  )
+
+  await syncLoginUsers(uniqueRows)
+}
+
+async function syncLoginUsers(rows) {
+  if (!rows.length) {
+    return
+  }
+
+  const latestRowsByEmployee = new Map()
+  for (const row of rows) {
+    latestRowsByEmployee.set(row.employee_id, row)
+  }
+
+  const loginRows = [...latestRowsByEmployee.values()]
+  const hashByPin = new Map()
+
+  for (const row of loginRows) {
+    const pin = normalizedPin(row.password_hash)
+    if (!hashByPin.has(pin)) {
+      hashByPin.set(pin, await bcrypt.hash(pin, 12))
+    }
+  }
+
+  await query(
+    `
+      INSERT INTO users (login_name, employee_name, primary_role, password_hash, is_active, current_pin)
+      SELECT *
+      FROM UNNEST(
+        $1::text[],
+        $2::text[],
+        $3::text[],
+        $4::text[],
+        $5::boolean[],
+        $6::text[]
+      )
+      ON CONFLICT (login_name)
+      DO UPDATE SET
+        employee_name = EXCLUDED.employee_name,
+        primary_role = EXCLUDED.primary_role,
+        password_hash = EXCLUDED.password_hash,
+        is_active = EXCLUDED.is_active,
+        current_pin = EXCLUDED.current_pin
+    `,
+    [
+      loginRows.map((row) => row.employee_id),
+      loginRows.map((row) => row.employee_name),
+      loginRows.map((row) => row.responsibility),
+      loginRows.map((row) => hashByPin.get(normalizedPin(row.password_hash))),
+      loginRows.map((row) => computeStatus(row) === 'Active'),
+      loginRows.map((row) => normalizedPin(row.password_hash)),
+    ],
+  )
 }
 
 async function deleteUserMasterAssignment(row) {
@@ -229,6 +608,179 @@ export async function listResponsibilityOptions(_req, res, next) {
     `)
 
     return res.json({ responsibilities: result.rows.map((row) => row.responsibility) })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function importResponsibilities(req, res, next) {
+  if (!req.file) {
+    return res.status(400).json({ message: 'Responsibility import file is required' })
+  }
+
+  try {
+    const fieldsMapping = parseResponsibilityFieldsMapping(req.body?.fieldsMapping)
+    const sheetRows = parseResponsibilityWorkbook(req.file)
+    const employeeIds = [...new Set(sheetRows.map((row) => row.employee_id).filter(Boolean))]
+
+    if (!employeeIds.length) {
+      return res.status(400).json({ message: 'Uploaded sheet contains no Employee ID values' })
+    }
+
+    const existingResult = await query(
+      `
+        SELECT ${SELECT_COLUMNS}
+        FROM responsibility_master
+        WHERE employee_id = ANY($1)
+      `,
+      [employeeIds],
+    )
+    const existingRows = new Map(existingResult.rows.map((row) => [responsibilityCompositeKey(row), normalizeRow(row)]))
+    const processedKeys = new Set()
+    const inserts = []
+    const updates = []
+    const unchangedRows = []
+    const changedRowsForSync = []
+
+    for (const row of sheetRows) {
+      const key = responsibilityCompositeKey(row)
+
+      if (!row.employee_id || !row.project_id || !row.responsibility || processedKeys.has(key)) {
+        continue
+      }
+
+      processedKeys.add(key)
+      const existingRow = existingRows.get(key)
+
+      if (!existingRow) {
+        const insertRow = buildResponsibilityInsertRow(row, fieldsMapping)
+        inserts.push(insertRow)
+        changedRowsForSync.push(normalizeRow(insertRow))
+        continue
+      }
+
+      const update = buildResponsibilityUpdate(row, existingRow, fieldsMapping)
+      if (update) {
+        updates.push(update)
+        changedRowsForSync.push(normalizeRow({
+          ...existingRow,
+          employee_name: fieldsMapping['Employee Name'] ? row.employee_name : existingRow.employee_name,
+          project_description: fieldsMapping['Project Description'] ? row.project_description : existingRow.project_description,
+          valid_from: fieldsMapping['Valid From'] ? row.valid_from : existingRow.valid_from,
+          valid_to: fieldsMapping['Valid To'] ? row.valid_to : existingRow.valid_to,
+        }))
+      } else {
+        unchangedRows.push(row)
+      }
+    }
+
+    const client = await pool.connect()
+
+    try {
+      await client.query('BEGIN')
+
+      if (inserts.length) {
+        await bulkInsertResponsibilities(client, inserts)
+      }
+
+      if (updates.length) {
+        await bulkUpdateResponsibilities(client, updates)
+      }
+
+      await client.query('COMMIT')
+    } catch (error) {
+      await client.query('ROLLBACK')
+      throw error
+    } finally {
+      client.release()
+    }
+
+    await syncUserMasters(changedRowsForSync)
+
+    return res.json({
+      message: 'Responsibility spreadsheet sync completed successfully.',
+      processedRows: sheetRows.length,
+      summary: {
+        insertedCount: inserts.length,
+        updatedCount: updates.length,
+        unchangedCount: unchangedRows.length,
+        updatedRecordsLog: updates.map((update) => update.employee_id),
+      },
+    })
+  } catch (error) {
+    if (error.statusCode) {
+      return res.status(error.statusCode).json({ message: error.message })
+    }
+
+    return handleResponsibilityError(error, res, next)
+  }
+}
+
+export async function exportResponsibilities(req, res, next) {
+  try {
+    const searchField = String(req.query?.field ?? '').trim()
+    const searchValue = String(req.query?.value ?? '').trim()
+    const selectedKeys = String(req.query?.selectedKeys ?? '')
+      .split(',')
+      .map((key) => key.trim())
+      .filter(Boolean)
+
+    if (selectedKeys.length === 0 && (searchField || searchValue)) {
+      if (!searchField || !searchValue) {
+        return res.status(400).json({ message: 'Both filter field and value are required' })
+      }
+
+      if (!Object.prototype.hasOwnProperty.call(SEARCHABLE_RESPONSIBILITY_FIELDS, searchField)) {
+        return res.status(400).json({ message: 'Invalid filter field' })
+      }
+    }
+
+    let whereClause = ''
+    let filterParams = []
+
+    if (selectedKeys.length > 0) {
+      whereClause = 'WHERE id::TEXT = ANY($1::text[])'
+      filterParams = [selectedKeys]
+    } else if (searchField && searchValue) {
+      whereClause = `WHERE ${SEARCHABLE_RESPONSIBILITY_FIELDS[searchField]} ILIKE $1`
+      filterParams = [`%${searchValue}%`]
+    }
+
+    const result = await query(
+      `
+        SELECT
+          employee_id,
+          employee_name,
+          project_id,
+          project_description,
+          responsibility,
+          valid_from,
+          valid_to
+        FROM responsibility_master
+        ${whereClause}
+        ORDER BY employee_id ASC, project_id ASC, responsibility ASC
+      `,
+      filterParams,
+    )
+
+    const workbook = new ExcelJS.Workbook()
+    const worksheet = workbook.addWorksheet('Responsibility Master')
+    worksheet.columns = RESPONSIBILITY_IMPORT_COLUMNS.map((column) => ({
+      header: column.excelHeader,
+      key: column.dbColumn,
+      width: Math.max(18, Math.min(44, column.excelHeader.length + 8)),
+    }))
+    worksheet.getRow(1).font = { bold: true }
+    worksheet.addRows(result.rows.map((row) => ({
+      ...row,
+      valid_from: formatDateOnly(row.valid_from),
+      valid_to: formatDateOnly(row.valid_to),
+    })))
+
+    res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+    res.setHeader('Content-Disposition', 'attachment; filename=Responsibility_Master_Export.xlsx')
+    await workbook.xlsx.write(res)
+    return res.end()
   } catch (error) {
     return next(error)
   }
