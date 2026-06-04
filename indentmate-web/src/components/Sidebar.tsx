@@ -17,6 +17,7 @@ const mastersGroups = [
     items: [
       'Responsibility Master',
       'Business Partner Activity Master',
+      'Engineer by Activity Master',
     ],
   },
   {
@@ -34,6 +35,8 @@ const mastersGroups = [
       'Project Master',
       'Activity Master',
       'Service Orders',
+      'Rental Orders',
+      'Purchase Office',
     ],
   },
   {
@@ -60,6 +63,9 @@ function getMasterPath(groupKey: string, item: string) {
     'Project Master',
     'Activity Master',
     'Service Orders',
+    'Rental Orders',
+    'Purchase Office',
+    'Engineer by Activity Master',
     'Business Partner Activity Master',
     'Location Master',
     'Delivery Point Master',
@@ -79,6 +85,18 @@ function getMasterPath(groupKey: string, item: string) {
 
     if (item === 'Service Orders') {
       return '/master-data/service-order-master'
+    }
+
+    if (item === 'Rental Orders') {
+      return '/master-data/rental-order-master'
+    }
+
+    if (item === 'Purchase Office') {
+      return '/master-data/purchase-office-master'
+    }
+
+    if (item === 'Engineer by Activity Master') {
+      return '/master-data/engineer-activity-master'
     }
 
     return `/master-data/${slugify(item)}`

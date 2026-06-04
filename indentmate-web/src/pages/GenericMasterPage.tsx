@@ -130,6 +130,44 @@ const MASTER_IMPORT_METADATA: Record<string, MasterImportMetadata> = {
       { label: 'Description I', excelHeader: 'Description I', dbColumn: 'description_1' },
     ],
   },
+  'engineer-activity-master': {
+    excelLookupKey: 'Employee ID',
+    columns: [
+      { label: 'Company', excelHeader: 'Company', dbColumn: 'company', isReadOnly: true },
+      { label: 'Project Code', excelHeader: 'Project', dbColumn: 'project_code' },
+      { label: 'Project Description', excelHeader: 'Project Description', dbColumn: 'project_description' },
+      { label: 'Location Code', excelHeader: 'Location', dbColumn: 'location_code' },
+      { label: 'Location Description', excelHeader: 'Location Description', dbColumn: 'location_description' },
+      { label: 'Activity Code', excelHeader: 'Activity', dbColumn: 'activity_code' },
+      { label: 'Activity Description', excelHeader: 'Activity Description', dbColumn: 'activity_description' },
+      { label: 'Employee ID', excelHeader: 'Employee ID', dbColumn: 'employee_id' },
+      { label: 'Employee Name', excelHeader: 'Employee Name', dbColumn: 'employee_name' },
+    ],
+  },
+  'rental-order-master': {
+    excelLookupKey: 'Rental Order',
+    columns: [
+      { label: 'Rental Order', excelHeader: 'Rental Order', dbColumn: 'rental_order', isReadOnly: true },
+      { label: 'Rental Description', excelHeader: 'Rental Description', dbColumn: 'rental_description' },
+      { label: 'Status', excelHeader: 'Status', dbColumn: 'status' },
+      { label: 'Project Code', excelHeader: 'Project', dbColumn: 'project_code' },
+      { label: 'Project Description', excelHeader: 'Project Description', dbColumn: 'project_description' },
+      { label: 'Item Type', excelHeader: 'Item Type in Transaction', dbColumn: 'item_type_in_transaction' },
+      { label: 'Item Code', excelHeader: 'Item', dbColumn: 'item_code' },
+      { label: 'Item Description', excelHeader: 'Item Description', dbColumn: 'item_description' },
+    ],
+  },
+  'purchase-office-master': {
+    excelLookupKey: 'Order',
+    columns: [
+      { label: 'Order', excelHeader: 'Order', dbColumn: 'purchase_order', isReadOnly: true },
+      { label: 'Buy-from BP', excelHeader: 'Buy-from Business Partner', dbColumn: 'buy_from_business_partner' },
+      { label: 'BP Description', excelHeader: 'BP Description', dbColumn: 'bp_description' },
+      { label: 'Status', excelHeader: 'Status', dbColumn: 'status' },
+      { label: 'Purchase Office', excelHeader: 'Purchase Office', dbColumn: 'purchase_office' },
+      { label: 'Purchase Office Description', excelHeader: 'Purchase Office Description', dbColumn: 'purchase_office_description' },
+    ],
+  },
 }
 
 function defaultFieldsMapping(metadata?: MasterImportMetadata) {
@@ -446,6 +484,114 @@ const masterConfigs: Record<string, MasterConfig> = {
       { label: 'Description I', value: 'description_1', placeholder: 'Enter Description I...' },
     ],
   },
+  'engineer-activity-master': {
+    title: 'Engineer by Activity Master',
+    subtitle: 'Engineer assignment matrix by project, location, and activity',
+    countLabel: 'Records',
+    addButtonLabel: 'Add Engineer Assignment',
+    addModalTitle: 'Add Engineer Assignment',
+    editModalTitle: 'Edit Engineer Assignment',
+    fields: [
+      { key: 'company', label: 'Company', required: true },
+      { key: 'project_code', label: 'Project Code', required: true },
+      { key: 'project_description', label: 'Project Description', required: true },
+      { key: 'location_code', label: 'Location Code', required: true },
+      { key: 'location_description', label: 'Location Description', required: true, type: 'textarea' },
+      { key: 'activity_code', label: 'Activity Code' },
+      { key: 'activity_description', label: 'Activity Description', type: 'textarea' },
+      { key: 'employee_id', label: 'Employee ID', required: true },
+      { key: 'employee_name', label: 'Employee Name', required: true },
+    ],
+    columns: [
+      { key: 'company', label: 'Company' },
+      { key: 'project_code', label: 'Project Code' },
+      { key: 'location_code', label: 'Location Code' },
+      { key: 'location_description', label: 'Location Description' },
+      { key: 'activity_code', label: 'Activity Code' },
+      { key: 'activity_description', label: 'Activity Description' },
+      { key: 'employee_id', label: 'Employee ID' },
+      { key: 'employee_name', label: 'Employee Name' },
+    ],
+    searchFields: [
+      { label: 'Company', value: 'company', placeholder: 'Enter Company...' },
+      { label: 'Project Code', value: 'project_code', placeholder: 'Enter Project Code...' },
+      { label: 'Project Description', value: 'project_description', placeholder: 'Enter Project Description...' },
+      { label: 'Location Code', value: 'location_code', placeholder: 'Enter Location Code...' },
+      { label: 'Location Description', value: 'location_description', placeholder: 'Enter Location Description...' },
+      { label: 'Activity Code', value: 'activity_code', placeholder: 'Enter Activity Code...' },
+      { label: 'Employee ID', value: 'employee_id', placeholder: 'Enter Employee ID...' },
+      { label: 'Employee Name', value: 'employee_name', placeholder: 'Enter Employee Name...' },
+    ],
+  },
+  'rental-order-master': {
+    title: 'Rental Order Master',
+    subtitle: 'Rental orders, project assignment, and item transaction details',
+    countLabel: 'Records',
+    addButtonLabel: 'Add Rental Order',
+    addModalTitle: 'Add Rental Order',
+    editModalTitle: 'Edit Rental Order',
+    fields: [
+      { key: 'rental_order', label: 'Rental Order', required: true },
+      { key: 'rental_description', label: 'Rental Description', required: true, type: 'textarea' },
+      { key: 'status', label: 'Status', required: true },
+      { key: 'project_code', label: 'Project Code', required: true },
+      { key: 'project_description', label: 'Project Description', required: true },
+      { key: 'item_type_in_transaction', label: 'Item Type in Transaction', required: true },
+      { key: 'item_code', label: 'Item Code' },
+      { key: 'item_description', label: 'Item Description', type: 'textarea' },
+    ],
+    columns: [
+      { key: 'rental_order', label: 'Rental Order' },
+      { key: 'rental_description', label: 'Rental Description' },
+      { key: 'status', label: 'Status' },
+      { key: 'project_code', label: 'Project Code' },
+      { key: 'project_description', label: 'Project Description' },
+      { key: 'item_type_in_transaction', label: 'Item Type' },
+      { key: 'item_code', label: 'Item Code' },
+      { key: 'item_description', label: 'Item Description' },
+    ],
+    searchFields: [
+      { label: 'Rental Order', value: 'rental_order', placeholder: 'Enter Rental Order...' },
+      { label: 'Rental Description', value: 'rental_description', placeholder: 'Enter Rental Description...' },
+      { label: 'Status', value: 'status', placeholder: 'Enter Status...' },
+      { label: 'Project Code', value: 'project_code', placeholder: 'Enter Project Code...' },
+      { label: 'Project Description', value: 'project_description', placeholder: 'Enter Project Description...' },
+      { label: 'Item Type', value: 'item_type_in_transaction', placeholder: 'Enter Item Type...' },
+      { label: 'Item Code', value: 'item_code', placeholder: 'Enter Item Code...' },
+    ],
+  },
+  'purchase-office-master': {
+    title: 'Purchase Office Master',
+    subtitle: 'Purchase order office ownership and buy-from business partner details',
+    countLabel: 'Records',
+    addButtonLabel: 'Add Purchase Office',
+    addModalTitle: 'Add Purchase Office',
+    editModalTitle: 'Edit Purchase Office',
+    fields: [
+      { key: 'purchase_order', label: 'Order', required: true },
+      { key: 'buy_from_business_partner', label: 'Buy-from Business Partner', required: true },
+      { key: 'bp_description', label: 'BP Description', required: true, type: 'textarea' },
+      { key: 'status', label: 'Status', required: true },
+      { key: 'purchase_office', label: 'Purchase Office', required: true },
+      { key: 'purchase_office_description', label: 'Purchase Office Description', required: true, type: 'textarea' },
+    ],
+    columns: [
+      { key: 'purchase_order', label: 'Order' },
+      { key: 'buy_from_business_partner', label: 'Buy-from BP' },
+      { key: 'bp_description', label: 'BP Description' },
+      { key: 'status', label: 'Status' },
+      { key: 'purchase_office', label: 'Purchase Office' },
+      { key: 'purchase_office_description', label: 'Purchase Office Description' },
+    ],
+    searchFields: [
+      { label: 'Order', value: 'purchase_order', placeholder: 'Enter Order...' },
+      { label: 'Buy-from BP', value: 'buy_from_business_partner', placeholder: 'Enter Buy-from Business Partner...' },
+      { label: 'BP Description', value: 'bp_description', placeholder: 'Enter BP Description...' },
+      { label: 'Status', value: 'status', placeholder: 'Enter Status...' },
+      { label: 'Purchase Office', value: 'purchase_office', placeholder: 'Enter Purchase Office...' },
+      { label: 'Purchase Office Description', value: 'purchase_office_description', placeholder: 'Enter Purchase Office Description...' },
+    ],
+  },
 }
 
 type MasterRecord = Record<string, unknown>
@@ -568,11 +714,11 @@ function isFlagField(field: MasterField) {
 }
 
 function supportsInlineEdit(masterKey: string) {
-  return ['project-master', 'location-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master'].includes(masterKey)
+  return ['project-master', 'location-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master', 'engineer-activity-master', 'rental-order-master', 'purchase-office-master'].includes(masterKey)
 }
 
 function isPaginatedMaster(masterKey: string) {
-  return ['project-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'location-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master'].includes(masterKey)
+  return ['project-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'location-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master', 'engineer-activity-master', 'rental-order-master', 'purchase-office-master'].includes(masterKey)
 }
 
 function normalizeFormPayload(values: MasterRecord, fields: MasterField[]) {
@@ -1185,6 +1331,37 @@ export default function GenericMasterPage() {
     }
   }
 
+  function handleDelete(record: MasterRecord) {
+    if (record.id === null || record.id === undefined) {
+      return
+    }
+
+    Modal.confirm({
+      title: `Delete ${config.title} record?`,
+      content: 'This will permanently remove the selected master record.',
+      okText: 'Delete',
+      okButtonProps: { danger: true },
+      async onOk() {
+        try {
+          await api.delete(`/api/master-data/${masterKey}/${record.id}`)
+          setRecords((currentRecords) => currentRecords.filter((currentRecord) => currentRecord.id !== record.id))
+          setSelectedRowKeys((currentSelection) => {
+            const nextSelection = new Set(currentSelection)
+            nextSelection.delete(getRecordSelectionKey(record))
+            return nextSelection
+          })
+          await loadRecords(isFilterActive && searchField && searchQuery.trim()
+            ? { field: searchField, value: searchQuery.trim(), page: currentPage }
+            : { page: currentPage })
+          message.success(`${config.title} record deleted successfully`)
+        } catch (requestError: any) {
+          console.error(requestError)
+          message.error(requestError.response?.data?.message ?? `Failed to delete ${config.title} record`)
+        }
+      },
+    })
+  }
+
   const recordCount = isPaginated ? totalRecords : records.length
   const showingStart = recordCount === 0 ? 0 : ((currentPage - 1) * PAGE_SIZE) + 1
   const showingEnd = Math.min(currentPage * PAGE_SIZE, recordCount)
@@ -1401,7 +1578,8 @@ export default function GenericMasterPage() {
                                     key: 'delete',
                                     icon: <Trash2 size={16} />,
                                     label: 'Delete',
-                                    disabled: true,
+                                    danger: true,
+                                    onClick: () => handleDelete(record),
                                   },
                                 ],
                               }}

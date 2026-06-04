@@ -1,0 +1,38 @@
+using IndentMate.Mobile.Controls;
+using IndentMate.Mobile.ViewModels;
+
+namespace IndentMate.Mobile.Views;
+
+public partial class SERIndentHeaderPage : ContentPage
+{
+    public SERIndentHeaderPage()
+    {
+        InitializeComponent();
+    }
+
+    protected override void OnAppearing()
+    {
+        base.OnAppearing();
+        if (BindingContext is SERIndentHeaderViewModel viewModel)
+        {
+            viewModel.RefreshCommand.Execute(null);
+        }
+    }
+
+    protected override void OnDisappearing()
+    {
+        DropdownField.CloseAll();
+        base.OnDisappearing();
+    }
+
+    private async void OnBackClicked(object? sender, EventArgs e)
+    {
+        DropdownField.CloseAll();
+        await Shell.Current.GoToAsync("//home");
+    }
+
+    private void OnFormTapped(object? sender, TappedEventArgs e)
+    {
+        DropdownField.CloseAllFromOutsideTap();
+    }
+}

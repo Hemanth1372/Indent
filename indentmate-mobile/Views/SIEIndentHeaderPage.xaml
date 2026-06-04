@@ -1,0 +1,113 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="IndentMate.Mobile.Views.SIEIndentHeaderPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:controls="clr-namespace:IndentMate.Mobile.Controls"
+    xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
+    BackgroundColor="#F4F7FB"
+    Shell.NavBarIsVisible="False">
+
+    <ContentPage.BindingContext>
+        <vm:SIEIndentHeaderViewModel />
+    </ContentPage.BindingContext>
+
+    <Grid Padding="20" RowDefinitions="Auto,*">
+        <Grid ColumnDefinitions="Auto,*" Padding="0,0,0,18">
+            <Button
+                BackgroundColor="Transparent"
+                Clicked="OnBackClicked"
+                FontSize="24"
+                HeightRequest="42"
+                Padding="0"
+                Text="&#x2039;"
+                TextColor="#172033"
+                WidthRequest="42" />
+            <Label
+                Grid.Column="1"
+                FontAttributes="Bold"
+                FontSize="22"
+                Text="SIE Indent Header"
+                TextColor="#172033"
+                VerticalOptions="Center" />
+        </Grid>
+
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Spacing="14">
+                <VerticalStackLayout.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnFormTapped" />
+                </VerticalStackLayout.GestureRecognizers>
+
+                <Label FontAttributes="Bold" FontSize="13" Text="Project" TextColor="#475467" />
+                <controls:DropdownField
+                    DisplayMemberPath="DisplayName"
+                    ItemsSource="{Binding Projects}"
+                    MaximumWidthRequest="436"
+                    Placeholder="Select project"
+                    SelectedItem="{Binding SelectedProject}"
+                    WidthRequest="436" />
+
+                <Label FontAttributes="Bold" FontSize="13" Text="Indent Type" TextColor="#475467" />
+                <controls:DropdownField
+                    ItemsSource="{Binding IndentTypes}"
+                    MaximumWidthRequest="436"
+                    Placeholder="Issue / Issue Return"
+                    SelectedItem="{Binding SelectedIndentType}"
+                    WidthRequest="436" />
+
+                <Label FontAttributes="Bold" FontSize="13" Text="Warehouse" TextColor="#475467" />
+                <Border
+                    Padding="12"
+                    BackgroundColor="#EEF2F7"
+                    IsVisible="{Binding ShowAutoWarehouse}"
+                    Stroke="#D6DEE9"
+                    StrokeShape="RoundRectangle 8"
+                    StrokeThickness="1">
+                    <Label Text="{Binding AutoWarehouseDisplay}" TextColor="#172033" />
+                </Border>
+                <controls:DropdownField
+                    DisplayMemberPath="DisplayName"
+                    IsVisible="{Binding ShowWarehousePicker}"
+                    ItemsSource="{Binding Warehouses}"
+                    MaximumWidthRequest="436"
+                    Placeholder="Select warehouse"
+                    SelectedItem="{Binding SelectedWarehouse}"
+                    WidthRequest="436" />
+
+                <Label FontAttributes="Bold" FontSize="13" Text="From Location" TextColor="#475467" />
+                <controls:DropdownField
+                    DisplayMemberPath="DisplayName"
+                    ItemsSource="{Binding FromLocations}"
+                    MaximumWidthRequest="436"
+                    Placeholder="Select from location"
+                    SelectedItem="{Binding SelectedFromLocation}"
+                    WidthRequest="436" />
+
+                <Label FontAttributes="Bold" FontSize="13" Text="To (Contractor)" TextColor="#475467" />
+                <controls:DropdownField
+                    DisplayMemberPath="DisplayName"
+                    ItemsSource="{Binding ToContractors}"
+                    MaximumWidthRequest="436"
+                    Placeholder="Select to contractor"
+                    SelectedItem="{Binding SelectedToContractor}"
+                    WidthRequest="436" />
+
+                <Label
+                    FontSize="13"
+                    IsVisible="{Binding HasError}"
+                    Text="{Binding StatusMessage}"
+                    TextColor="#D92D20" />
+
+                <Button
+                    Margin="0,8,0,0"
+                    BackgroundColor="#1565D8"
+                    Command="{Binding CreateRequestCommand}"
+                    CornerRadius="8"
+                    FontAttributes="Bold"
+                    HeightRequest="52"
+                    Text="Create Request"
+                    TextColor="White" />
+            </VerticalStackLayout>
+        </ScrollView>
+    </Grid>
+</ContentPage>

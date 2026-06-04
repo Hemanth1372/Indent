@@ -1,5 +1,0 @@
-<Solution>
-  <Project Path="IndentMate.API/IndentMate.API.csproj" />
-  <Project Path="IndentMate.Mobile/IndentMate.Mobile.csproj" />
-  <Project Path="IndentMate.Shared/IndentMate.Shared.csproj" />
-</Solution>
