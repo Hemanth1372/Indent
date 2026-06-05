@@ -41,29 +41,6 @@ jobs:
           node --check server.js
           find src workbook-importers -name '*.js' -print0 | xargs -0 -r -n1 node --check
 
-  web:
-    name: Build Web
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
-
-      - name: Setup Node.js ${{ env.NODE_VERSION }}
-        uses: actions/setup-node@v4
-        with:
-          node-version: ${{ env.NODE_VERSION }}
-          cache: npm
-          cache-dependency-path: indentmate-web/package-lock.json
-
-      - name: Install web dependencies
-        working-directory: indentmate-web
-        run: npm ci
-
-      - name: Build web
-        working-directory: indentmate-web
-        run: npm run build
-
   package-api:
     name: Package API Artifact
     runs-on: ubuntu-latest
