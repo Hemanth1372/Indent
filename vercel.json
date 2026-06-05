@@ -1,0 +1,6 @@
+{
+  "framework": "vite",
+  "installCommand": "cd indentmate-web && npm ci",
+  "buildCommand": "cd indentmate-web && npm run build",
+  "outputDirectory": "indentmate-web/dist"
+}
