@@ -1,6 +1,5 @@
-name: IndentMate CI/CD
+name: IndentMate CI
 
-# Trigger on pushes to main and dev branches
 on:
   push:
     branches:
@@ -12,13 +11,10 @@ on:
       - dev
 
 env:
-  DOTNET_VERSION: '10.0.x'
-  API_PROJECT: 'IndentMate.API/IndentMate.API.csproj'
-  SOLUTION: 'IndentMate.slnx'
+  NODE_VERSION: '22.x'
 
 jobs:
-  # ─── Build & Test ─────────────────────────────────────────────────────────
-  build-and-test:
+  api:
     name: Build & Test API
     runs-on: ubuntu-latest
 
@@ -26,64 +22,79 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET ${{ env.DOTNET_VERSION }}
-        uses: actions/setup-dotnet@v4
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
         with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: indentmate-api/package-lock.json
 
-      - name: Restore NuGet packages
-        run: dotnet restore ${{ env.API_PROJECT }}
+      - name: Install API dependencies
+        working-directory: indentmate-api
+        run: npm ci
 
-      - name: Build IndentMate.API
-        run: dotnet build ${{ env.API_PROJECT }} --no-restore --configuration Release
+      - name: Check API JavaScript syntax
+        working-directory: indentmate-api
+        shell: bash
+        run: |
+          set -euo pipefail
+          node --check server.js
+          find src workbook-importers -name '*.js' -print0 | xargs -0 -r -n1 node --check
 
-      - name: Run tests
-        run: dotnet test ${{ env.SOLUTION }} --no-build --configuration Release --verbosity normal
-        # Note: No test project exists yet — this step will pass once tests are added.
-        continue-on-error: true
-
-  # ─── Publish (main branch only) ───────────────────────────────────────────
-  publish:
-    name: Publish API Artifact
+  web:
+    name: Build Web
     runs-on: ubuntu-latest
-    needs: build-and-test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Node.js ${{ env.NODE_VERSION }}
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: indentmate-web/package-lock.json
+
+      - name: Install web dependencies
+        working-directory: indentmate-web
+        run: npm ci
+
+      - name: Build web
+        working-directory: indentmate-web
+        run: npm run build
+
+  package-api:
+    name: Package API Artifact
+    runs-on: ubuntu-latest
+    needs: api
     if: github.ref == 'refs/heads/main' && github.event_name == 'push'
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Setup .NET ${{ env.DOTNET_VERSION }}
-        uses: actions/setup-dotnet@v4
-        with:
-          dotnet-version: ${{ env.DOTNET_VERSION }}
-
-      - name: Restore NuGet packages
-        run: dotnet restore ${{ env.API_PROJECT }}
-
-      - name: Publish IndentMate.API
+      - name: Create API artifact
+        shell: bash
         run: |
-          dotnet publish ${{ env.API_PROJECT }} \
-            --configuration Release \
-            --output ./publish/api \
-            --no-restore
-
-      - name: Zip published API
-        run: |
-          cd publish
-          zip -r IndentMate-API-${{ github.sha }}.zip api/
+          mkdir -p publish
+          tar \
+            --exclude='node_modules' \
+            --exclude='.env' \
+            -czf "publish/IndentMate-API-${GITHUB_SHA}.tar.gz" \
+            indentmate-api
 
       - name: Upload API artifact
         uses: actions/upload-artifact@v4
         with:
           name: IndentMate-API-${{ github.sha }}
-          path: publish/IndentMate-API-${{ github.sha }}.zip
+          path: publish/IndentMate-API-${{ github.sha }}.tar.gz
           retention-days: 30
 
       - name: Upload summary
         run: |
-          echo "## ✅ Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "- **Branch:** ${{ github.ref_name }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Commit:** ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **Artifact:** IndentMate-API-${{ github.sha }}.zip" >> $GITHUB_STEP_SUMMARY
-          echo "- **Published:** $(date -u)" >> $GITHUB_STEP_SUMMARY
+          echo "## Build Summary" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Branch: ${{ github.ref_name }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Commit: ${{ github.sha }}" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Artifact: IndentMate-API-${{ github.sha }}.tar.gz" >> "$GITHUB_STEP_SUMMARY"
+          echo "- Published: $(date -u)" >> "$GITHUB_STEP_SUMMARY"
