@@ -14,9 +14,11 @@ import { warehouseRoutes } from './routes/warehouseRoutes.js'
 
 export function createApp() {
   const app = express()
+  const normalizeOrigin = (origin) => origin.replace(/\/+$/, '')
   const allowedOrigins = env.corsOrigin
     .split(',')
     .map((origin) => origin.trim())
+    .map(normalizeOrigin)
     .filter(Boolean)
 
   app.use(
@@ -27,7 +29,7 @@ export function createApp() {
           return
         }
 
-        const isConfiguredOrigin = allowedOrigins.includes(origin)
+        const isConfiguredOrigin = allowedOrigins.includes(normalizeOrigin(origin))
         const isLocalDevOrigin = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+$/.test(origin)
 
         callback(null, isConfiguredOrigin || isLocalDevOrigin)
