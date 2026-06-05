@@ -31,8 +31,9 @@ export function createApp() {
 
         const isConfiguredOrigin = allowedOrigins.includes(normalizeOrigin(origin))
         const isLocalDevOrigin = /^http:\/\/(localhost|127\.0\.0\.1|\[::1\]):\d+$/.test(origin)
+        const isVercelOrigin = /^https:\/\/[a-z0-9-]+\.vercel\.app$/i.test(normalizeOrigin(origin))
 
-        callback(null, isConfiguredOrigin || isLocalDevOrigin)
+        callback(null, isConfiguredOrigin || isLocalDevOrigin || isVercelOrigin)
       },
     }),
   )
