@@ -5,6 +5,7 @@ import {
   Home,
   LayoutDashboard,
   LogOut,
+  ReceiptText,
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
@@ -15,7 +16,9 @@ const mastersGroups = [
     key: 'admin',
     label: 'Admin',
     items: [
-      'Responsibility Master',
+      'User Master',
+      'User Project Assignment Master',
+      'Role Master',
       'Business Partner Activity Master',
       'Engineer by Activity Master',
     ],
@@ -55,11 +58,13 @@ function slugify(value: string) {
 }
 
 function getMasterPath(groupKey: string, item: string) {
-  if (item === 'Responsibility Master') {
-    return '/admin/responsibility-master'
+  if (item === 'User Master') {
+    return '/admin/user-master'
   }
 
   const realMasterItems = new Set([
+    'Role Master',
+    'User Project Assignment Master',
     'Project Master',
     'Activity Master',
     'Service Orders',
@@ -75,6 +80,14 @@ function getMasterPath(groupKey: string, item: string) {
   ])
 
   if (realMasterItems.has(item)) {
+    if (item === 'Role Master') {
+      return '/master-data/role-master'
+    }
+
+    if (item === 'User Project Assignment Master') {
+      return '/master-data/responsibility-master'
+    }
+
     if (item === 'Business Partner Activity Master') {
       return '/master-data/business-partner-master'
     }
@@ -228,6 +241,20 @@ export default function Sidebar({ open }: SidebarProps) {
             })}
           </div>
         )}
+
+        <NavLink
+          className={({ isActive }) =>
+            `flex h-12 items-center gap-4 border-l-4 px-5 text-sm font-semibold ${
+              isActive
+                ? 'border-amber-400 bg-cyan-900/45 text-white'
+                : 'border-transparent text-slate-300 hover:bg-white/5 hover:text-white'
+            }`
+          }
+          to="/transactions"
+        >
+          <ReceiptText className="text-amber-400" size={19} />
+          Transactions
+        </NavLink>
 
       </nav>
 

@@ -3,9 +3,14 @@ import xlsx from 'xlsx'
 import { pool, query } from '../db/pool.js'
 
 const PROJECTS_SELECT_SQL = `
-  SELECT project_id, project_name, location, status
-  FROM projects
-  ORDER BY project_name ASC
+  SELECT
+    id AS project_id,
+    project_code AS site_code,
+    project_description AS project_name,
+    project_description AS location,
+    'Active' AS status
+  FROM project_master
+  ORDER BY project_description ASC
 `
 
 export async function listProjects(_req, res, next) {

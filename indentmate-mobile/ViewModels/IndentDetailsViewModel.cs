@@ -9,7 +9,7 @@ namespace IndentMate.Mobile.ViewModels;
 public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
 {
     private readonly DatabaseService _databaseService;
-    private readonly ApiService _apiService;
+    private readonly SyncService _syncService;
     private LocalIndent? _indent;
 
     [ObservableProperty] private string _indentId = string.Empty;
@@ -25,21 +25,19 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
     [ObservableProperty] private Color _statusColor = Color.FromArgb("#6B7280");
 
     public ObservableCollection<LocalIndentItem> Items { get; } = new();
-    public bool CanEdit => Status is "Created" or "Rejected";
+    public bool CanEdit => Status is "Created" or "Rejected" or "SyncError";
     public bool IsSerIndent => _indent?.EngineerType == "SER";
     public bool IsSieIndent => !IsSerIndent;
 
     public IndentDetailsViewModel()
-        : this(
-            new DatabaseService(Path.Combine(FileSystem.AppDataDirectory, "indentmate.db")),
-            new ApiService())
+        : this(CreateDefaultDatabaseService(), CreateDefaultSyncService())
     {
     }
 
-    public IndentDetailsViewModel(DatabaseService databaseService, ApiService apiService)
+    public IndentDetailsViewModel(DatabaseService databaseService, SyncService syncService)
     {
         _databaseService = databaseService;
-        _apiService = apiService;
+        _syncService = syncService;
     }
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
@@ -55,9 +53,12 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
     {
         StatusColor = value switch
         {
+            "PendingSync" => Color.FromArgb("#F59E0B"),
+            "Created" => Color.FromArgb("#6B7280"),
             "PendingApproval" => Color.FromArgb("#1565D8"),
             "Approved" => Color.FromArgb("#16A34A"),
             "Rejected" => Color.FromArgb("#D92D20"),
+            "SyncError" => Color.FromArgb("#D92D20"),
             _ => Color.FromArgb("#6B7280")
         };
         OnPropertyChanged(nameof(CanEdit));
@@ -85,53 +86,12 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
             if (Items.Count > 20)
                 throw new InvalidOperationException("Maximum 20 line items allowed per indent.");
 
-            _indent.Status = "PendingApproval";
-            _indent.SubmittedAt = DateTime.UtcNow;
+            if (string.IsNullOrWhiteSpace(_indent.RequestNo))
+                _indent.RequestNo = $"REQ-{DateTime.UtcNow:yyyyMMddHHmmss}";
+
             await _databaseService.UpdateIndentAsync(_indent);
-
-            var payload = new
-            {
-                requestNo = _indent.RequestNo,
-                engineerId = _indent.EngineerId,
-                projectId = _indent.ProjectId,
-                warehouseId = _indent.WarehouseId,
-                indentType = _indent.IndentType,
-                engineerType = _indent.EngineerType,
-                orderNo = _indent.OrderNo,
-                orderType = _indent.OrderType,
-                equipmentDisplay = _indent.EquipmentDisplay,
-                status = _indent.Status,
-                submittedAt = _indent.SubmittedAt,
-                items = Items.Select(item => new
-                {
-                    materialCode = item.MaterialCode,
-                    materialDesc = item.MaterialDesc,
-                    workType = item.WorkType,
-                    activityId = item.ActivityId,
-                    locationId = item.LocationId,
-                    uom = item.UoM,
-                    requestedQty = item.RequestedQty,
-                    remarks = item.Remarks,
-                    attachmentUrl = item.AttachmentUrl
-                }).ToList()
-            };
-
-            try
-            {
-                await _apiService.PostAsync<object, object>("/api/indents", payload);
-                _indent.IsSynced = true;
-                await _databaseService.UpdateIndentAsync(_indent);
-            }
-            catch (Exception ex)
-            {
-                _indent.IsSynced = false;
-                await _databaseService.UpdateIndentAsync(_indent);
-                await Shell.Current.DisplayAlert(
-                    "Sync failed",
-                    $"The indent was saved on this device, but it did not reach the admin portal. {ex.Message}",
-                    "OK");
-                return;
-            }
+            await _databaseService.MarkIndentPendingSyncAsync(_indent.IndentId);
+            await _syncService.PushPendingIndentsAsync();
 
             await LoadAsync();
             await Shell.Current.GoToAsync("//home");
@@ -154,7 +114,9 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
             if (_indent is null)
                 return;
 
-            IndentNo = _indent.RequestNo;
+            IndentNo = string.IsNullOrWhiteSpace(_indent.OfficialIndentNo)
+                ? _indent.RequestNo
+                : _indent.OfficialIndentNo;
             IndentDate = _indent.CreatedAt;
             ProjectDisplay = _indent.ProjectId;
             FromLocation = _indent.FromLocationId;
@@ -174,5 +136,16 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
                 Items.Add(item);
             }
         });
+    }
+
+    private static DatabaseService CreateDefaultDatabaseService()
+    {
+        return new DatabaseService(Path.Combine(FileSystem.AppDataDirectory, "indentmate.db"));
+    }
+
+    private static SyncService CreateDefaultSyncService()
+    {
+        var databaseService = CreateDefaultDatabaseService();
+        return new SyncService(databaseService, new ApiService(), new LNApiService());
     }
 }

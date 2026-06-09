@@ -4,9 +4,10 @@ import { env } from '../config/env.js'
 import { query } from '../db/pool.js'
 
 const USER_BY_LOGIN_NAME_SQL = `
-  SELECT user_id, login_name, employee_name, primary_role, password_hash, is_active
+  SELECT user_id, login_name, employee_name, primary_role, password_hash, current_pin, is_active
   FROM users
   WHERE login_name = $1
+    AND COALESCE(is_deleted, FALSE) = FALSE
   LIMIT 1
 `
 
@@ -19,19 +20,19 @@ const USER_CONTEXT_SQL = `
     COALESCE(
       json_agg(
         json_build_object(
-          'project_id', p.project_id,
-          'project_name', p.project_name,
-          'location', p.location,
-          'status', p.status,
-          'role_name', upr.role_name
+          'project_id', pm.id,
+          'project_name', COALESCE(pm.project_description, rm.project_description),
+          'location', rm.project_id,
+          'status', COALESCE(rm.manual_status, 'Active'),
+          'role_name', rm.responsibility
         )
-        ORDER BY p.project_name
-      ) FILTER (WHERE p.project_id IS NOT NULL),
+        ORDER BY COALESCE(pm.project_description, rm.project_description)
+      ) FILTER (WHERE rm.id IS NOT NULL),
       '[]'::json
     ) AS assigned_projects
   FROM users u
-  LEFT JOIN user_project_roles upr ON upr.user_id = u.user_id
-  LEFT JOIN projects p ON p.project_id = upr.project_id
+  LEFT JOIN responsibility_master rm ON rm.employee_id = u.login_name
+  LEFT JOIN project_master pm ON pm.project_code = rm.project_id
   WHERE u.user_id = $1
   GROUP BY u.user_id, u.employee_name, u.login_name, u.primary_role
 `
@@ -44,9 +45,8 @@ const USER_MASTER_BY_EMPLOYEE_SQL = `
     responsibility,
     manual_status,
     valid_from,
-    valid_to,
-    password_hash
-  FROM user_master
+    valid_to
+  FROM responsibility_master
   WHERE employee_id = $1
   ORDER BY project_id ASC, responsibility ASC
 `
@@ -62,6 +62,13 @@ export async function portalLogin(req, res, next) {
 export async function webLogin(req, res, next) {
   try {
     const { login_name, password } = req.validated.body
+    const userResult = await query(USER_BY_LOGIN_NAME_SQL, [login_name])
+    const loginUser = userResult.rows[0]
+
+    if (!loginUser) {
+      return res.status(401).json({ message: 'Invalid employee ID or password' })
+    }
+
     const result = await query(
       `
         SELECT
@@ -73,8 +80,7 @@ export async function webLogin(req, res, next) {
           responsibility,
           manual_status,
           valid_from,
-          valid_to,
-          password_hash
+          valid_to
         FROM responsibility_master
         WHERE employee_id = $1
         ORDER BY project_id ASC, responsibility ASC
@@ -87,7 +93,7 @@ export async function webLogin(req, res, next) {
       return res.status(401).json({ message: 'Invalid employee ID or password' })
     }
 
-    const passwordMatches = await verifyFieldPin(password, assignments)
+    const passwordMatches = await verifyUserPin(password, loginUser)
 
     if (!passwordMatches) {
       return res.status(401).json({ message: 'Invalid employee ID or password' })
@@ -163,17 +169,6 @@ export async function resetAdminPassword(req, res, next) {
         message: 'No active Super Admin account found for this Employee ID.',
       })
     }
-
-    await query(
-      `
-        UPDATE responsibility_master
-        SET password_hash = $2,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE employee_id = $1
-          AND LOWER(TRIM(responsibility)) = 'super admin'
-      `,
-      [employeeId, password],
-    )
 
     const hashedPassword = await bcrypt.hash(password, 10)
     await query(
@@ -264,6 +259,13 @@ function isPortalAdminRole(role) {
 async function handleFieldLogin(req, res, next) {
   try {
     const { login_name, password } = req.validated.body
+    const loginUserResult = await query(USER_BY_LOGIN_NAME_SQL, [login_name])
+    const loginUser = loginUserResult.rows[0]
+
+    if (!loginUser) {
+      return res.status(401).json({ message: 'Invalid Employee ID or PIN.' })
+    }
+
     const userMasterResult = await query(USER_MASTER_BY_EMPLOYEE_SQL, [login_name])
     const assignments = userMasterResult.rows
 
@@ -291,7 +293,7 @@ async function handleFieldLogin(req, res, next) {
       })
     }
 
-    const passwordMatches = await verifyFieldPin(password, activeAssignments)
+    const passwordMatches = await verifyUserPin(password, loginUser)
 
     if (!passwordMatches) {
       return res.status(401).json({ message: 'Invalid Employee ID or PIN.' })
@@ -326,28 +328,24 @@ async function handleFieldLogin(req, res, next) {
   }
 }
 
-async function verifyFieldPin(password, assignments) {
-  for (const assignment of assignments) {
-    const storedPassword = String(assignment.password_hash ?? '')
+async function verifyUserPin(password, user) {
+  const plainPin = String(user.current_pin ?? '').trim()
 
-    if (!storedPassword) {
-      continue
-    }
-
-    if (storedPassword === password) {
-      return true
-    }
-
-    try {
-      if (await bcrypt.compare(password, storedPassword)) {
-        return true
-      }
-    } catch {
-      // Non-bcrypt PIN values are supported for User Master administrative lookup.
-    }
+  if (plainPin && plainPin === password) {
+    return true
   }
 
-  return false
+  const storedPassword = String(user.password_hash ?? '')
+
+  if (!storedPassword) {
+    return false
+  }
+
+  try {
+    return bcrypt.compare(password, storedPassword)
+  } catch {
+    return false
+  }
 }
 
 function computeUserMasterStatus(user) {

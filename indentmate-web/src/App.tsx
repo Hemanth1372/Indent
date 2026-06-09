@@ -9,6 +9,7 @@ import IndentDetail from './pages/IndentDetail'
 import IndentList from './pages/IndentList'
 import Login from './pages/Login'
 import ResponsibilityMaster from './pages/ResponsibilityMaster'
+import Transactions from './pages/Transactions'
 
 function ProtectedRoute({ children, title = 'Dashboard' }: { children: ReactNode; title?: string }) {
   return (
@@ -78,9 +79,9 @@ export default function App() {
           }
         />
         <Route
-          path="/admin/responsibility-master"
+          path="/admin/user-master"
           element={
-            <ProtectedRoute title="Responsibility Master">
+            <ProtectedRoute title="User Master">
               <ResponsibilityMaster />
             </ProtectedRoute>
           }
@@ -100,14 +101,20 @@ export default function App() {
         <Route
           path="/responsibility-master"
           element={
-            <Navigate to="/admin/responsibility-master" replace />
+            <Navigate to="/admin/user-master" replace />
+          }
+        />
+        <Route
+          path="/admin/responsibility-master"
+          element={
+            <Navigate to="/admin/user-master" replace />
           }
         />
         <Route
           path="/transactions"
           element={
             <ProtectedRoute title="Transactions">
-              <PlaceholderPage title="Transactions" />
+              <Transactions />
             </ProtectedRoute>
           }
         />

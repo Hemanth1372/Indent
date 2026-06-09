@@ -13,17 +13,13 @@ const SELECT_COLUMNS = `
   valid_from,
   valid_to,
   manual_status,
-  password_hash,
   created_at,
   updated_at
 `
 
 const SEARCHABLE_RESPONSIBILITY_FIELDS = {
-  project_id: 'project_id',
-  project_description: 'project_description',
-  responsibility: 'responsibility',
-  employee_id: 'employee_id',
-  employee_name: 'employee_name',
+  employee_id: 'u.login_name',
+  employee_name: 'u.employee_name',
 }
 
 const RESPONSIBILITY_IMPORT_COLUMNS = [
@@ -159,7 +155,6 @@ function buildResponsibilityInsertRow(row, fieldsMapping) {
     valid_from: fieldsMapping['Valid From'] ? row.valid_from : null,
     valid_to: fieldsMapping['Valid To'] ? row.valid_to : null,
     manual_status: 'Active',
-    password_hash: '123456',
   }
 }
 
@@ -266,7 +261,9 @@ function throwBadRequest(message) {
 }
 
 async function syncLoginUser(row) {
-  const pin = normalizedPin(row.password_hash)
+  const rawPin = String(row.password_hash ?? '').trim()
+  const hasProvidedPin = /^\d{6}$/.test(rawPin)
+  const pin = hasProvidedPin ? rawPin : '123456'
   const passwordHash = await bcrypt.hash(pin, 12)
   const isActive = computeStatus(row) === 'Active'
 
@@ -278,52 +275,14 @@ async function syncLoginUser(row) {
       DO UPDATE SET
         employee_name = EXCLUDED.employee_name,
         primary_role = EXCLUDED.primary_role,
-        password_hash = EXCLUDED.password_hash,
-        is_active = EXCLUDED.is_active,
-        current_pin = EXCLUDED.current_pin
+        is_active = EXCLUDED.is_active
+        ${hasProvidedPin ? ', password_hash = EXCLUDED.password_hash, current_pin = EXCLUDED.current_pin' : ''}
     `,
     [row.employee_id, row.employee_name, row.responsibility, passwordHash, isActive, pin],
   )
 }
 
 async function syncUserMaster(row) {
-  await query(
-    `
-      INSERT INTO user_master (
-        employee_id,
-        employee_name,
-        project_id,
-        project_description,
-        responsibility,
-        valid_from,
-        valid_to,
-        manual_status,
-        password_hash
-      )
-      VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
-      ON CONFLICT (employee_id, project_id, responsibility)
-      DO UPDATE SET
-        employee_name = EXCLUDED.employee_name,
-        project_description = EXCLUDED.project_description,
-        valid_from = EXCLUDED.valid_from,
-        valid_to = EXCLUDED.valid_to,
-        manual_status = EXCLUDED.manual_status,
-        password_hash = EXCLUDED.password_hash,
-        updated_at = CURRENT_TIMESTAMP
-    `,
-    [
-      row.employee_id,
-      row.employee_name,
-      row.project_id,
-      row.project_description,
-      row.responsibility,
-      row.valid_from,
-      row.valid_to,
-      row.manual_status,
-      row.password_hash,
-    ],
-  )
-
   await syncLoginUser(row)
 }
 
@@ -338,8 +297,7 @@ async function bulkInsertResponsibilities(client, rows) {
         responsibility,
         valid_from,
         valid_to,
-        manual_status,
-        password_hash
+        manual_status
       )
       SELECT *
       FROM UNNEST(
@@ -350,8 +308,7 @@ async function bulkInsertResponsibilities(client, rows) {
         $5::text[],
         $6::date[],
         $7::date[],
-        $8::text[],
-        $9::text[]
+        $8::text[]
       )
     `,
     [
@@ -363,7 +320,6 @@ async function bulkInsertResponsibilities(client, rows) {
       rows.map((row) => row.valid_from),
       rows.map((row) => row.valid_to),
       rows.map((row) => row.manual_status),
-      rows.map((row) => row.password_hash),
     ],
   )
 }
@@ -407,54 +363,6 @@ async function syncUserMasters(rows) {
   const uniqueRows = [
     ...new Map(rows.map((row) => [responsibilityCompositeKey(row), row])).values(),
   ]
-  await query(
-    `
-      INSERT INTO user_master (
-        employee_id,
-        employee_name,
-        project_id,
-        project_description,
-        responsibility,
-        valid_from,
-        valid_to,
-        manual_status,
-        password_hash
-      )
-      SELECT *
-      FROM UNNEST(
-        $1::text[],
-        $2::text[],
-        $3::text[],
-        $4::text[],
-        $5::text[],
-        $6::date[],
-        $7::date[],
-        $8::text[],
-        $9::text[]
-      )
-      ON CONFLICT (employee_id, project_id, responsibility)
-      DO UPDATE SET
-        employee_name = EXCLUDED.employee_name,
-        project_description = EXCLUDED.project_description,
-        valid_from = EXCLUDED.valid_from,
-        valid_to = EXCLUDED.valid_to,
-        manual_status = EXCLUDED.manual_status,
-        password_hash = EXCLUDED.password_hash,
-        updated_at = CURRENT_TIMESTAMP
-    `,
-    [
-      uniqueRows.map((row) => row.employee_id),
-      uniqueRows.map((row) => row.employee_name),
-      uniqueRows.map((row) => row.project_id),
-      uniqueRows.map((row) => row.project_description),
-      uniqueRows.map((row) => row.responsibility),
-      uniqueRows.map((row) => row.valid_from),
-      uniqueRows.map((row) => row.valid_to),
-      uniqueRows.map((row) => row.manual_status),
-      uniqueRows.map((row) => row.password_hash),
-    ],
-  )
-
   await syncLoginUsers(uniqueRows)
 }
 
@@ -494,9 +402,7 @@ async function syncLoginUsers(rows) {
       DO UPDATE SET
         employee_name = EXCLUDED.employee_name,
         primary_role = EXCLUDED.primary_role,
-        password_hash = EXCLUDED.password_hash,
-        is_active = EXCLUDED.is_active,
-        current_pin = EXCLUDED.current_pin
+        is_active = EXCLUDED.is_active
     `,
     [
       loginRows.map((row) => row.employee_id),
@@ -510,15 +416,7 @@ async function syncLoginUsers(rows) {
 }
 
 async function deleteUserMasterAssignment(row) {
-  await query(
-    `
-      DELETE FROM user_master
-      WHERE employee_id = $1
-        AND project_id = $2
-        AND responsibility = $3
-    `,
-    [row.employee_id, row.project_id, row.responsibility],
-  )
+  return row
 }
 
 async function fetchResponsibilityById(id) {
@@ -555,14 +453,16 @@ export async function listResponsibilities(req, res, next) {
       }
     }
 
-    const whereClause = searchField && searchValue
-      ? `WHERE ${SEARCHABLE_RESPONSIBILITY_FIELDS[searchField]} ILIKE $1`
-      : ''
+    const whereConditions = ['COALESCE(u.is_deleted, FALSE) = FALSE']
+    if (searchField && searchValue) {
+      whereConditions.push(`${SEARCHABLE_RESPONSIBILITY_FIELDS[searchField]} ILIKE $1`)
+    }
+    const whereClause = `WHERE ${whereConditions.join(' AND ')}`
     const filterParams = searchField && searchValue ? [`%${searchValue}%`] : []
     const countResult = await query(
       `
         SELECT COUNT(*)::int AS total
-        FROM responsibility_master
+        FROM users u
         ${whereClause}
       `,
       filterParams,
@@ -575,10 +475,24 @@ export async function listResponsibilities(req, res, next) {
     const offset = (currentPage - 1) * limit
     const result = await query(
       `
-        SELECT ${SELECT_COLUMNS}
-        FROM responsibility_master
+        SELECT
+          COALESCE(MIN(rm.id), 0) AS id,
+          u.login_name AS employee_id,
+          u.employee_name,
+          NULL::text AS project_id,
+          NULL::text AS project_description,
+          u.primary_role AS responsibility,
+          NULL::date AS valid_from,
+          NULL::date AS valid_to,
+          CASE WHEN u.is_active THEN 'Active' ELSE 'Inactive' END AS manual_status,
+          COALESCE(u.current_pin, '123456') AS password_hash,
+          CASE WHEN u.is_active THEN 'Active' ELSE 'Inactive' END AS status,
+          COUNT(rm.id)::int AS assignment_count
+        FROM users u
+        LEFT JOIN responsibility_master rm ON rm.employee_id = u.login_name
         ${whereClause}
-        ORDER BY employee_id ASC, project_id ASC, responsibility ASC
+        GROUP BY u.login_name, u.employee_name, u.primary_role, u.is_active, u.current_pin
+        ORDER BY u.login_name ASC
         LIMIT $${filterParams.length + 1} OFFSET $${filterParams.length + 2}
       `,
       [...filterParams, limit, offset],
@@ -591,23 +505,249 @@ export async function listResponsibilities(req, res, next) {
         currentPage,
         limit,
       },
-      data: result.rows.map(normalizeRow),
+      data: result.rows.map((row) => ({
+        ...row,
+        id: row.id === 0 ? row.employee_id : row.id,
+        is_active: row.status === 'Active',
+      })),
     })
   } catch (error) {
     return next(error)
   }
 }
 
+export async function listUserProjectAssignments(req, res, next) {
+  try {
+    const employeeId = String(req.params.employeeId ?? '').trim()
+    const result = await query(
+      `
+        SELECT ${SELECT_COLUMNS}
+        FROM responsibility_master
+        WHERE employee_id = $1
+        ORDER BY project_id ASC, responsibility ASC
+      `,
+      [employeeId],
+    )
+
+    return res.json({ data: result.rows.map(normalizeRow) })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function createUserMaster(req, res, next) {
+  try {
+    const payload = req.validated.body
+    const pin = normalizedPin(payload.password_hash ?? payload.password)
+    const passwordHash = await bcrypt.hash(pin, 12)
+    const result = await query(
+      `
+        INSERT INTO users (login_name, employee_name, primary_role, password_hash, is_active, current_pin)
+        VALUES ($1, $2, NULL, $3, TRUE, $4)
+        ON CONFLICT (login_name)
+        DO UPDATE SET
+          employee_name = EXCLUDED.employee_name,
+          password_hash = EXCLUDED.password_hash,
+          current_pin = EXCLUDED.current_pin,
+          is_active = TRUE,
+          is_deleted = FALSE
+        RETURNING login_name AS employee_id, employee_name, current_pin AS password_hash, is_active
+      `,
+      [payload.employee_id, payload.employee_name, passwordHash, pin],
+    )
+
+    return res.status(201).json({
+      message: 'User Master record created successfully',
+      data: {
+        ...result.rows[0],
+        id: result.rows[0].employee_id,
+        status: result.rows[0].is_active ? 'Active' : 'Inactive',
+        manual_status: result.rows[0].is_active ? 'Active' : 'Inactive',
+        assignment_count: 0,
+      },
+    })
+  } catch (error) {
+    return handleResponsibilityError(error, res, next)
+  }
+}
+
+export async function updateUserMaster(req, res, next) {
+  try {
+    const employeeId = req.validated.params.employeeId
+    const payload = req.validated.body
+    const fields = []
+    const values = []
+
+    if (payload.employee_name !== undefined) {
+      values.push(payload.employee_name)
+      fields.push(`employee_name = $${values.length}`)
+    }
+
+    if (payload.password_hash !== undefined || payload.password !== undefined) {
+      const pin = normalizedPin(payload.password_hash ?? payload.password)
+      values.push(await bcrypt.hash(pin, 12))
+      fields.push(`password_hash = $${values.length}`)
+      values.push(pin)
+      fields.push(`current_pin = $${values.length}`)
+    }
+
+    if (!fields.length) {
+      return res.status(400).json({ message: 'No editable fields were provided' })
+    }
+
+    const result = await query(
+      `
+        UPDATE users
+        SET ${fields.join(', ')}
+        WHERE login_name = $${values.length + 1}
+        RETURNING login_name AS employee_id, employee_name, current_pin AS password_hash, is_active
+      `,
+      [...values, employeeId],
+    )
+
+    if (!result.rows[0]) {
+      return res.status(404).json({ message: 'User Master record not found' })
+    }
+
+    await query(
+      `
+        UPDATE responsibility_master
+        SET employee_name = $2,
+            password_hash = COALESCE($3, password_hash),
+            updated_at = CURRENT_TIMESTAMP
+        WHERE employee_id = $1
+      `,
+      [employeeId, result.rows[0].employee_name, result.rows[0].password_hash],
+    )
+
+    return res.json({
+      message: 'User Master record updated successfully',
+      data: {
+        ...result.rows[0],
+        id: result.rows[0].employee_id,
+        status: result.rows[0].is_active ? 'Active' : 'Inactive',
+        manual_status: result.rows[0].is_active ? 'Active' : 'Inactive',
+      },
+    })
+  } catch (error) {
+    return handleResponsibilityError(error, res, next)
+  }
+}
+
+export async function updateUserMasterStatus(req, res, next) {
+  try {
+    const employeeId = req.validated.params.employeeId
+    const { manual_status } = req.validated.body
+    const isActive = manual_status === 'Active'
+    const result = await query(
+      `
+        UPDATE users
+        SET is_active = $2
+        WHERE login_name = $1
+        RETURNING login_name AS employee_id, employee_name, current_pin AS password_hash, is_active
+      `,
+      [employeeId, isActive],
+    )
+
+    if (!result.rows[0]) {
+      return res.status(404).json({ message: 'User Master record not found' })
+    }
+
+    await query(
+      `
+        UPDATE responsibility_master
+        SET manual_status = $2,
+            updated_at = CURRENT_TIMESTAMP
+        WHERE employee_id = $1
+      `,
+      [employeeId, manual_status],
+    )
+
+    return res.json({
+      message: isActive ? 'User activated successfully' : 'User deactivated successfully',
+      data: {
+        ...result.rows[0],
+        id: result.rows[0].employee_id,
+        status: manual_status,
+        manual_status,
+      },
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function createUserProjectAssignment(req, res, next) {
+  try {
+    const employeeId = req.validated.params.employeeId
+    const payload = req.validated.body
+    const userResult = await query(
+      `
+        SELECT login_name, employee_name, current_pin
+        FROM users
+        WHERE login_name = $1
+        LIMIT 1
+      `,
+      [employeeId],
+    )
+
+    if (!userResult.rows[0]) {
+      return res.status(404).json({ message: 'User Master record not found' })
+    }
+
+    const user = userResult.rows[0]
+    const result = await query(
+      `
+        INSERT INTO responsibility_master (
+          employee_id,
+          employee_name,
+          project_id,
+          project_description,
+          responsibility,
+          valid_from,
+          valid_to,
+          manual_status
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'Active')
+        RETURNING ${SELECT_COLUMNS}
+      `,
+      [
+        user.login_name,
+        user.employee_name,
+        payload.project_id,
+        payload.project_description,
+        payload.responsibility,
+        payload.valid_from || null,
+        payload.valid_to || null,
+      ],
+    )
+    const row = normalizeRow(result.rows[0])
+
+    await syncUserMaster(row)
+
+    return res.status(201).json({
+      message: 'Project assignment created successfully',
+      data: row,
+    })
+  } catch (error) {
+    return handleResponsibilityError(error, res, next)
+  }
+}
+
 export async function listResponsibilityOptions(_req, res, next) {
   try {
     const result = await query(`
-      SELECT DISTINCT responsibility
-      FROM responsibility_master
-      WHERE responsibility IS NOT NULL AND responsibility <> ''
-      ORDER BY responsibility ASC
+      SELECT
+        role_name,
+        COALESCE(NULLIF(description, ''), role_name) AS responsibility
+      FROM role_master
+      ORDER BY COALESCE(NULLIF(description, ''), role_name) ASC
     `)
 
-    return res.json({ responsibilities: result.rows.map((row) => row.responsibility) })
+    return res.json({
+      responsibilities: result.rows.map((row) => row.responsibility),
+      roles: result.rows,
+    })
   } catch (error) {
     return next(error)
   }
@@ -739,7 +879,7 @@ export async function exportResponsibilities(req, res, next) {
     let filterParams = []
 
     if (selectedKeys.length > 0) {
-      whereClause = 'WHERE id::TEXT = ANY($1::text[])'
+      whereClause = 'WHERE employee_id = ANY($1::text[]) OR id::TEXT = ANY($1::text[])'
       filterParams = [selectedKeys]
     } else if (searchField && searchValue) {
       whereClause = `WHERE ${SEARCHABLE_RESPONSIBILITY_FIELDS[searchField]} ILIKE $1`
@@ -764,7 +904,7 @@ export async function exportResponsibilities(req, res, next) {
     )
 
     const workbook = new ExcelJS.Workbook()
-    const worksheet = workbook.addWorksheet('Responsibility Master')
+    const worksheet = workbook.addWorksheet('User Master')
     worksheet.columns = RESPONSIBILITY_IMPORT_COLUMNS.map((column) => ({
       header: column.excelHeader,
       key: column.dbColumn,
@@ -778,7 +918,7 @@ export async function exportResponsibilities(req, res, next) {
     })))
 
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
-    res.setHeader('Content-Disposition', 'attachment; filename=Responsibility_Master_Export.xlsx')
+    res.setHeader('Content-Disposition', 'attachment; filename=User_Master_Export.xlsx')
     await workbook.xlsx.write(res)
     return res.end()
   } catch (error) {
@@ -800,10 +940,9 @@ export async function createResponsibility(req, res, next) {
           responsibility,
           valid_from,
           valid_to,
-          manual_status,
-          password_hash
+          manual_status
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, 'Active', $8)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, 'Active')
         RETURNING ${SELECT_COLUMNS}
       `,
       [
@@ -814,15 +953,14 @@ export async function createResponsibility(req, res, next) {
         payload.responsibility,
         payload.valid_from || null,
         payload.valid_to || null,
-        pin,
       ],
     )
     const row = normalizeRow(result.rows[0])
 
-    await syncUserMaster(row)
+    await syncUserMaster({ ...row, password_hash: pin })
 
     return res.status(201).json({
-      message: 'Responsibility Master record created successfully',
+      message: 'User Master record created successfully',
       data: row,
     })
   } catch (error) {
@@ -836,7 +974,7 @@ export async function updateResponsibility(req, res, next) {
     const previousRow = await fetchResponsibilityById(id)
 
     if (!previousRow) {
-      return res.status(404).json({ message: 'Responsibility Master record not found' })
+      return res.status(404).json({ message: 'User Master record not found' })
     }
 
     const payload = req.validated.body
@@ -848,17 +986,12 @@ export async function updateResponsibility(req, res, next) {
       'responsibility',
       'valid_from',
       'valid_to',
-      'password_hash',
     ].filter((field) => Object.prototype.hasOwnProperty.call(payload, field))
 
     const assignments = fields.map((field, index) => `${field} = $${index + 2}`)
     const values = fields.map((field) => {
       if (['valid_from', 'valid_to'].includes(field) && payload[field] === '') {
         return null
-      }
-
-      if (field === 'password_hash') {
-        return normalizedPin(payload[field])
       }
 
       return payload[field]
@@ -875,7 +1008,7 @@ export async function updateResponsibility(req, res, next) {
     )
 
     if (!result.rows[0]) {
-      return res.status(404).json({ message: 'Responsibility Master record not found' })
+      return res.status(404).json({ message: 'User Master record not found' })
     }
 
     const row = normalizeRow(result.rows[0])
@@ -891,7 +1024,7 @@ export async function updateResponsibility(req, res, next) {
     await syncUserMaster(row)
 
     return res.json({
-      message: 'Responsibility Master record updated successfully',
+      message: 'User Master record updated successfully',
       data: row,
     })
   } catch (error) {
@@ -903,23 +1036,22 @@ export async function changeResponsibilityPassword(req, res, next) {
   try {
     const { id } = req.validated.params
     const pin = normalizedPin(req.validated.body.password_hash)
-    const result = await query(
-      `
-        UPDATE responsibility_master
-        SET password_hash = $2,
-            updated_at = CURRENT_TIMESTAMP
-        WHERE id = $1
-        RETURNING ${SELECT_COLUMNS}
-      `,
-      [id, pin],
-    )
+    const row = await fetchResponsibilityById(id)
 
-    if (!result.rows[0]) {
-      return res.status(404).json({ message: 'Responsibility Master record not found' })
+    if (!row) {
+      return res.status(404).json({ message: 'User Master record not found' })
     }
 
-    const row = normalizeRow(result.rows[0])
-    await syncUserMaster(row)
+    const passwordHash = await bcrypt.hash(pin, 12)
+    await query(
+      `
+        UPDATE users
+        SET password_hash = $2,
+            current_pin = $3
+        WHERE login_name = $1
+      `,
+      [row.employee_id, passwordHash, pin],
+    )
 
     return res.json({
       message: 'PIN updated successfully',
@@ -936,7 +1068,7 @@ export async function changeResponsibilityRole(req, res, next) {
     const previousRow = await fetchResponsibilityById(id)
 
     if (!previousRow) {
-      return res.status(404).json({ message: 'Responsibility Master record not found' })
+      return res.status(404).json({ message: 'User Master record not found' })
     }
 
     const result = await query(
@@ -981,7 +1113,7 @@ export async function updateResponsibilityStatus(req, res, next) {
     )
 
     if (!targetResult.rows[0]) {
-      return res.status(404).json({ message: 'Responsibility Master record not found' })
+      return res.status(404).json({ message: 'User Master record not found' })
     }
 
     const result = await query(
@@ -1024,7 +1156,7 @@ export async function deleteResponsibility(req, res, next) {
     )
 
     if (!result.rows[0]) {
-      return res.status(404).json({ message: 'Responsibility Master record not found' })
+      return res.status(404).json({ message: 'User Master record not found' })
     }
 
     const deletedRow = result.rows[0]
@@ -1040,7 +1172,7 @@ export async function deleteResponsibility(req, res, next) {
     }
 
     return res.json({
-      message: 'Responsibility Master record deleted successfully',
+      message: 'User Master record deleted successfully',
       data: result.rows[0],
     })
   } catch (error) {

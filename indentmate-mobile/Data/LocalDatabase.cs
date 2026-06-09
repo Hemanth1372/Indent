@@ -72,6 +72,7 @@ public class LocalBusinessPartner
     [PrimaryKey]
     public string BusinessPartnerId { get; set; } = string.Empty;
     public string ActivityId { get; set; } = string.Empty;
+    public string LocationCode { get; set; } = string.Empty;
     public string ProjectId { get; set; } = string.Empty;
     public string Name { get; set; } = string.Empty;
     public bool SubcontractorPO { get; set; }
@@ -88,6 +89,7 @@ public class LocalIndent
     public string IndentId { get; set; } = Guid.NewGuid().ToString();
 
     public string RequestNo { get; set; } = string.Empty;
+    public string OfficialIndentNo { get; set; } = string.Empty;
     public string EngineerId { get; set; } = string.Empty;
     public string ProjectId { get; set; } = string.Empty;
     public string WarehouseId { get; set; } = string.Empty;
@@ -103,6 +105,7 @@ public class LocalIndent
     public DateTime CreatedAt { get; set; } = DateTime.UtcNow;
     public DateTime? SubmittedAt { get; set; }
     public bool IsSynced { get; set; } = false;
+    public string SyncErrorMessage { get; set; } = string.Empty;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

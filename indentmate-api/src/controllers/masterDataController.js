@@ -3,13 +3,22 @@ import xlsx from 'xlsx'
 import { pool, query } from '../db/pool.js'
 
 export const MASTER_DEFINITIONS = {
+  'role-master': {
+    table: 'role_master',
+    select: 'id, role_name, description, created_at, updated_at',
+    orderBy: 'role_name ASC',
+    primaryKey: 'id',
+    fields: ['role_name', 'description'],
+    required: ['role_name'],
+    searchableFields: ['role_name', 'description'],
+  },
   'responsibility-master': {
     table: 'responsibility_master',
-    select: 'id, employee_id, employee_name, project_id, project_description, responsibility, valid_from, valid_to, manual_status, password_hash, created_at, updated_at',
+    select: 'id, employee_id, employee_name, project_id, project_description, responsibility, valid_from, valid_to, manual_status, created_at, updated_at',
     orderBy: 'employee_id ASC, project_id ASC, responsibility ASC',
     primaryKey: 'id',
-    fields: ['employee_id', 'employee_name', 'project_id', 'project_description', 'responsibility', 'valid_from', 'valid_to', 'manual_status', 'password_hash'],
-    required: ['employee_id', 'employee_name', 'project_id', 'project_description', 'responsibility', 'password_hash'],
+    fields: ['employee_id', 'employee_name', 'project_id', 'project_description', 'responsibility', 'valid_from', 'valid_to', 'manual_status'],
+    required: ['employee_id', 'employee_name', 'project_id', 'project_description', 'responsibility'],
     searchableFields: ['employee_id', 'employee_name', 'project_id', 'project_description', 'responsibility', 'manual_status'],
   },
   'project-master': {
@@ -123,6 +132,20 @@ export const MASTER_DEFINITIONS = {
 }
 
 export const MASTER_IMPORT_CONFIGS = {
+  'role-master': {
+    tableName: 'role_master',
+    lookupDbColumn: 'role_name',
+    keyDbColumns: ['role_name'],
+    excelLookupKey: 'Role Name',
+    orderBy: 'role_name ASC',
+    defaults: {
+      description: null,
+    },
+    columns: [
+      { label: 'Role Name', excelHeader: 'Role Name', dbColumn: 'role_name', type: 'string', isReadOnly: true },
+      { label: 'Description', excelHeader: 'Description', dbColumn: 'description', type: 'text', nullable: true },
+    ],
+  },
   'responsibility-master': {
     tableName: 'responsibility_master',
     lookupDbColumn: 'employee_id',
@@ -130,7 +153,6 @@ export const MASTER_IMPORT_CONFIGS = {
     excelLookupKey: 'Employee ID',
     orderBy: 'employee_id ASC, project_id ASC, responsibility ASC',
     defaults: {
-      password_hash: '123456',
       manual_status: 'Active',
     },
     columns: [
@@ -437,7 +459,7 @@ export async function listMasterData(req, res, next) {
     const whereClause = searchField && searchValue ? `WHERE ${searchField} ILIKE $1` : ''
     const params = searchField && searchValue ? [`%${searchValue}%`] : []
 
-    if (['responsibility-master', 'project-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'location-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master', 'engineer-activity-master', 'rental-order-master', 'purchase-office-master'].includes(req.params.masterKey)) {
+    if (['role-master', 'responsibility-master', 'project-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'location-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master', 'engineer-activity-master', 'rental-order-master', 'purchase-office-master'].includes(req.params.masterKey)) {
       const requestedPage = Number.parseInt(String(req.query?.page ?? ''), 10)
       const requestedLimit = Number.parseInt(String(req.query?.limit ?? ''), 10)
       const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
@@ -827,7 +849,7 @@ export async function exportMasterData(req, res, next) {
     )
 
     const workbook = new ExcelJS.Workbook()
-    const worksheet = workbook.addWorksheet(definition.table)
+    const worksheet = workbook.addWorksheet(req.params.masterKey === 'responsibility-master' ? 'User Project Assignments' : definition.table)
     worksheet.columns = importConfig.columns.map((column) => ({
       header: column.excelHeader,
       key: column.dbColumn,
@@ -836,7 +858,9 @@ export async function exportMasterData(req, res, next) {
     worksheet.getRow(1).font = { bold: true }
     worksheet.addRows(result.rows)
 
-    const filename = `${req.params.masterKey.replace(/-/g, '_')}_Export.xlsx`
+    const filename = req.params.masterKey === 'responsibility-master'
+      ? 'User_Project_Assignment_Master_Export.xlsx'
+      : `${req.params.masterKey.replace(/-/g, '_')}_Export.xlsx`
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     res.setHeader('Content-Disposition', `attachment; filename=${filename}`)
     await workbook.xlsx.write(res)
@@ -1179,7 +1203,7 @@ function normalizePayload(body, definition) {
             return [field, null]
           }
 
-          if (field.startsWith('scheduled_') && trimmedValue === '') {
+          if ((field.startsWith('scheduled_') || ['valid_from', 'valid_to'].includes(field)) && trimmedValue === '') {
             return [field, null]
           }
 

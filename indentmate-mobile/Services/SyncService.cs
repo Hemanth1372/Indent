@@ -1,4 +1,6 @@
 using IndentMate.Mobile.Data;
+using Newtonsoft.Json;
+using System.Net;
 
 namespace IndentMate.Mobile.Services;
 
@@ -9,14 +11,42 @@ public class SyncService
 {
     private const int TotalSessions = 12;
     private readonly DatabaseService _databaseService;
+    private readonly ApiService _apiService;
     private readonly LNApiService _lnApiService;
+    private readonly SemaphoreSlim _pushLock = new(1, 1);
 
     public event EventHandler<SyncProgressEventArgs>? SyncProgressChanged;
 
-    public SyncService(DatabaseService databaseService, LNApiService lnApiService)
+    public SyncService(DatabaseService databaseService, ApiService apiService, LNApiService lnApiService)
     {
         _databaseService = databaseService;
+        _apiService = apiService;
         _lnApiService = lnApiService;
+        Connectivity.Current.ConnectivityChanged += HandleConnectivityChanged;
+    }
+
+    public async Task PushPendingIndentsAsync(CancellationToken ct = default)
+    {
+        if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
+            return;
+
+        if (!await _pushLock.WaitAsync(0, ct))
+            return;
+
+        try
+        {
+            var pendingIndents = await _databaseService.GetPendingSyncIndentsAsync();
+
+            foreach (var indent in pendingIndents)
+            {
+                ct.ThrowIfCancellationRequested();
+                await PushIndentAsync(indent, ct);
+            }
+        }
+        finally
+        {
+            _pushLock.Release();
+        }
     }
 
     public async Task FullSyncAsync(string engineerId)
@@ -235,10 +265,208 @@ public class SyncService
         }
     }
 
+    private async Task PushIndentAsync(LocalIndent indent, CancellationToken ct)
+    {
+        var items = await _databaseService.GetItemsForIndentAsync(indent.IndentId);
+        var payload = BuildIndentPayload(indent, items);
+
+        try
+        {
+            var result = await _apiService.PostForResultAsync<IndentSyncPayload, IndentSyncResponse>(
+                "/api/indents",
+                payload,
+                ct);
+
+            if (result.IsSuccessStatusCode && !string.IsNullOrWhiteSpace(result.Data?.IndentNo))
+            {
+                await _databaseService.MarkIndentSyncedAsync(indent.IndentId, result.Data.IndentNo);
+                return;
+            }
+
+            if (result.StatusCode == HttpStatusCode.BadRequest)
+            {
+                await _databaseService.MarkIndentSyncErrorAsync(
+                    indent.IndentId,
+                    ExtractErrorMessage(result.RawBody));
+            }
+        }
+        catch (HttpRequestException)
+        {
+            await _databaseService.MarkIndentPendingSyncAsync(indent.IndentId);
+        }
+        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        {
+            await _databaseService.MarkIndentPendingSyncAsync(indent.IndentId);
+        }
+    }
+
+    private static IndentSyncPayload BuildIndentPayload(LocalIndent indent, List<LocalIndentItem> items)
+    {
+        var firstItem = items.FirstOrDefault();
+
+        return new IndentSyncPayload
+        {
+            AppRequestId = indent.RequestNo,
+            ProjectCode = indent.ProjectId,
+            SourceWarehouse = indent.WarehouseId,
+            DeliveryLocation = firstItem?.LocationId ?? indent.FromLocationId,
+            RequirementType = indent.IndentType,
+            IndentType = indent.IndentType,
+            EngineerId = indent.EngineerId,
+            EngineerType = indent.EngineerType,
+            OrderNo = indent.OrderNo,
+            OrderType = indent.OrderType,
+            EquipmentDisplay = indent.EquipmentDisplay,
+            Status = "Created",
+            Items = items.Select(item => new IndentSyncLinePayload
+            {
+                ItemCode = item.MaterialCode,
+                MaterialCode = item.MaterialCode,
+                MaterialDesc = item.MaterialDesc,
+                Make = indent.EquipmentDisplay,
+                WorkType = item.WorkType,
+                ActivityId = item.ActivityId,
+                LocationId = item.LocationId,
+                Uom = item.UoM,
+                RequiredQty = item.RequestedQty,
+                RequestedQty = item.RequestedQty,
+                Remarks = item.Remarks,
+                AttachmentUrl = item.AttachmentUrl
+            }).ToList()
+        };
+    }
+
+    private static string ExtractErrorMessage(string responseBody)
+    {
+        if (string.IsNullOrWhiteSpace(responseBody))
+            return "Validation failed while syncing indent.";
+
+        try
+        {
+            var error = JsonConvert.DeserializeObject<ApiErrorResponse>(responseBody);
+            return error?.Message ?? responseBody;
+        }
+        catch (JsonException)
+        {
+            return responseBody;
+        }
+    }
+
     private void RaiseProgress(int completed)
     {
         SyncProgressChanged?.Invoke(this, new SyncProgressEventArgs(completed, TotalSessions));
     }
+
+    private async void HandleConnectivityChanged(object? sender, ConnectivityChangedEventArgs e)
+    {
+        if (e.NetworkAccess != NetworkAccess.Internet)
+            return;
+
+        try
+        {
+            await PushPendingIndentsAsync();
+        }
+        catch
+        {
+            // PendingSync records remain queued and will retry on the next connectivity change.
+        }
+    }
+}
+
+public sealed class IndentSyncPayload
+{
+    [JsonProperty("app_request_id")]
+    public string AppRequestId { get; set; } = string.Empty;
+
+    [JsonProperty("project_code")]
+    public string ProjectCode { get; set; } = string.Empty;
+
+    [JsonProperty("source_warehouse")]
+    public string SourceWarehouse { get; set; } = string.Empty;
+
+    [JsonProperty("delivery_location")]
+    public string DeliveryLocation { get; set; } = string.Empty;
+
+    [JsonProperty("requirement_type")]
+    public string RequirementType { get; set; } = string.Empty;
+
+    [JsonProperty("indent_type")]
+    public string IndentType { get; set; } = string.Empty;
+
+    [JsonProperty("engineerId")]
+    public string EngineerId { get; set; } = string.Empty;
+
+    [JsonProperty("engineerType")]
+    public string EngineerType { get; set; } = string.Empty;
+
+    [JsonProperty("orderNo")]
+    public string OrderNo { get; set; } = string.Empty;
+
+    [JsonProperty("orderType")]
+    public string OrderType { get; set; } = string.Empty;
+
+    [JsonProperty("equipmentDisplay")]
+    public string EquipmentDisplay { get; set; } = string.Empty;
+
+    [JsonProperty("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonProperty("items")]
+    public List<IndentSyncLinePayload> Items { get; set; } = new();
+}
+
+public sealed class IndentSyncLinePayload
+{
+    [JsonProperty("item_code")]
+    public string ItemCode { get; set; } = string.Empty;
+
+    [JsonProperty("materialCode")]
+    public string MaterialCode { get; set; } = string.Empty;
+
+    [JsonProperty("materialDesc")]
+    public string MaterialDesc { get; set; } = string.Empty;
+
+    [JsonProperty("make")]
+    public string Make { get; set; } = string.Empty;
+
+    [JsonProperty("workType")]
+    public string WorkType { get; set; } = string.Empty;
+
+    [JsonProperty("activityId")]
+    public string ActivityId { get; set; } = string.Empty;
+
+    [JsonProperty("locationId")]
+    public string LocationId { get; set; } = string.Empty;
+
+    [JsonProperty("uom")]
+    public string Uom { get; set; } = string.Empty;
+
+    [JsonProperty("required_qty")]
+    public decimal RequiredQty { get; set; }
+
+    [JsonProperty("requestedQty")]
+    public decimal RequestedQty { get; set; }
+
+    [JsonProperty("remarks")]
+    public string Remarks { get; set; } = string.Empty;
+
+    [JsonProperty("attachmentUrl")]
+    public string AttachmentUrl { get; set; } = string.Empty;
+}
+
+public sealed class IndentSyncResponse
+{
+    [JsonProperty("app_request_id")]
+    public string AppRequestId { get; set; } = string.Empty;
+
+    [JsonProperty("indent_no")]
+    public string IndentNo { get; set; } = string.Empty;
+}
+
+public sealed class ApiErrorResponse
+{
+    [JsonProperty("message")]
+    public string? Message { get; set; }
 }
 
 public class SyncProgressEventArgs : EventArgs

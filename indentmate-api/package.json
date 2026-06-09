@@ -6,6 +6,7 @@
   "scripts": {
     "dev": "node --watch server.js",
     "start": "node server.js",
+    "test:integration": "node --test tests/*.integration.test.js",
     "setup-db": "node setupDb.js",
     "seed-spreadsheets": "node src/db/spreadsheetSeeder.js"
   },

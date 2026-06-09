@@ -3,24 +3,25 @@ import { query } from '../db/pool.js'
 
 const USER_MASTER_SELECT_SQL = `
   SELECT
-    id,
-    id::text AS user_id,
-    employee_id,
-    employee_id AS login_name,
-    employee_name,
-    project_id,
-    project_description,
-    responsibility,
-    responsibility AS primary_role,
-    valid_from,
-    valid_to,
-    manual_status,
-    password_hash,
-    password_hash AS current_pin,
-    created_at,
-    updated_at
-  FROM user_master
-  ORDER BY employee_id ASC, project_id ASC, responsibility ASC
+    rm.id,
+    rm.id::text AS user_id,
+    rm.employee_id,
+    rm.employee_id AS login_name,
+    rm.employee_name,
+    rm.project_id,
+    rm.project_description,
+    rm.responsibility,
+    rm.responsibility AS primary_role,
+    rm.valid_from,
+    rm.valid_to,
+    rm.manual_status,
+    u.current_pin AS password_hash,
+    u.current_pin,
+    rm.created_at,
+    rm.updated_at
+  FROM responsibility_master rm
+  LEFT JOIN users u ON u.login_name = rm.employee_id
+  ORDER BY rm.employee_id ASC, rm.project_id ASC, rm.responsibility ASC
 `
 
 const USER_MASTER_RETURNING_SQL = `
@@ -36,14 +37,12 @@ const USER_MASTER_RETURNING_SQL = `
   valid_from,
   valid_to,
   manual_status,
-  password_hash,
-  password_hash AS current_pin,
   created_at,
   updated_at
 `
 
 const CREATE_USER_MASTER_SQL = `
-  INSERT INTO user_master (
+  INSERT INTO responsibility_master (
     employee_id,
     employee_name,
     project_id,
@@ -51,15 +50,14 @@ const CREATE_USER_MASTER_SQL = `
     responsibility,
     valid_from,
     valid_to,
-    manual_status,
-    password_hash
+    manual_status
   )
-  VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
+  VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
   RETURNING ${USER_MASTER_RETURNING_SQL}
 `
 
 const UPDATE_USER_MASTER_STATUS_SQL = `
-  UPDATE user_master
+  UPDATE responsibility_master
   SET manual_status = $1,
       updated_at = CURRENT_TIMESTAMP
   WHERE employee_id = $2
@@ -67,7 +65,7 @@ const UPDATE_USER_MASTER_STATUS_SQL = `
 `
 
 const UPDATE_USER_MASTER_ROLE_SQL = `
-  UPDATE user_master
+  UPDATE responsibility_master
   SET responsibility = $1,
       updated_at = CURRENT_TIMESTAMP
   WHERE id = $2
@@ -75,15 +73,13 @@ const UPDATE_USER_MASTER_ROLE_SQL = `
 `
 
 const CHANGE_USER_MASTER_PASSWORD_SQL = `
-  UPDATE user_master
-  SET password_hash = $1,
-      updated_at = CURRENT_TIMESTAMP
-  WHERE id = $2
-  RETURNING ${USER_MASTER_RETURNING_SQL}
+  SELECT ${USER_MASTER_RETURNING_SQL}
+  FROM responsibility_master
+  WHERE id = $1
 `
 
 const DELETE_USER_MASTER_SQL = `
-  DELETE FROM user_master
+  DELETE FROM responsibility_master
   WHERE id = $1
   RETURNING id, employee_id, employee_name, responsibility
 `
@@ -200,25 +196,26 @@ export async function listUsers(req, res, next) {
     const result = await query(
       `
         SELECT
-          id,
-          id::text AS user_id,
-          employee_id,
-          employee_id AS login_name,
-          employee_name,
-          project_id,
-          project_description,
-          responsibility,
-          responsibility AS primary_role,
-          valid_from,
-          valid_to,
-          manual_status,
-          password_hash,
-          password_hash AS current_pin,
-          created_at,
-          updated_at
-        FROM user_master
-        WHERE ${columnName} ILIKE $1
-        ORDER BY employee_id ASC, project_id ASC, responsibility ASC
+          rm.id,
+          rm.id::text AS user_id,
+          rm.employee_id,
+          rm.employee_id AS login_name,
+          rm.employee_name,
+          rm.project_id,
+          rm.project_description,
+          rm.responsibility,
+          rm.responsibility AS primary_role,
+          rm.valid_from,
+          rm.valid_to,
+          rm.manual_status,
+          u.current_pin AS password_hash,
+          u.current_pin,
+          rm.created_at,
+          rm.updated_at
+        FROM responsibility_master rm
+        LEFT JOIN users u ON u.login_name = rm.employee_id
+        WHERE rm.${columnName} ILIKE $1
+        ORDER BY rm.employee_id ASC, rm.project_id ASC, rm.responsibility ASC
       `,
       [`%${searchValue}%`],
     )
@@ -252,7 +249,6 @@ export async function createUser(req, res, next) {
       valid_from,
       valid_to,
       manual_status,
-      pin,
     ])
 
     await upsertLoginUser({
@@ -335,7 +331,7 @@ export async function changeUserPassword(req, res, next) {
     const { userId } = req.validated.params
     const { newPassword } = req.validated.body
     const pin = currentPinFromPassword(newPassword)
-    const result = await query(CHANGE_USER_MASTER_PASSWORD_SQL, [pin, userId])
+    const result = await query(CHANGE_USER_MASTER_PASSWORD_SQL, [userId])
 
     if (!result.rows[0]) {
       return res.status(404).json({ message: 'User Master record not found' })
@@ -381,11 +377,6 @@ export async function syncUserPin(req, res, next) {
       })
     }
 
-    await query(
-      'UPDATE user_master SET password_hash = $1, updated_at = CURRENT_TIMESTAMP WHERE employee_id = $2',
-      [current_pin, normalizedLoginName],
-    )
-
     return res.json({
       message: 'PIN synchronized successfully',
       data: userResult.rows[0],
@@ -406,7 +397,7 @@ export async function deleteUser(req, res, next) {
     }
 
     const remaining = await query(
-      'SELECT 1 FROM user_master WHERE employee_id = $1 LIMIT 1',
+      'SELECT 1 FROM responsibility_master WHERE employee_id = $1 LIMIT 1',
       [result.rows[0].employee_id],
     )
 

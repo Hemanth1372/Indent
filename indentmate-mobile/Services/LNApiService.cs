@@ -349,6 +349,7 @@ public class LNApiService
             {
                 BusinessPartnerId = row.BusinessPartnerId ?? string.Empty,
                 ActivityId = activity.ActivityId,
+                LocationCode = row.LocationCode ?? string.Empty,
                 ProjectId = activity.ProjectId,
                 Name = row.Name ?? string.Empty,
                 SubcontractorPO = row.SubcontractorPO
@@ -717,6 +718,9 @@ public class LNBusinessPartner
 {
     [JsonProperty("bpid")]
     public string? BusinessPartnerId { get; set; }
+
+    [JsonProperty("loca")]
+    public string? LocationCode { get; set; }
 
     [JsonProperty("nama")]
     public string? Name { get; set; }

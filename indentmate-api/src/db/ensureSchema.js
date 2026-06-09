@@ -9,88 +9,20 @@ export async function ensureSchema() {
       employee_name VARCHAR(100) NOT NULL,
       primary_role VARCHAR(50),
       is_active BOOLEAN DEFAULT TRUE,
+      is_deleted BOOLEAN DEFAULT FALSE,
       password_hash VARCHAR(255) NOT NULL,
       current_pin VARCHAR(6),
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `)
-  await query(`
-    CREATE TABLE IF NOT EXISTS projects (
-      project_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      site_code VARCHAR(50) UNIQUE,
-      project_name VARCHAR(255) NOT NULL,
-      location VARCHAR(200),
-      status VARCHAR(50) DEFAULT 'Active',
-      address_code VARCHAR(50),
-      address_description TEXT
-    )
-  `)
-  await query(`
-    CREATE TABLE IF NOT EXISTS user_project_roles (
-      user_id UUID NOT NULL REFERENCES users(user_id) ON DELETE CASCADE,
-      project_id UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-      role_name VARCHAR(80) NOT NULL,
-      assigned_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
-      PRIMARY KEY (user_id, project_id)
-    )
-  `)
-  await query(`
-    CREATE TABLE IF NOT EXISTS activities (
-      activity_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      project_id UUID NOT NULL REFERENCES projects(project_id) ON DELETE CASCADE,
-      description TEXT NOT NULL,
-      status VARCHAR(50) NOT NULL DEFAULT 'Not Started',
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `)
-  await query(`
-    CREATE TABLE IF NOT EXISTS user_master (
-      id SERIAL PRIMARY KEY,
-      employee_id VARCHAR(50) NOT NULL,
-      employee_name VARCHAR(150) NOT NULL,
-      project_id VARCHAR(50) NOT NULL,
-      project_description VARCHAR(255) NOT NULL,
-      responsibility VARCHAR(150) NOT NULL,
-      valid_from DATE NULL,
-      valid_to DATE NULL,
-      manual_status VARCHAR(20) DEFAULT 'Active',
-      password_hash VARCHAR(255) NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `)
-  await query('ALTER TABLE IF EXISTS user_master ADD COLUMN IF NOT EXISTS employee_id VARCHAR(50)')
-  await query('ALTER TABLE IF EXISTS user_master ADD COLUMN IF NOT EXISTS employee_name VARCHAR(150)')
-  await query('ALTER TABLE IF EXISTS user_master ADD COLUMN IF NOT EXISTS project_id VARCHAR(50)')
-  await query('ALTER TABLE IF EXISTS user_master ADD COLUMN IF NOT EXISTS project_description VARCHAR(255)')
-  await query('ALTER TABLE IF EXISTS user_master ADD COLUMN IF NOT EXISTS responsibility VARCHAR(150)')
-  await query('ALTER TABLE IF EXISTS user_master ADD COLUMN IF NOT EXISTS valid_from DATE NULL')
-  await query('ALTER TABLE IF EXISTS user_master ADD COLUMN IF NOT EXISTS valid_to DATE NULL')
-  await query("ALTER TABLE IF EXISTS user_master ADD COLUMN IF NOT EXISTS manual_status VARCHAR(20) DEFAULT 'Active'")
-  await query('ALTER TABLE IF EXISTS user_master ADD COLUMN IF NOT EXISTS password_hash VARCHAR(255)')
-  await query('ALTER TABLE IF EXISTS user_master ADD COLUMN IF NOT EXISTS updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP')
-  await query(`
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_user_master_assignment_key
-    ON user_master (employee_id, project_id, responsibility)
-  `)
+  await query('DROP TABLE IF EXISTS user_project_roles CASCADE')
+  await query('DROP TABLE IF EXISTS activities CASCADE')
+  await query('DROP TABLE IF EXISTS user_master CASCADE')
+  await query('DROP TABLE IF EXISTS projects CASCADE')
+  await query('DROP TABLE IF EXISTS delivery_point_master CASCADE')
   await query('ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS current_pin VARCHAR(6)')
+  await query('ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE')
   await query('ALTER TABLE IF EXISTS users DROP COLUMN IF EXISTS employee_id_str')
-  await query('ALTER TABLE IF EXISTS projects ADD COLUMN IF NOT EXISTS site_code VARCHAR(50)')
-  await query('ALTER TABLE IF EXISTS projects ADD COLUMN IF NOT EXISTS address_code VARCHAR(50)')
-  await query('ALTER TABLE IF EXISTS projects ADD COLUMN IF NOT EXISTS address_description TEXT')
-  await query(`
-    DO $$
-    BEGIN
-      IF NOT EXISTS (
-        SELECT 1
-        FROM pg_constraint
-        WHERE conname = 'projects_site_code_key'
-      ) THEN
-        ALTER TABLE projects ADD CONSTRAINT projects_site_code_key UNIQUE (site_code);
-      END IF;
-    END
-    $$;
-  `)
 
   await query(`
     CREATE TABLE IF NOT EXISTS project_master (
@@ -168,14 +100,52 @@ export async function ensureSchema() {
       valid_from DATE NULL,
       valid_to DATE NULL,
       manual_status VARCHAR(20) DEFAULT 'Active',
-      password_hash VARCHAR(255) NOT NULL,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `)
+  await query('ALTER TABLE IF EXISTS responsibility_master DROP COLUMN IF EXISTS password_hash')
 
   await query('CREATE INDEX IF NOT EXISTS idx_responsibility_master_project_id ON responsibility_master(project_id)')
   await query('CREATE INDEX IF NOT EXISTS idx_responsibility_master_employee_id ON responsibility_master(employee_id)')
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS role_master (
+      id SERIAL PRIMARY KEY,
+      role_name VARCHAR(150) UNIQUE NOT NULL,
+      description TEXT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+  await query('ALTER TABLE IF EXISTS role_master DROP COLUMN IF EXISTS status')
+  await query('CREATE INDEX IF NOT EXISTS idx_role_master_role_name ON role_master(role_name)')
+  await query(`
+    INSERT INTO role_master (role_name, description)
+    SELECT DISTINCT
+      COALESCE(NULLIF(SUBSTRING(responsibility FROM '\\(([^()]*)\\)\\s*$'), ''), TRIM(responsibility)) AS role_name,
+      NULLIF(TRIM(REGEXP_REPLACE(responsibility, '\\s*\\([^()]*\\)\\s*$', '')), '') AS description
+    FROM responsibility_master
+    WHERE responsibility IS NOT NULL AND TRIM(responsibility) <> ''
+    ON CONFLICT (role_name) DO NOTHING
+  `)
+  await query(`
+    DELETE FROM role_master AS stale
+    WHERE stale.role_name ~ '\\([^()]+\\)\\s*$'
+      AND EXISTS (
+        SELECT 1
+        FROM role_master AS parsed
+        WHERE parsed.role_name = SUBSTRING(stale.role_name FROM '\\(([^()]*)\\)\\s*$')
+      )
+  `)
+  await query(`
+    UPDATE role_master
+    SET description = NULLIF(TRIM(REGEXP_REPLACE(role_name, '\\s*\\([^()]*\\)\\s*$', '')), ''),
+        role_name = COALESCE(NULLIF(SUBSTRING(role_name FROM '\\(([^()]*)\\)\\s*$'), ''), role_name),
+        updated_at = CURRENT_TIMESTAMP
+    WHERE role_name ~ '\\([^()]+\\)\\s*$'
+      AND COALESCE(description, '') = ''
+  `)
 
   await query(`
     CREATE TABLE IF NOT EXISTS activity_master (
@@ -238,20 +208,7 @@ export async function ensureSchema() {
     ON location_master (project_code, location_code)
   `)
 
-  await query(`
-    CREATE TABLE IF NOT EXISTS business_partner_master (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      project_code VARCHAR(50),
-      location_code VARCHAR(80),
-      location_description TEXT,
-      activity_code VARCHAR(80),
-      activity_description TEXT,
-      business_partner_code VARCHAR(80) NOT NULL,
-      bp_name VARCHAR(255) NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `)
+  await query('DROP TABLE IF EXISTS business_partner_master CASCADE')
 
   await query(`
     CREATE TABLE IF NOT EXISTS bp_activity_master (
@@ -289,15 +246,7 @@ export async function ensureSchema() {
   await query('ALTER TABLE IF EXISTS warehouse_master ADD COLUMN IF NOT EXISTS is_material_warehouse VARCHAR(10)')
   await query('ALTER TABLE IF EXISTS warehouse_master ADD COLUMN IF NOT EXISTS is_virtual_warehouse VARCHAR(10)')
 
-  await query(`
-    CREATE TABLE IF NOT EXISTS warehouse_bin_master (
-      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-      warehouse_code VARCHAR(80) NOT NULL,
-      description TEXT NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-    )
-  `)
+  await query('DROP TABLE IF EXISTS warehouse_bin_master CASCADE')
 
   await query(`
     CREATE TABLE IF NOT EXISTS warehouse_location_master (
@@ -311,17 +260,6 @@ export async function ensureSchema() {
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT unique_wh_location_bin UNIQUE (warehouse_code, location_code)
-    )
-  `)
-
-  await query(`
-    CREATE TABLE IF NOT EXISTS delivery_point_master (
-      delivery_point_code VARCHAR(80) PRIMARY KEY,
-      address_code VARCHAR(80) NOT NULL,
-      address_description TEXT,
-      description TEXT NOT NULL,
-      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `)
 
@@ -400,17 +338,13 @@ export async function ensureSchema() {
 
   await query('CREATE INDEX IF NOT EXISTS idx_activity_master_code ON activity_master(activity_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_activity_master_project ON activity_master(project_code)')
-  await query('CREATE INDEX IF NOT EXISTS idx_business_partner_master_project ON business_partner_master(project_code)')
-  await query('CREATE INDEX IF NOT EXISTS idx_business_partner_master_bp ON business_partner_master(business_partner_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_bp_activity_master_project ON bp_activity_master(project_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_bp_activity_master_location ON bp_activity_master(location_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_bp_activity_master_bp ON bp_activity_master(business_partner_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_warehouse_master_site ON warehouse_master(project_site)')
-  await query('CREATE INDEX IF NOT EXISTS idx_warehouse_bin_master_warehouse ON warehouse_bin_master(warehouse_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_warehouse_location_master_project ON warehouse_location_master(project_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_warehouse_location_master_warehouse ON warehouse_location_master(warehouse_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_warehouse_location_master_location ON warehouse_location_master(location_code)')
-  await query('CREATE INDEX IF NOT EXISTS idx_delivery_point_master_address ON delivery_point_master(address_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_delivery_master_project ON delivery_master(project_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_delivery_master_address ON delivery_master(address_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_engineer_activity_master_project ON engineer_activity_master(project_code)')
@@ -440,8 +374,8 @@ export async function ensureSchema() {
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       indent_no VARCHAR(50) UNIQUE NOT NULL,
       created_by VARCHAR(50) NOT NULL REFERENCES users(login_name),
-      project_code VARCHAR(50) NOT NULL REFERENCES projects(site_code),
-      delivery_location VARCHAR(80) NOT NULL REFERENCES delivery_point_master(delivery_point_code),
+      project_code VARCHAR(50) NOT NULL,
+      delivery_location VARCHAR(80) NOT NULL,
       requirement_type VARCHAR(80) NOT NULL,
       item_code VARCHAR(50) NOT NULL,
       make VARCHAR(120),
@@ -458,4 +392,124 @@ export async function ensureSchema() {
   await query('CREATE INDEX IF NOT EXISTS idx_indents_created_by ON indents(created_by)')
   await query('CREATE INDEX IF NOT EXISTS idx_indents_project_code ON indents(project_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_indents_created_at ON indents(created_at)')
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS indent_headers (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      app_request_id VARCHAR(80),
+      indent_no VARCHAR(50) UNIQUE NOT NULL,
+      project_code VARCHAR(50) NOT NULL,
+      source_warehouse VARCHAR(100),
+      source_location VARCHAR(100),
+      delivery_location VARCHAR(100),
+      requirement_type VARCHAR(80),
+      indent_type VARCHAR(80) NOT NULL DEFAULT 'Issue',
+      to_entity_type VARCHAR(80),
+      to_entity_id VARCHAR(120),
+      status VARCHAR(50) NOT NULL DEFAULT 'Created',
+      created_by VARCHAR(50) NOT NULL REFERENCES users(login_name),
+      synced_at TIMESTAMP,
+      approved_by VARCHAR(50),
+      approved_at TIMESTAMP,
+      remarks TEXT,
+      attachments JSONB NOT NULL DEFAULT '[]'::jsonb,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS indent_lines (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      indent_header_id UUID NOT NULL REFERENCES indent_headers(id) ON DELETE CASCADE,
+      line_number INTEGER NOT NULL,
+      item_code VARCHAR(100) NOT NULL,
+      item_description TEXT,
+      make VARCHAR(120),
+      uom VARCHAR(50) NOT NULL,
+      required_qty NUMERIC(14, 3) NOT NULL,
+      issued_qty NUMERIC(14, 3) NOT NULL DEFAULT 0,
+      work_type VARCHAR(80),
+      activity_code VARCHAR(100),
+      location_code VARCHAR(100),
+      remarks TEXT,
+      attachment_url TEXT,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      CONSTRAINT unique_indent_line_number UNIQUE (indent_header_id, line_number)
+    )
+  `)
+
+  await query('CREATE INDEX IF NOT EXISTS idx_indent_headers_indent_no ON indent_headers(indent_no)')
+  await query('DROP INDEX IF EXISTS idx_indent_headers_app_request_id')
+  await query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_indent_headers_app_request_id_unique
+    ON indent_headers (app_request_id)
+    WHERE app_request_id IS NOT NULL
+  `)
+  await query('CREATE INDEX IF NOT EXISTS idx_indent_headers_status ON indent_headers(status)')
+  await query('CREATE INDEX IF NOT EXISTS idx_indent_headers_created_by ON indent_headers(created_by)')
+  await query('CREATE INDEX IF NOT EXISTS idx_indent_headers_project_code ON indent_headers(project_code)')
+  await query('CREATE INDEX IF NOT EXISTS idx_indent_headers_created_at ON indent_headers(created_at)')
+  await query('CREATE INDEX IF NOT EXISTS idx_indent_lines_header_id ON indent_lines(indent_header_id)')
+  await query('CREATE INDEX IF NOT EXISTS idx_indent_lines_item_code ON indent_lines(item_code)')
+
+  await query(`
+    INSERT INTO indent_headers (
+      id,
+      indent_no,
+      project_code,
+      delivery_location,
+      requirement_type,
+      indent_type,
+      status,
+      created_by,
+      remarks,
+      created_at,
+      updated_at
+    )
+    SELECT
+      i.id,
+      i.indent_no,
+      i.project_code,
+      i.delivery_location,
+      i.requirement_type,
+      'Issue',
+      i.status::text,
+      i.created_by,
+      i.remarks,
+      i.created_at,
+      i.updated_at
+    FROM indents i
+    ON CONFLICT (indent_no) DO NOTHING
+  `)
+
+  await query(`
+    INSERT INTO indent_lines (
+      indent_header_id,
+      line_number,
+      item_code,
+      make,
+      uom,
+      required_qty,
+      issued_qty,
+      remarks,
+      created_at,
+      updated_at
+    )
+    SELECT
+      h.id,
+      1,
+      i.item_code,
+      i.make,
+      i.uom,
+      i.required_qty,
+      0,
+      i.remarks,
+      i.created_at,
+      i.updated_at
+    FROM indents i
+    JOIN indent_headers h ON h.indent_no = i.indent_no
+    ON CONFLICT (indent_header_id, line_number) DO NOTHING
+  `)
 }

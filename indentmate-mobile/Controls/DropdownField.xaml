@@ -4,16 +4,16 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     x:Name="Root"
-    HorizontalOptions="Start"
-    HeightRequest="48">
+    HorizontalOptions="Fill"
+    HeightRequest="52">
 
     <Border
         x:Name="TriggerBorder"
-        Padding="14,0"
+        Padding="16,0"
         BackgroundColor="White"
-        HeightRequest="48"
+        HeightRequest="52"
         Stroke="#D6DEE9"
-        StrokeShape="RoundRectangle 8"
+        StrokeShape="RoundRectangle 10"
         StrokeThickness="1">
         <Border.GestureRecognizers>
             <TapGestureRecognizer Tapped="OnTriggerTapped" />
@@ -21,14 +21,14 @@
         <Grid ColumnDefinitions="*,Auto">
             <Label
                 x:Name="SelectedTextLabel"
-                FontSize="16"
+                FontSize="15"
                 LineBreakMode="TailTruncation"
-                TextColor="#172033"
+                TextColor="#101828"
                 VerticalOptions="Center" />
             <Label
                 Grid.Column="1"
-                FontSize="16"
-                Text="v"
+                FontSize="18"
+                Text="&#x2304;"
                 TextColor="#667085"
                 VerticalOptions="Center" />
         </Grid>

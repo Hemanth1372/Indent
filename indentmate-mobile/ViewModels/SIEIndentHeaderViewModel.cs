@@ -100,17 +100,22 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
     partial void OnSelectedProjectChanged(LocalProject? value)
     {
         _ = ReloadWarehousesAsync();
+        _ = ReloadProjectLocationsAsync();
     }
 
     partial void OnSelectedWarehouseChanged(LocalWarehouse? value)
     {
         IsVirtualWarehouse = value?.IsVirtual == true;
-        _ = ReloadFromToOptionsAsync();
     }
 
     partial void OnSelectedIndentTypeChanged(string value)
     {
-        _ = ReloadFromToOptionsAsync();
+        _ = ReloadContractorsAsync();
+    }
+
+    partial void OnSelectedFromLocationChanged(SelectionOption? value)
+    {
+        _ = ReloadContractorsAsync();
     }
 
     partial void OnIsAutoWarehouseChanged(bool value)
@@ -215,7 +220,7 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
 
         if (SelectedProject is null)
         {
-            await ReloadFromToOptionsAsync();
+            await ReloadProjectLocationsAsync();
             return;
         }
 
@@ -238,7 +243,6 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
             IsAutoWarehouse = true;
             SelectedWarehouse = virtualWarehouses[0];
             AutoWarehouseDisplay = $"{SelectedWarehouse.WarehouseCode} - {SelectedWarehouse.Description}";
-            await ReloadFromToOptionsAsync();
             return;
         }
 
@@ -248,8 +252,6 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
         }
 
         SelectedWarehouse ??= Warehouses.FirstOrDefault();
-
-        await ReloadFromToOptionsAsync();
     }
 
     private async Task<List<LocalWarehouse>> GetWarehousesForProjectAsync(List<string> projectCodes)
@@ -275,61 +277,125 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
         return localWarehouses;
     }
 
-    private async Task ReloadFromToOptionsAsync()
+    private async Task ReloadProjectLocationsAsync()
     {
         FromLocations.Clear();
         ToContractors.Clear();
         SelectedFromLocation = null;
         SelectedToContractor = null;
 
-        if (SelectedWarehouse is null || SelectedProject is null)
+        if (SelectedProject is null)
             return;
 
-        var locations = await _databaseService.GetWarehouseLocationsAsync(SelectedWarehouse.WarehouseCode);
-        var isIssue = SelectedIndentType == "Issue";
+        var projectCodes = new[] { SelectedProject.ProjectId, SelectedProject.SiteCode }
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
 
-        IEnumerable<LocalWarehouseLocation> fromLocations = locations;
-        IEnumerable<LocalWarehouseLocation> toLocations = locations;
+        var locations = await GetProjectLocationsAsync(projectCodes);
 
-        if (IsVirtualWarehouse && isIssue)
+        foreach (var location in locations
+            .GroupBy(location => location.LocationCode, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(location => location.LocationCode))
         {
-            fromLocations = locations.Where(location => IsCategory(location, "Storage"));
-            toLocations = locations.Where(location => IsCategory(location, "Employee") || IsCategory(location, "Subcon"));
-        }
-        else if (IsVirtualWarehouse)
-        {
-            fromLocations = locations.Where(location => IsCategory(location, "Employee") || IsCategory(location, "Subcon"));
-            toLocations = locations.Where(location => IsCategory(location, "Storage"));
+            FromLocations.Add(SelectionOption.FromProjectLocation(location));
         }
 
-        foreach (var location in fromLocations.OrderBy(location => location.LocationCode))
+        SelectedFromLocation = FromLocations.FirstOrDefault();
+        await ReloadContractorsAsync();
+    }
+
+    private async Task ReloadContractorsAsync()
+    {
+        ToContractors.Clear();
+        SelectedToContractor = null;
+
+        if (SelectedProject is null || SelectedFromLocation is null)
+            return;
+
+        var projectCodes = new[] { SelectedProject.ProjectId, SelectedProject.SiteCode }
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+
+        var partners = await GetContractorsForLocationAsync(projectCodes, SelectedFromLocation.Id);
+
+        foreach (var partner in partners
+            .GroupBy(partner => partner.BusinessPartnerId, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(partner => partner.Name))
         {
-            FromLocations.Add(SelectionOption.FromLocation(location));
+            ToContractors.Add(SelectionOption.FromBusinessPartner(partner));
         }
 
-        if (IsVirtualWarehouse || !isIssue)
+        if (ToContractors.Count == 0)
         {
-            foreach (var location in toLocations.OrderBy(location => location.LocationCode))
+            foreach (var projectCode in projectCodes)
             {
-                ToContractors.Add(SelectionOption.FromLocation(location));
+                partners.AddRange(await _databaseService.GetSubcontractorsForProjectAsync(projectCode));
             }
-        }
-        else
-        {
-            var partners = await _databaseService.GetSubcontractorsForProjectAsync(SelectedProject.ProjectId);
-            foreach (var partner in partners.OrderBy(partner => partner.Name))
+
+            foreach (var partner in partners
+                .GroupBy(partner => partner.BusinessPartnerId, StringComparer.OrdinalIgnoreCase)
+                .Select(group => group.First())
+                .OrderBy(partner => partner.Name))
             {
                 ToContractors.Add(SelectionOption.FromBusinessPartner(partner));
             }
         }
 
-        SelectedFromLocation ??= FromLocations.FirstOrDefault();
-        SelectedToContractor ??= ToContractors.FirstOrDefault();
+        SelectedToContractor = ToContractors.FirstOrDefault();
     }
 
-    private static bool IsCategory(LocalWarehouseLocation location, string category)
+    private async Task<List<LocalLocation>> GetProjectLocationsAsync(List<string> projectCodes)
     {
-        return string.Equals(location.Category, category, StringComparison.OrdinalIgnoreCase);
+        try
+        {
+            var apiLocations = await _apiService.GetLocationsForProjectAsync(projectCodes);
+            if (apiLocations.Count != 0)
+            {
+                return apiLocations;
+            }
+        }
+        catch
+        {
+        }
+
+        var localLocations = new List<LocalLocation>();
+        foreach (var projectCode in projectCodes)
+        {
+            localLocations.AddRange(await _databaseService.GetLocationsForProjectAsync(projectCode));
+        }
+
+        return localLocations;
+    }
+
+    private async Task<List<LocalBusinessPartner>> GetContractorsForLocationAsync(
+        List<string> projectCodes,
+        string locationCode)
+    {
+        try
+        {
+            var apiPartners = await _apiService.GetBusinessPartnersForProjectLocationAsync(projectCodes, locationCode);
+            if (apiPartners.Count != 0)
+            {
+                return apiPartners;
+            }
+        }
+        catch
+        {
+        }
+
+        var localPartners = new List<LocalBusinessPartner>();
+        foreach (var projectCode in projectCodes)
+        {
+            localPartners.AddRange(await _databaseService.GetSubcontractorsForProjectLocationAsync(
+                projectCode,
+                locationCode));
+        }
+
+        return localPartners;
     }
 
 }
@@ -349,6 +415,18 @@ public class SelectionOption
                 ? location.LocationCode
                 : $"{location.LocationCode} - {location.Description}",
             OptionType = "Location"
+        };
+    }
+
+    public static SelectionOption FromProjectLocation(LocalLocation location)
+    {
+        return new SelectionOption
+        {
+            Id = location.LocationCode,
+            DisplayName = string.IsNullOrWhiteSpace(location.Description)
+                ? location.LocationCode
+                : $"{location.LocationCode} - {location.Description}",
+            OptionType = "ProjectLocation"
         };
     }
 

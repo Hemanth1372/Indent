@@ -1,5 +1,5 @@
 import { Alert, Button, Checkbox, Dropdown, Form, Input, Modal, Select, Spin, Switch, message } from 'antd'
-import { Download, MoreVertical, Pencil, Plus, Trash2, Upload } from 'lucide-react'
+import { Download, MoreVertical, Pencil, Plus, Upload } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import * as XLSX from 'xlsx'
@@ -25,6 +25,25 @@ type MasterImportMetadata = {
 }
 
 const MASTER_IMPORT_METADATA: Record<string, MasterImportMetadata> = {
+  'responsibility-master': {
+    excelLookupKey: 'Employee ID',
+    columns: [
+      { label: 'Employee ID', excelHeader: 'Employee ID', dbColumn: 'employee_id', isReadOnly: true },
+      { label: 'Employee Name', excelHeader: 'Employee Name', dbColumn: 'employee_name' },
+      { label: 'Project ID', excelHeader: 'Project ID', dbColumn: 'project_id' },
+      { label: 'Project Description', excelHeader: 'Project Description', dbColumn: 'project_description' },
+      { label: 'Role', excelHeader: 'Responsibility', dbColumn: 'responsibility' },
+      { label: 'Valid From', excelHeader: 'Valid From', dbColumn: 'valid_from' },
+      { label: 'Valid To', excelHeader: 'Valid To', dbColumn: 'valid_to' },
+    ],
+  },
+  'role-master': {
+    excelLookupKey: 'Role Name',
+    columns: [
+      { label: 'Role Name', excelHeader: 'Role Name', dbColumn: 'role_name', isReadOnly: true },
+      { label: 'Description', excelHeader: 'Description', dbColumn: 'description' },
+    ],
+  },
   'project-master': {
     excelLookupKey: 'Project',
     columns: [
@@ -179,7 +198,7 @@ function defaultFieldsMapping(metadata?: MasterImportMetadata) {
   )
 }
 
-type FieldType = 'text' | 'textarea' | 'boolean' | 'checkboxText' | 'datetime' | 'number'
+type FieldType = 'text' | 'textarea' | 'boolean' | 'checkboxText' | 'datetime' | 'date' | 'number'
 
 type MasterField = {
   key: string
@@ -203,6 +222,59 @@ type MasterConfig = {
 }
 
 const masterConfigs: Record<string, MasterConfig> = {
+  'responsibility-master': {
+    title: 'User Project Assignment Master',
+    subtitle: 'Project-wise user role assignments and validity periods',
+    countLabel: 'Assignments',
+    addButtonLabel: 'Add Assignment',
+    addModalTitle: 'Add User Project Assignment',
+    editModalTitle: 'Edit User Project Assignment',
+    fields: [
+      { key: 'project_id', label: 'Project ID', required: true },
+      { key: 'project_description', label: 'Project Description', required: true },
+      { key: 'employee_id', label: 'User ID', required: true },
+      { key: 'employee_name', label: 'Username', required: true },
+      { key: 'responsibility', label: 'Role', required: true },
+      { key: 'valid_from', label: 'Valid From', type: 'date' },
+      { key: 'valid_to', label: 'Valid To', type: 'date' },
+    ],
+    columns: [
+      { key: 'project_id', label: 'Project ID' },
+      { key: 'project_description', label: 'Project Description', minWidth: '220px' },
+      { key: 'employee_id', label: 'User ID' },
+      { key: 'employee_name', label: 'Username' },
+      { key: 'responsibility', label: 'Role', minWidth: '190px' },
+      { key: 'valid_from', label: 'Valid From', type: 'date' },
+      { key: 'valid_to', label: 'Valid To', type: 'date' },
+    ],
+    searchFields: [
+      { label: 'Project ID', value: 'project_id', placeholder: 'Enter Project ID...' },
+      { label: 'Project Description', value: 'project_description', placeholder: 'Enter Project Description...' },
+      { label: 'User ID', value: 'employee_id', placeholder: 'Enter User ID...' },
+      { label: 'Username', value: 'employee_name', placeholder: 'Enter Username...' },
+      { label: 'Role', value: 'responsibility', placeholder: 'Enter Role...' },
+    ],
+  },
+  'role-master': {
+    title: 'Role Master',
+    subtitle: 'Portal role catalog used for User Master assignments',
+    countLabel: 'Roles',
+    addButtonLabel: 'Add Role',
+    addModalTitle: 'Add Role Master',
+    editModalTitle: 'Edit Role Master',
+    fields: [
+      { key: 'role_name', label: 'Role Name', required: true },
+      { key: 'description', label: 'Description', type: 'textarea' },
+    ],
+    columns: [
+      { key: 'role_name', label: 'Role Name' },
+      { key: 'description', label: 'Description', minWidth: '220px' },
+    ],
+    searchFields: [
+      { label: 'Role Name', value: 'role_name', placeholder: 'Enter Role Name...' },
+      { label: 'Description', value: 'description', placeholder: 'Enter Description...' },
+    ],
+  },
   'project-master': {
     title: 'Project Master',
     subtitle: 'Enterprise project catalogs, engineering controls, and coordination flags',
@@ -601,6 +673,16 @@ type ProjectOption = {
   description: string
 }
 
+type UserOption = {
+  employee_id: string
+  employee_name: string
+}
+
+type RoleOption = {
+  role_name: string
+  responsibility: string
+}
+
 type MasterListResponse = {
   data: MasterRecord[]
   metadata?: {
@@ -642,6 +724,10 @@ function displayValue(record: MasterRecord, field: MasterField) {
     return formatDateTime(value)
   }
 
+  if (field.type === 'date') {
+    return formatDisplayDate(value)
+  }
+
   if (field.type === 'number') {
     if (value === null || value === undefined || value === '') {
       return '-'
@@ -681,6 +767,24 @@ function formatDateTime(value: unknown) {
   return `${day}/${month}/${year} ${hours}:${minutes}`
 }
 
+function formatDisplayDate(value: unknown) {
+  if (value === null || value === undefined || value === '') {
+    return '-'
+  }
+
+  const date = new Date(String(value))
+
+  if (Number.isNaN(date.getTime())) {
+    return String(value)
+  }
+
+  const day = String(date.getDate()).padStart(2, '0')
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const year = date.getFullYear()
+
+  return `${day}/${month}/${year}`
+}
+
 function toDateTimeInputValue(value: unknown) {
   if (value === null || value === undefined || value === '') {
     return ''
@@ -714,11 +818,36 @@ function isFlagField(field: MasterField) {
 }
 
 function supportsInlineEdit(masterKey: string) {
-  return ['project-master', 'location-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master', 'engineer-activity-master', 'rental-order-master', 'purchase-office-master'].includes(masterKey)
+  return ['responsibility-master', 'role-master', 'project-master', 'location-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master', 'engineer-activity-master', 'rental-order-master', 'purchase-office-master'].includes(masterKey)
+}
+
+function toDateInputValue(value: unknown) {
+  if (value === null || value === undefined || value === '') {
+    return ''
+  }
+
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10)
+  }
+
+  const textValue = String(value)
+  const isoMatch = textValue.match(/^(\d{4}-\d{2}-\d{2})/)
+
+  if (isoMatch) {
+    return isoMatch[1]
+  }
+
+  const date = new Date(textValue)
+
+  if (Number.isNaN(date.getTime())) {
+    return textValue.slice(0, 10)
+  }
+
+  return date.toISOString().slice(0, 10)
 }
 
 function isPaginatedMaster(masterKey: string) {
-  return ['project-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'location-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master', 'engineer-activity-master', 'rental-order-master', 'purchase-office-master'].includes(masterKey)
+  return ['responsibility-master', 'role-master', 'project-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'location-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master', 'engineer-activity-master', 'rental-order-master', 'purchase-office-master'].includes(masterKey)
 }
 
 function normalizeFormPayload(values: MasterRecord, fields: MasterField[]) {
@@ -800,6 +929,10 @@ export default function GenericMasterPage() {
   const [records, setRecords] = useState<MasterRecord[]>([])
   const [projectOptions, setProjectOptions] = useState<ProjectOption[]>([])
   const [projectOptionsLoading, setProjectOptionsLoading] = useState(false)
+  const [userOptions, setUserOptions] = useState<UserOption[]>([])
+  const [userOptionsLoading, setUserOptionsLoading] = useState(false)
+  const [roleOptions, setRoleOptions] = useState<RoleOption[]>([])
+  const [roleOptionsLoading, setRoleOptionsLoading] = useState(false)
   const [loading, setLoading] = useState(true)
   const [importing, setImporting] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -867,6 +1000,20 @@ export default function GenericMasterPage() {
     })),
     [projectOptions],
   )
+  const userSelectOptions = useMemo(
+    () => userOptions.map((user) => ({
+      label: user.employee_name ? `${user.employee_id} - ${user.employee_name}` : user.employee_id,
+      value: user.employee_id,
+    })),
+    [userOptions],
+  )
+  const roleSelectOptions = useMemo(
+    () => roleOptions.map((role) => ({
+      label: role.responsibility,
+      value: role.responsibility,
+    })),
+    [roleOptions],
+  )
 
   async function loadProjectOptions() {
     setProjectOptionsLoading(true)
@@ -888,6 +1035,52 @@ export default function GenericMasterPage() {
       message.error('Could not load project options')
     } finally {
       setProjectOptionsLoading(false)
+    }
+  }
+
+  async function loadUserOptions() {
+    setUserOptionsLoading(true)
+
+    try {
+      const { data } = await api.get<MasterListResponse>('/api/responsibilities', {
+        params: { limit: 500 },
+      })
+      const options = data.data
+        .map((user) => ({
+          employee_id: String(user.employee_id ?? '').trim(),
+          employee_name: String(user.employee_name ?? '').trim(),
+        }))
+        .filter((user) => user.employee_id)
+
+      setUserOptions(options)
+    } catch (requestError) {
+      console.error(requestError)
+      message.error('Could not load user options')
+    } finally {
+      setUserOptionsLoading(false)
+    }
+  }
+
+  async function loadRoleOptions() {
+    setRoleOptionsLoading(true)
+
+    try {
+      const { data } = await api.get<{ responsibilities?: string[], roles?: RoleOption[] }>('/api/responsibilities/options')
+      const options = (data.roles?.length
+        ? data.roles
+        : (data.responsibilities ?? []).map((responsibility) => ({ role_name: responsibility, responsibility })))
+        .map((role) => ({
+          role_name: String(role.role_name ?? role.responsibility ?? '').trim(),
+          responsibility: String(role.responsibility ?? role.role_name ?? '').trim(),
+        }))
+        .filter((role) => role.responsibility)
+
+      setRoleOptions(options)
+    } catch (requestError) {
+      console.error(requestError)
+      message.error('Could not load role options')
+    } finally {
+      setRoleOptionsLoading(false)
     }
   }
 
@@ -930,7 +1123,52 @@ export default function GenericMasterPage() {
     }
   }
 
+  function handleUserFieldChange(targetForm: ReturnType<typeof Form.useForm>[0], value?: string) {
+    targetForm.setFieldValue('employee_id', value)
+
+    if (!value) {
+      targetForm.setFieldValue('employee_name', undefined)
+      return
+    }
+
+    const selectedUser = userOptions.find((user) => user.employee_id === value)
+    if (selectedUser) {
+      targetForm.setFieldValue('employee_name', selectedUser.employee_name)
+    }
+  }
+
   function renderFieldInput(field: MasterField, targetForm: ReturnType<typeof Form.useForm>[0]) {
+    if (masterKey === 'responsibility-master' && field.key === 'employee_id') {
+      return (
+        <Select
+          allowClear
+          loading={userOptionsLoading}
+          onChange={(value) => handleUserFieldChange(targetForm, value)}
+          optionFilterProp="label"
+          options={userSelectOptions}
+          placeholder="Select User ID"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'responsibility-master' && field.key === 'employee_name') {
+      return <Input readOnly />
+    }
+
+    if (masterKey === 'responsibility-master' && field.key === 'responsibility') {
+      return (
+        <Select
+          allowClear
+          loading={roleOptionsLoading}
+          optionFilterProp="label"
+          options={roleSelectOptions}
+          placeholder="Select Role"
+          showSearch
+        />
+      )
+    }
+
     if (isProjectCodeField(field)) {
       return (
         <Select
@@ -973,6 +1211,10 @@ export default function GenericMasterPage() {
 
     if (field.type === 'datetime') {
       return <Input type="datetime-local" />
+    }
+
+    if (field.type === 'date') {
+      return <Input type="date" />
     }
 
     if (field.type === 'number') {
@@ -1075,6 +1317,10 @@ export default function GenericMasterPage() {
     loadRecords({ page: 1 })
     if (config?.fields.some((field) => isProjectCodeField(field) || isProjectDescriptionField(field))) {
       loadProjectOptions()
+    }
+    if (masterKey === 'responsibility-master') {
+      loadUserOptions()
+      loadRoleOptions()
     }
   }, [masterKey])
 
@@ -1290,9 +1536,11 @@ export default function GenericMasterPage() {
           field.key,
           field.type === 'datetime'
             ? toDateTimeInputValue(record[field.key])
-            : field.type === 'checkboxText'
-              ? String(record[field.key]).toLowerCase() === 'yes'
-              : record[field.key] ?? '',
+            : field.type === 'date'
+              ? toDateInputValue(record[field.key])
+              : field.type === 'checkboxText'
+                ? String(record[field.key]).toLowerCase() === 'yes'
+                : record[field.key] ?? '',
         ]),
       ),
     )
@@ -1329,37 +1577,6 @@ export default function GenericMasterPage() {
     } finally {
       setUpdating(false)
     }
-  }
-
-  function handleDelete(record: MasterRecord) {
-    if (record.id === null || record.id === undefined) {
-      return
-    }
-
-    Modal.confirm({
-      title: `Delete ${config.title} record?`,
-      content: 'This will permanently remove the selected master record.',
-      okText: 'Delete',
-      okButtonProps: { danger: true },
-      async onOk() {
-        try {
-          await api.delete(`/api/master-data/${masterKey}/${record.id}`)
-          setRecords((currentRecords) => currentRecords.filter((currentRecord) => currentRecord.id !== record.id))
-          setSelectedRowKeys((currentSelection) => {
-            const nextSelection = new Set(currentSelection)
-            nextSelection.delete(getRecordSelectionKey(record))
-            return nextSelection
-          })
-          await loadRecords(isFilterActive && searchField && searchQuery.trim()
-            ? { field: searchField, value: searchQuery.trim(), page: currentPage }
-            : { page: currentPage })
-          message.success(`${config.title} record deleted successfully`)
-        } catch (requestError: any) {
-          console.error(requestError)
-          message.error(requestError.response?.data?.message ?? `Failed to delete ${config.title} record`)
-        }
-      },
-    })
   }
 
   const recordCount = isPaginated ? totalRecords : records.length
@@ -1573,13 +1790,6 @@ export default function GenericMasterPage() {
                                     icon: <Pencil size={16} />,
                                     label: 'Edit',
                                     onClick: () => handleOpenEdit(record),
-                                  },
-                                  {
-                                    key: 'delete',
-                                    icon: <Trash2 size={16} />,
-                                    label: 'Delete',
-                                    danger: true,
-                                    onClick: () => handleDelete(record),
                                   },
                                 ],
                               }}

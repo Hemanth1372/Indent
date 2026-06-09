@@ -54,6 +54,8 @@ public class DatabaseService
             await _db.CreateTableAsync<LocalRentalOrder>();
             await _db.CreateTableAsync<SyncLog>();
             await _db.CreateTableAsync<LocalOfflineQueue>();
+            await EnsureLocalIndentSyncColumnsAsync(_db);
+            await EnsureLocalBusinessPartnerColumnsAsync(_db);
 
             _initialized = true;
         }
@@ -140,6 +142,15 @@ public class DatabaseService
             .ToListAsync();
     }
 
+    public async Task<List<LocalIndent>> GetPendingSyncIndentsAsync()
+    {
+        var db = await GetDbAsync();
+        return await db.Table<LocalIndent>()
+            .Where(i => i.Status == "PendingSync" && !i.IsSynced)
+            .OrderBy(i => i.SubmittedAt)
+            .ToListAsync();
+    }
+
     /// <summary>Count by status — used for Home dashboard stat cards.</summary>
     public async Task<int> CountIndentsByStatusAsync(string engineerId, string status)
     {
@@ -165,6 +176,44 @@ public class DatabaseService
     public async Task UpdateIndentAsync(LocalIndent indent)
     {
         var db = await GetDbAsync();
+        await db.UpdateAsync(indent);
+    }
+
+    public async Task MarkIndentPendingSyncAsync(string indentId)
+    {
+        var db = await GetDbAsync();
+        var indent = await GetIndentByIdAsync(indentId);
+        if (indent is null) return;
+
+        indent.Status = "PendingSync";
+        indent.SubmittedAt ??= DateTime.UtcNow;
+        indent.IsSynced = false;
+        indent.SyncErrorMessage = string.Empty;
+        await db.UpdateAsync(indent);
+    }
+
+    public async Task MarkIndentSyncedAsync(string indentId, string officialIndentNo)
+    {
+        var db = await GetDbAsync();
+        var indent = await GetIndentByIdAsync(indentId);
+        if (indent is null) return;
+
+        indent.OfficialIndentNo = officialIndentNo;
+        indent.Status = "Created";
+        indent.IsSynced = true;
+        indent.SyncErrorMessage = string.Empty;
+        await db.UpdateAsync(indent);
+    }
+
+    public async Task MarkIndentSyncErrorAsync(string indentId, string errorMessage)
+    {
+        var db = await GetDbAsync();
+        var indent = await GetIndentByIdAsync(indentId);
+        if (indent is null) return;
+
+        indent.Status = "SyncError";
+        indent.IsSynced = false;
+        indent.SyncErrorMessage = errorMessage;
         await db.UpdateAsync(indent);
     }
 
@@ -230,6 +279,27 @@ public class DatabaseService
         var db = await GetDbAsync();
         return await db.Table<LocalBusinessPartner>()
             .Where(p => p.ProjectId == projectId && p.SubcontractorPO)
+            .ToListAsync();
+    }
+
+    public async Task<List<LocalBusinessPartner>> GetSubcontractorsForProjectLocationAsync(
+        string projectId,
+        string locationCode)
+    {
+        var db = await GetDbAsync();
+        var partners = await db.Table<LocalBusinessPartner>()
+            .Where(p => p.ProjectId == projectId &&
+                        p.LocationCode == locationCode &&
+                        p.SubcontractorPO)
+            .ToListAsync();
+
+        if (partners.Count != 0)
+            return partners;
+
+        return await db.Table<LocalBusinessPartner>()
+            .Where(p => p.ProjectId == projectId &&
+                        p.SubcontractorPO &&
+                        (p.LocationCode == null || p.LocationCode == ""))
             .ToListAsync();
     }
 
@@ -397,6 +467,36 @@ public class DatabaseService
     // ─────────────────────────────────────────────────────────────────────────
 
     /// <summary>Drops and recreates all tables — used during full resync.</summary>
+    private static async Task EnsureLocalIndentSyncColumnsAsync(SQLiteAsyncConnection db)
+    {
+        await AddColumnIfMissingAsync(db, "LocalIndents", "OfficialIndentNo", "TEXT NOT NULL DEFAULT ''");
+        await AddColumnIfMissingAsync(db, "LocalIndents", "SyncErrorMessage", "TEXT NOT NULL DEFAULT ''");
+    }
+
+    private static async Task EnsureLocalBusinessPartnerColumnsAsync(SQLiteAsyncConnection db)
+    {
+        await AddColumnIfMissingAsync(db, "LocalBusinessPartners", "LocationCode", "TEXT NOT NULL DEFAULT ''");
+    }
+
+    private static async Task AddColumnIfMissingAsync(
+        SQLiteAsyncConnection db,
+        string tableName,
+        string columnName,
+        string columnDefinition)
+    {
+        var columns = await db.QueryAsync<TableColumnInfo>($"PRAGMA table_info({tableName})");
+        if (columns.Any(column => string.Equals(column.Name, columnName, StringComparison.OrdinalIgnoreCase)))
+            return;
+
+        await db.ExecuteAsync($"ALTER TABLE {tableName} ADD COLUMN {columnName} {columnDefinition}");
+    }
+
+    private sealed class TableColumnInfo
+    {
+        [Column("name")]
+        public string Name { get; set; } = string.Empty;
+    }
+
     public async Task ResetDatabaseAsync()
     {
         var db = await GetDbAsync();

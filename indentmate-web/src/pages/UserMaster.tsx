@@ -1,5 +1,5 @@
 import { Alert, Button, Form, Input, Modal, Select, Spin, message } from 'antd'
-import { Eye, EyeOff, Lock, MoreVertical, Plus, ShieldCheck, ToggleLeft, Trash2 } from 'lucide-react'
+import { Eye, EyeOff, Lock, MoreVertical, Plus, ShieldCheck, ToggleLeft } from 'lucide-react'
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
@@ -76,6 +76,7 @@ const SYSTEM_ROLES = [
   'PR Assigner (PUA)',
   'QS Engineer (QSE)',
   'Site Engineer (SIE)',
+  'Service Engineer (SER)',
   'F&A Head (AFH)',
   'Department Head (DPH)',
   'Procurement Incharge (PUI)',
@@ -350,29 +351,6 @@ export default function UserMaster() {
     }
   }
 
-  function handleDeleteUser(user: UserRow) {
-    setOpenDropdownId(null)
-    setMenuPosition(null)
-
-    Modal.confirm({
-      title: `Delete ${user.employee_name}?`,
-      content: 'This will remove this User Master assignment row. The login is removed only when no assignments remain.',
-      okText: 'Delete Record',
-      okButtonProps: { danger: true },
-      cancelText: 'Cancel',
-      async onOk() {
-        try {
-          await api.delete(`/api/users/${user.id}`)
-          setUsers((currentUsers) => currentUsers.filter((currentUser) => currentUser.id !== user.id))
-          message.success('User Master record deleted successfully')
-        } catch (requestError: any) {
-          console.error(requestError)
-          message.error(requestError.response?.data?.message ?? 'Failed to delete User Master record')
-        }
-      },
-    })
-  }
-
   async function handlePasswordSubmit(values: PasswordFormValues) {
     if (!selectedUser) {
       return
@@ -617,18 +595,6 @@ export default function UserMaster() {
                       <ShieldCheck size={18} />
                     </span>
                     Change Responsibility
-                  </button>
-                )}
-                {isAdministrator && (
-                  <button
-                    className="flex w-full items-center gap-4 px-4 py-3 text-left text-red-600 transition hover:bg-red-50"
-                    onClick={() => handleDeleteUser(user)}
-                    type="button"
-                  >
-                    <span className="grid h-9 w-9 place-items-center rounded-lg bg-red-50 text-red-500">
-                      <Trash2 size={18} />
-                    </span>
-                    Delete Record
                   </button>
                 )}
               </>

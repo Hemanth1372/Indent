@@ -53,7 +53,6 @@ public partial class DropdownField : ContentView
     public DropdownField()
     {
         InitializeComponent();
-        WidthRequest = DefaultDropdownWidth;
         MaximumWidthRequest = DefaultDropdownWidth;
         UpdateSelectedText();
     }
