@@ -45,8 +45,10 @@ CREATE TABLE IF NOT EXISTS service_orders (
   service_order_no VARCHAR(50) UNIQUE NOT NULL,
   status VARCHAR(100) NOT NULL,
   item_code VARCHAR(100) NULL,
+  item_description TEXT NULL,
   serial_number VARCHAR(100),
   project_site VARCHAR(50) NOT NULL,
+  project_description VARCHAR(255) NULL,
   description TEXT,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -67,6 +69,7 @@ CREATE TABLE IF NOT EXISTS warehouse_master (
 CREATE TABLE IF NOT EXISTS warehouse_location_master (
   id SERIAL PRIMARY KEY,
   project_code VARCHAR(50) NOT NULL,
+  project_description VARCHAR(255) NOT NULL DEFAULT '',
   warehouse_code VARCHAR(50) NOT NULL,
   warehouse_name VARCHAR(255) NOT NULL,
   location_code VARCHAR(100) NOT NULL,
@@ -95,6 +98,14 @@ CREATE TABLE IF NOT EXISTS role_master (
   id SERIAL PRIMARY KEY,
   role_name VARCHAR(150) UNIQUE NOT NULL,
   description TEXT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS business_partner_master (
+  id SERIAL PRIMARY KEY,
+  business_partner_code VARCHAR(100) UNIQUE NOT NULL,
+  business_partner_name VARCHAR(255) NOT NULL,
   created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
@@ -129,7 +140,7 @@ CREATE TABLE IF NOT EXISTS delivery_master (
 
 CREATE TABLE IF NOT EXISTS engineer_activity_master (
   id SERIAL PRIMARY KEY,
-  company VARCHAR(50) NOT NULL,
+  company VARCHAR(50) NOT NULL DEFAULT '',
   project_code VARCHAR(50) NOT NULL,
   project_description VARCHAR(255) NOT NULL,
   location_code VARCHAR(100) NOT NULL,
@@ -177,6 +188,14 @@ CREATE TABLE IF NOT EXISTS purchase_office_master (
   updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 );
 
+CREATE TABLE IF NOT EXISTS purchase_office_code_master (
+  id SERIAL PRIMARY KEY,
+  purchase_office VARCHAR(100) UNIQUE NOT NULL,
+  purchase_office_description TEXT NOT NULL,
+  created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+  updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+
 DO $$
 BEGIN
   IF NOT EXISTS (
@@ -218,6 +237,8 @@ CREATE INDEX IF NOT EXISTS idx_warehouse_location_master_location ON warehouse_l
 CREATE INDEX IF NOT EXISTS idx_responsibility_master_project_id ON responsibility_master(project_id);
 CREATE INDEX IF NOT EXISTS idx_responsibility_master_employee_id ON responsibility_master(employee_id);
 CREATE INDEX IF NOT EXISTS idx_role_master_role_name ON role_master(role_name);
+CREATE INDEX IF NOT EXISTS idx_business_partner_master_code ON business_partner_master(business_partner_code);
+CREATE INDEX IF NOT EXISTS idx_business_partner_master_name ON business_partner_master(business_partner_name);
 CREATE INDEX IF NOT EXISTS idx_bp_activity_master_project ON bp_activity_master(project_code);
 CREATE INDEX IF NOT EXISTS idx_bp_activity_master_location ON bp_activity_master(location_code);
 CREATE INDEX IF NOT EXISTS idx_bp_activity_master_bp ON bp_activity_master(business_partner_code);
@@ -230,6 +251,7 @@ CREATE INDEX IF NOT EXISTS idx_rental_order_master_project ON rental_order_maste
 CREATE INDEX IF NOT EXISTS idx_rental_order_master_status ON rental_order_master(status);
 CREATE INDEX IF NOT EXISTS idx_purchase_office_master_bp ON purchase_office_master(buy_from_business_partner);
 CREATE INDEX IF NOT EXISTS idx_purchase_office_master_office ON purchase_office_master(purchase_office);
+CREATE INDEX IF NOT EXISTS idx_purchase_office_code_master_office ON purchase_office_code_master(purchase_office);
 CREATE INDEX IF NOT EXISTS idx_indents_status ON indents(status);
 CREATE INDEX IF NOT EXISTS idx_indents_created_by ON indents(created_by);
 CREATE INDEX IF NOT EXISTS idx_indents_project_code ON indents(project_code);

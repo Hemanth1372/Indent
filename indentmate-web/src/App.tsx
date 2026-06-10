@@ -58,6 +58,10 @@ function MasterDataRoute() {
 }
 
 function titleFromSlug(value: string) {
+  if (value === 'warehouse-bin-master') {
+    return 'Warehouse Location Master'
+  }
+
   return value
     .split('-')
     .filter(Boolean)
@@ -115,6 +119,14 @@ export default function App() {
           element={
             <ProtectedRoute title="Transactions">
               <Transactions />
+            </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/transactions/:indentId"
+          element={
+            <ProtectedRoute title="Transaction Detail">
+              <IndentDetail />
             </ProtectedRoute>
           }
         />

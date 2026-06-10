@@ -32,7 +32,7 @@ export const MASTER_DEFINITIONS = {
   },
   'activity-master': {
     table: 'activity_master',
-    select: 'id, activity_code, project_code, description, activity_type, critical_capacity_type, work_auth_status, resource_required, scheduled_start_date, scheduled_finish_date, created_at, updated_at',
+    select: "id, project_code, (SELECT project_description FROM project_master WHERE project_code = activity_master.project_code LIMIT 1) AS project_description, activity_code, description, activity_type, critical_capacity_type, work_auth_status, resource_required, scheduled_start_date, scheduled_finish_date, created_at, updated_at",
     orderBy: 'project_code ASC, activity_code ASC',
     primaryKey: 'id',
     fields: ['activity_code', 'project_code', 'description', 'activity_type', 'critical_capacity_type', 'work_auth_status', 'resource_required', 'scheduled_start_date', 'scheduled_finish_date'],
@@ -59,12 +59,12 @@ export const MASTER_DEFINITIONS = {
   },
   'service-order-master': {
     table: 'service_orders',
-    select: 'id, service_order_no, status, item_code, serial_number, project_site, description, created_at, updated_at',
+    select: "id, service_order_no, project_site, COALESCE(NULLIF(project_description, ''), (SELECT project_description FROM project_master WHERE project_code = service_orders.project_site LIMIT 1)) AS project_description, item_code, COALESCE(NULLIF(item_description, ''), description) AS item_description, serial_number, status, description, created_at, updated_at",
     orderBy: 'service_order_no ASC',
     primaryKey: 'id',
-    fields: ['service_order_no', 'status', 'item_code', 'serial_number', 'project_site', 'description'],
-    required: ['service_order_no', 'status', 'project_site'],
-    searchableFields: ['service_order_no', 'status', 'item_code', 'serial_number', 'project_site', 'description'],
+    fields: ['service_order_no', 'project_site', 'project_description', 'item_code', 'item_description', 'serial_number', 'status', 'description'],
+    required: ['service_order_no', 'project_site', 'project_description', 'item_code', 'item_description', 'status'],
+    searchableFields: ['service_order_no', 'project_site', 'project_description', 'item_code', 'item_description', 'serial_number', 'status', 'description'],
   },
   'business-partner-master': {
     table: 'bp_activity_master',
@@ -74,6 +74,15 @@ export const MASTER_DEFINITIONS = {
     fields: ['project_code', 'project_description', 'location_code', 'location_description', 'activity_code', 'activity_description', 'business_partner_code', 'business_partner_name'],
     required: ['project_code', 'project_description', 'location_code', 'location_description', 'business_partner_code', 'business_partner_name'],
     searchableFields: ['project_code', 'project_description', 'location_code', 'location_description', 'activity_code', 'activity_description', 'business_partner_code', 'business_partner_name'],
+  },
+  'business-partner-code-master': {
+    table: 'business_partner_master',
+    select: 'id, business_partner_code, business_partner_name, created_at, updated_at',
+    orderBy: 'business_partner_code ASC',
+    primaryKey: 'id',
+    fields: ['business_partner_code', 'business_partner_name'],
+    required: ['business_partner_code', 'business_partner_name'],
+    searchableFields: ['business_partner_code', 'business_partner_name'],
   },
   'warehouse-master': {
     table: 'warehouse_master',
@@ -86,30 +95,30 @@ export const MASTER_DEFINITIONS = {
   },
   'warehouse-bin-master': {
     table: 'warehouse_location_master',
-    select: 'id, project_code, warehouse_code, warehouse_name, location_code, location_description, location_category, created_at, updated_at',
+    select: "id, project_code, COALESCE(NULLIF(project_description, ''), (SELECT project_description FROM project_master WHERE project_code = warehouse_location_master.project_code LIMIT 1)) AS project_description, warehouse_code, warehouse_name, location_code, location_description, location_category, created_at, updated_at",
     orderBy: 'project_code ASC, warehouse_code ASC, location_code ASC',
     primaryKey: 'id',
-    fields: ['project_code', 'warehouse_code', 'warehouse_name', 'location_code', 'location_description', 'location_category'],
-    required: ['project_code', 'warehouse_code', 'warehouse_name', 'location_code', 'location_description', 'location_category'],
-    searchableFields: ['project_code', 'warehouse_code', 'warehouse_name', 'location_code', 'location_description', 'location_category'],
+    fields: ['project_code', 'project_description', 'warehouse_code', 'warehouse_name', 'location_code', 'location_description', 'location_category'],
+    required: ['project_code', 'project_description', 'warehouse_code', 'warehouse_name', 'location_code', 'location_description', 'location_category'],
+    searchableFields: ['project_code', 'project_description', 'warehouse_code', 'warehouse_name', 'location_code', 'location_description', 'location_category'],
   },
   'delivery-point-master': {
     table: 'delivery_master',
-    select: 'id, address_code, address_description, project_code, project_description, delivery_point, description_1, created_at, updated_at',
+    select: 'id, project_code, project_description, address_code, address_description, delivery_point, description_1, created_at, updated_at',
     orderBy: 'project_code ASC, delivery_point ASC',
     primaryKey: 'id',
-    fields: ['address_code', 'address_description', 'project_code', 'project_description', 'delivery_point', 'description_1'],
+    fields: ['project_code', 'project_description', 'address_code', 'address_description', 'delivery_point', 'description_1'],
     required: ['address_code', 'address_description', 'project_code', 'project_description', 'delivery_point'],
-    searchableFields: ['address_code', 'address_description', 'project_code', 'project_description', 'delivery_point', 'description_1'],
+    searchableFields: ['project_code', 'project_description', 'address_code', 'address_description', 'delivery_point', 'description_1'],
   },
   'engineer-activity-master': {
     table: 'engineer_activity_master',
-    select: 'id, company, project_code, project_description, location_code, location_description, activity_code, activity_description, employee_id, employee_name, created_at, updated_at',
+    select: 'id, project_code, project_description, location_code, location_description, activity_code, activity_description, employee_id, employee_name, created_at, updated_at',
     orderBy: 'project_code ASC, location_code ASC, activity_code ASC, employee_id ASC',
     primaryKey: 'id',
-    fields: ['company', 'project_code', 'project_description', 'location_code', 'location_description', 'activity_code', 'activity_description', 'employee_id', 'employee_name'],
-    required: ['company', 'project_code', 'project_description', 'location_code', 'location_description', 'employee_id', 'employee_name'],
-    searchableFields: ['company', 'project_code', 'project_description', 'location_code', 'location_description', 'activity_code', 'activity_description', 'employee_id', 'employee_name'],
+    fields: ['project_code', 'project_description', 'location_code', 'location_description', 'activity_code', 'activity_description', 'employee_id', 'employee_name'],
+    required: ['project_code', 'project_description', 'location_code', 'location_description', 'employee_id', 'employee_name'],
+    searchableFields: ['project_code', 'project_description', 'location_code', 'location_description', 'activity_code', 'activity_description', 'employee_id', 'employee_name'],
   },
   'rental-order-master': {
     table: 'rental_order_master',
@@ -128,6 +137,15 @@ export const MASTER_DEFINITIONS = {
     fields: ['purchase_order', 'buy_from_business_partner', 'bp_description', 'status', 'purchase_office', 'purchase_office_description'],
     required: ['purchase_order', 'buy_from_business_partner', 'bp_description', 'status', 'purchase_office', 'purchase_office_description'],
     searchableFields: ['purchase_order', 'buy_from_business_partner', 'bp_description', 'status', 'purchase_office', 'purchase_office_description'],
+  },
+  'purchase-office-code-master': {
+    table: 'purchase_office_code_master',
+    select: 'id, purchase_office, purchase_office_description, created_at, updated_at',
+    orderBy: 'purchase_office ASC',
+    primaryKey: 'id',
+    fields: ['purchase_office', 'purchase_office_description'],
+    required: ['purchase_office', 'purchase_office_description'],
+    searchableFields: ['purchase_office', 'purchase_office_description'],
   },
 }
 
@@ -264,17 +282,21 @@ export const MASTER_IMPORT_CONFIGS = {
     orderBy: 'service_order_no ASC',
     defaults: {
       status: 'Released',
+      project_description: null,
       item_code: null,
+      item_description: null,
       serial_number: null,
       project_site: '',
       description: null,
     },
     columns: [
       { label: 'Service Order', excelHeader: 'Service Order', dbColumn: 'service_order_no', isReadOnly: true },
-      { label: 'Status', excelHeader: 'Status', dbColumn: 'status' },
+      { label: 'Project Code', excelHeader: 'Project Code', aliases: ['Project Site', 'Site'], dbColumn: 'project_site' },
+      { label: 'Project Description', excelHeader: 'Project Description', dbColumn: 'project_description', nullable: true },
       { label: 'Item Code', excelHeader: 'Item Code', dbColumn: 'item_code', nullable: true },
+      { label: 'Item Description', excelHeader: 'Item Description', dbColumn: 'item_description', nullable: true },
       { label: 'Serial Number', excelHeader: 'Serial Number', dbColumn: 'serial_number', nullable: true },
-      { label: 'Project Site', excelHeader: 'Project Site', aliases: ['Site'], dbColumn: 'project_site' },
+      { label: 'Status', excelHeader: 'Status', dbColumn: 'status' },
       { label: 'Description', excelHeader: 'Description', dbColumn: 'description', nullable: true },
     ],
   },
@@ -304,6 +326,20 @@ export const MASTER_IMPORT_CONFIGS = {
       { label: 'Business Partner Name', excelHeader: 'BP Name', dbColumn: 'business_partner_name' },
     ],
   },
+  'business-partner-code-master': {
+    tableName: 'business_partner_master',
+    lookupDbColumn: 'business_partner_code',
+    keyDbColumns: ['business_partner_code'],
+    excelLookupKey: 'Business Partner',
+    orderBy: 'business_partner_code ASC',
+    defaults: {
+      business_partner_name: '',
+    },
+    columns: [
+      { label: 'Business Partner Code', excelHeader: 'Business Partner', dbColumn: 'business_partner_code', isReadOnly: true },
+      { label: 'Business Partner Name', excelHeader: 'BP Name', dbColumn: 'business_partner_name' },
+    ],
+  },
   'warehouse-master': {
     tableName: 'warehouse_master',
     lookupDbColumn: 'warehouse_code',
@@ -320,8 +356,8 @@ export const MASTER_IMPORT_CONFIGS = {
     columns: [
       { label: 'Warehouse Code', excelHeader: 'Warehouse', dbColumn: 'warehouse_code', isReadOnly: true },
       { label: 'Warehouse Description', excelHeader: 'Warehouse Description', dbColumn: 'warehouse_description' },
-      { label: 'Site Code', excelHeader: 'Site', dbColumn: 'project_site' },
-      { label: 'Site Description', excelHeader: 'Site Description', dbColumn: 'site_description' },
+      { label: 'Project Code', excelHeader: 'Project Code', aliases: ['Site'], dbColumn: 'project_site' },
+      { label: 'Project Description', excelHeader: 'Project Description', aliases: ['Site Description'], dbColumn: 'site_description' },
       { label: 'Material Warehouse', excelHeader: 'Material Warehouse (Yes/No)', dbColumn: 'is_material_warehouse' },
       { label: 'Virtual Warehouse', excelHeader: 'Virtual Warehouse (Yes/No)', dbColumn: 'is_virtual_warehouse' },
     ],
@@ -334,6 +370,7 @@ export const MASTER_IMPORT_CONFIGS = {
     orderBy: 'project_code ASC, warehouse_code ASC, location_code ASC',
     defaults: {
       project_code: '',
+      project_description: '',
       warehouse_code: '',
       warehouse_name: '',
       location_description: '',
@@ -341,8 +378,9 @@ export const MASTER_IMPORT_CONFIGS = {
     },
     columns: [
       { label: 'Project Code', excelHeader: 'Project', dbColumn: 'project_code' },
+      { label: 'Project Description', excelHeader: 'Project Description', dbColumn: 'project_description' },
       { label: 'Warehouse Code', excelHeader: 'Warehouse', dbColumn: 'warehouse_code' },
-      { label: 'Warehouse Name', excelHeader: 'Warehouse Location', dbColumn: 'warehouse_name' },
+      { label: 'Warehouse Description', excelHeader: 'Warehouse Description', aliases: ['Warehouse Location', 'Warehouse Name'], dbColumn: 'warehouse_name' },
       { label: 'Location Code', excelHeader: 'Location', dbColumn: 'location_code', isReadOnly: true },
       { label: 'Location Description', excelHeader: 'Location Description', dbColumn: 'location_description' },
       { label: 'Location Category', excelHeader: 'Location Category', dbColumn: 'location_category' },
@@ -362,10 +400,10 @@ export const MASTER_IMPORT_CONFIGS = {
       description_1: null,
     },
     columns: [
-      { label: 'Address Code', excelHeader: 'Address Code', dbColumn: 'address_code', isReadOnly: true },
-      { label: 'Address Description', excelHeader: 'Address Code Description', dbColumn: 'address_description' },
       { label: 'Project Code', excelHeader: 'Project Code', dbColumn: 'project_code' },
       { label: 'Project Description', excelHeader: 'Project Description', dbColumn: 'project_description' },
+      { label: 'Address Code', excelHeader: 'Address Code', dbColumn: 'address_code', isReadOnly: true },
+      { label: 'Address Description', excelHeader: 'Address Code Description', dbColumn: 'address_description' },
       { label: 'Delivery Point', excelHeader: 'Delivery Point', dbColumn: 'delivery_point' },
       { label: 'Description I', excelHeader: 'Description I', dbColumn: 'description_1' },
     ],
@@ -373,7 +411,7 @@ export const MASTER_IMPORT_CONFIGS = {
   'engineer-activity-master': {
     tableName: 'engineer_activity_master',
     lookupDbColumn: 'employee_id',
-    keyDbColumns: ['company', 'project_code', 'location_code', 'activity_code', 'employee_id'],
+    keyDbColumns: ['project_code', 'location_code', 'activity_code', 'employee_id'],
     excelLookupKey: 'Employee ID',
     orderBy: 'project_code ASC, location_code ASC, activity_code ASC, employee_id ASC',
     defaults: {
@@ -381,7 +419,6 @@ export const MASTER_IMPORT_CONFIGS = {
       activity_description: null,
     },
     columns: [
-      { label: 'Company', excelHeader: 'Company', dbColumn: 'company', isReadOnly: true },
       { label: 'Project Code', excelHeader: 'Project', dbColumn: 'project_code' },
       { label: 'Project Description', excelHeader: 'Project Description', dbColumn: 'project_description' },
       { label: 'Location Code', excelHeader: 'Location', dbColumn: 'location_code' },
@@ -417,10 +454,10 @@ export const MASTER_IMPORT_CONFIGS = {
     tableName: 'purchase_office_master',
     lookupDbColumn: 'purchase_order',
     keyDbColumns: ['purchase_order'],
-    excelLookupKey: 'Order',
+    excelLookupKey: 'Purchase Order',
     orderBy: 'purchase_order ASC',
     columns: [
-      { label: 'Order', excelHeader: 'Order', dbColumn: 'purchase_order', isReadOnly: true },
+      { label: 'Purchase Order', excelHeader: 'Purchase Order', aliases: ['Order'], dbColumn: 'purchase_order', isReadOnly: true },
       { label: 'Buy-from BP', excelHeader: 'Buy-from Business Partner', dbColumn: 'buy_from_business_partner' },
       { label: 'BP Description', excelHeader: 'BP Description', dbColumn: 'bp_description' },
       { label: 'Status', excelHeader: 'Status', dbColumn: 'status' },
@@ -428,10 +465,108 @@ export const MASTER_IMPORT_CONFIGS = {
       { label: 'Purchase Office Description', excelHeader: 'Purchase Office Description', dbColumn: 'purchase_office_description' },
     ],
   },
+  'purchase-office-code-master': {
+    tableName: 'purchase_office_code_master',
+    lookupDbColumn: 'purchase_office',
+    keyDbColumns: ['purchase_office'],
+    excelLookupKey: 'Purchase Office',
+    orderBy: 'purchase_office ASC',
+    defaults: {
+      purchase_office_description: '',
+    },
+    columns: [
+      { label: 'Purchase Office', excelHeader: 'Purchase Office', dbColumn: 'purchase_office', isReadOnly: true },
+      { label: 'Purchase Office Description', excelHeader: 'Purchase Office Description', dbColumn: 'purchase_office_description' },
+    ],
+  },
 }
 
 export function getMasterDefinition(masterKey) {
   return MASTER_DEFINITIONS[masterKey]
+}
+
+function parseFilterQuery(rawFilters) {
+  if (!rawFilters) {
+    return []
+  }
+
+  try {
+    const parsedFilters = typeof rawFilters === 'string' ? JSON.parse(rawFilters) : rawFilters
+
+    if (!Array.isArray(parsedFilters)) {
+      return []
+    }
+
+    return parsedFilters
+      .map((filter) => ({
+        field: String(filter?.field ?? '').trim(),
+        value: String(filter?.value ?? '').trim(),
+      }))
+      .filter((filter) => filter.field && filter.value)
+  } catch {
+    return null
+  }
+}
+
+function buildFilterClause(filters, searchableFields, aliasMap = {}) {
+  if (!filters.length) {
+    return { whereClause: '', params: [] }
+  }
+
+  const whereConditions = []
+  const params = []
+
+  for (const filter of filters) {
+    const dbField = aliasMap[filter.field] ?? filter.field
+
+    if (!searchableFields.includes(filter.field)) {
+      const error = new Error('Invalid filter field')
+      error.statusCode = 400
+      throw error
+    }
+
+    params.push(`%${filter.value}%`)
+    whereConditions.push(`${dbField}::TEXT ILIKE $${params.length}`)
+  }
+
+  return {
+    whereClause: `WHERE ${whereConditions.join(' AND ')}`,
+    params,
+  }
+}
+
+function descriptionExpressionForFilter(definition, field) {
+  const pairings = {
+    project_code: definition.table === 'activity_master'
+      ? `(SELECT project_description FROM project_master WHERE project_code = ${definition.table}.project_code LIMIT 1)`
+      : 'project_description',
+    project_id: 'project_description',
+    project_site: 'site_description',
+    warehouse_code: definition.table === 'warehouse_location_master' ? 'warehouse_name' : 'warehouse_description',
+    location_code: definition.table === 'location_master' ? 'description' : 'location_description',
+    business_partner_code: definition.table === 'purchase_office_master' ? 'bp_description' : 'business_partner_name',
+    buy_from_business_partner: 'bp_description',
+    activity_code: definition.table === 'activity_master' ? 'description' : 'activity_description',
+    item_code: 'item_description',
+    address_code: 'address_description',
+    delivery_point: 'description_1',
+    employee_id: 'employee_name',
+    purchase_office: 'purchase_office_description',
+    rental_order: 'rental_description',
+    service_order_no: 'description',
+  }
+  const expression = pairings[field]
+
+  if (!expression) {
+    return null
+  }
+
+  const availableFields = new Set([...(definition.fields ?? []), ...(definition.searchableFields ?? [])])
+  if (expression.includes('SELECT') || availableFields.has(expression)) {
+    return expression
+  }
+
+  return null
 }
 
 export async function listMasterData(req, res, next) {
@@ -442,9 +577,14 @@ export async function listMasterData(req, res, next) {
       return res.status(404).json({ message: 'Master not found' })
     }
 
+    const parsedFilters = parseFilterQuery(req.query?.filters)
     const searchField = String(req.query?.field ?? '').trim()
     const searchValue = String(req.query?.value ?? '').trim()
     const searchableFields = definition.searchableFields ?? []
+
+    if (parsedFilters === null) {
+      return res.status(400).json({ message: 'Invalid filter payload' })
+    }
 
     if (searchField || searchValue) {
       if (!searchField || !searchValue) {
@@ -456,10 +596,14 @@ export async function listMasterData(req, res, next) {
       }
     }
 
-    const whereClause = searchField && searchValue ? `WHERE ${searchField} ILIKE $1` : ''
-    const params = searchField && searchValue ? [`%${searchValue}%`] : []
+    const activeFilters = parsedFilters.length > 0
+      ? parsedFilters
+      : searchField && searchValue
+        ? [{ field: searchField, value: searchValue }]
+        : []
+    const { whereClause, params } = buildFilterClause(activeFilters, searchableFields)
 
-    if (['role-master', 'responsibility-master', 'project-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'location-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master', 'engineer-activity-master', 'rental-order-master', 'purchase-office-master'].includes(req.params.masterKey)) {
+    if (['role-master', 'responsibility-master', 'project-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'location-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master', 'business-partner-code-master', 'engineer-activity-master', 'rental-order-master', 'purchase-office-master', 'purchase-office-code-master'].includes(req.params.masterKey)) {
       const requestedPage = Number.parseInt(String(req.query?.page ?? ''), 10)
       const requestedLimit = Number.parseInt(String(req.query?.limit ?? ''), 10)
       const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
@@ -607,6 +751,43 @@ export async function updateMasterData(req, res, next) {
   }
 }
 
+export async function listMasterFilterOptions(req, res, next) {
+  try {
+    const definition = getMasterDefinition(req.params.masterKey)
+
+    if (!definition) {
+      return res.status(404).json({ message: 'Master not found' })
+    }
+
+    const field = String(req.query?.field ?? '').trim()
+    const searchableFields = definition.searchableFields ?? []
+
+    if (!field || !searchableFields.includes(field)) {
+      return res.status(400).json({ message: 'Invalid filter field' })
+    }
+
+    const descriptionExpression = descriptionExpressionForFilter(definition, field)
+    const result = await query(
+      `
+        SELECT DISTINCT ${field}::TEXT AS value${descriptionExpression ? `, ${descriptionExpression}::TEXT AS description` : ''}
+        FROM ${definition.table}
+        WHERE ${field} IS NOT NULL AND TRIM(${field}::TEXT) <> ''
+        ORDER BY value ASC
+        LIMIT 500
+      `,
+    )
+
+    return res.json({
+      data: result.rows.map((row) => ({
+        value: row.value,
+        label: row.description && row.description !== row.value ? `${row.value} (${row.description})` : row.value,
+      })),
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
 export async function createMasterData(req, res, next) {
   try {
     const definition = getMasterDefinition(req.params.masterKey)
@@ -703,10 +884,11 @@ export async function importMasterData(req, res, next) {
       return res.status(400).json({ message: `${missingKeyColumn} must be selected for import` })
     }
 
+    const lookupColumn = importConfig.columns.find((column) => column.dbColumn === importConfig.lookupDbColumn)
     const primaryLookupValues = [
       ...new Set(
         sheetRows
-          .map((row) => normalizeCell(row[excelLookupKey]))
+          .map((row) => normalizeCell(lookupColumn ? readImportColumnValue(row, lookupColumn) : row[excelLookupKey]))
           .filter(Boolean),
       ),
     ]
@@ -738,7 +920,7 @@ export async function importMasterData(req, res, next) {
     const processedLookupValues = new Set()
 
     for (const row of sheetRows) {
-      const lookupValue = normalizeCell(row[excelLookupKey])
+      const lookupValue = normalizeCell(lookupColumn ? readImportColumnValue(row, lookupColumn) : row[excelLookupKey])
       const compositeKey = buildRowCompositeKey(row, importConfig, keyDbColumns)
 
       if (!lookupValue || !compositeKey || processedLookupValues.has(compositeKey)) {
@@ -809,6 +991,7 @@ export async function exportMasterData(req, res, next) {
   }
 
   try {
+    const parsedFilters = parseFilterQuery(req.query?.filters)
     const searchField = String(req.query?.field ?? '').trim()
     const searchValue = String(req.query?.value ?? '').trim()
     const selectedKeys = String(req.query?.selectedKeys ?? '')
@@ -816,6 +999,10 @@ export async function exportMasterData(req, res, next) {
       .map((key) => key.trim())
       .filter(Boolean)
     const searchableFields = definition.searchableFields ?? []
+
+    if (parsedFilters === null) {
+      return res.status(400).json({ message: 'Invalid filter payload' })
+    }
 
     if (selectedKeys.length === 0 && (searchField || searchValue)) {
       if (!searchField || !searchValue) {
@@ -833,9 +1020,15 @@ export async function exportMasterData(req, res, next) {
     if (selectedKeys.length > 0) {
       whereClause = `WHERE ${definition.primaryKey}::TEXT = ANY($1::text[])`
       params = [selectedKeys]
-    } else if (searchField && searchValue) {
-      whereClause = `WHERE ${searchField}::TEXT ILIKE $1`
-      params = [`%${searchValue}%`]
+    } else {
+      const activeFilters = parsedFilters.length > 0
+        ? parsedFilters
+        : searchField && searchValue
+          ? [{ field: searchField, value: searchValue }]
+          : []
+      const builtFilters = buildFilterClause(activeFilters, searchableFields)
+      whereClause = builtFilters.whereClause
+      params = builtFilters.params
     }
 
     const result = await query(
@@ -892,7 +1085,10 @@ function parseWorkbookRows(file, importConfig) {
   }
 
   const headers = new Set(Object.keys(sheetRows[0] ?? {}).map((header) => String(header).trim()))
-  if (!headers.has(importConfig.excelLookupKey)) {
+  const lookupColumn = importConfig.columns.find((column) => column.dbColumn === importConfig.lookupDbColumn)
+  const lookupHeaders = [importConfig.excelLookupKey, ...(lookupColumn?.aliases ?? [])]
+
+  if (!lookupHeaders.some((header) => headers.has(header))) {
     throwBadRequest(`Invalid template. Required column: ${importConfig.excelLookupKey}`)
   }
 

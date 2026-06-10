@@ -78,12 +78,42 @@ export async function ensureSchema() {
       service_order_no VARCHAR(50) UNIQUE NOT NULL,
       status VARCHAR(100) NOT NULL,
       item_code VARCHAR(100) NULL,
+      item_description TEXT NULL,
       serial_number VARCHAR(100),
       project_site VARCHAR(50) NOT NULL,
+      project_description VARCHAR(255) NULL,
       description TEXT,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
+  `)
+  await query('ALTER TABLE IF EXISTS service_orders ADD COLUMN IF NOT EXISTS item_description TEXT NULL')
+  await query('ALTER TABLE IF EXISTS service_orders ADD COLUMN IF NOT EXISTS project_description VARCHAR(255) NULL')
+  await query(`
+    UPDATE service_orders AS service
+    SET
+      item_description = COALESCE(NULLIF(service.item_description, ''), item.item_description, service.description),
+      updated_at = CURRENT_TIMESTAMP
+    FROM item_master AS item
+    WHERE service.project_site = item.project_site
+      AND service.item_code = item.item_code
+      AND (
+        service.item_description IS NULL
+        OR service.item_description = ''
+      )
+  `)
+  await query(`
+    UPDATE service_orders AS service
+    SET
+      project_description = project.project_description,
+      updated_at = CURRENT_TIMESTAMP
+    FROM project_master AS project
+    WHERE service.project_site = project.project_code
+      AND (
+        service.project_description IS NULL
+        OR service.project_description = ''
+        OR service.project_description IS DISTINCT FROM project.project_description
+      )
   `)
 
   await query('CREATE INDEX IF NOT EXISTS idx_service_orders_item_code ON service_orders(item_code)')
@@ -208,7 +238,15 @@ export async function ensureSchema() {
     ON location_master (project_code, location_code)
   `)
 
-  await query('DROP TABLE IF EXISTS business_partner_master CASCADE')
+  await query(`
+    CREATE TABLE IF NOT EXISTS business_partner_master (
+      id SERIAL PRIMARY KEY,
+      business_partner_code VARCHAR(100) UNIQUE NOT NULL,
+      business_partner_name VARCHAR(255) NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
 
   await query(`
     CREATE TABLE IF NOT EXISTS bp_activity_master (
@@ -225,6 +263,22 @@ export async function ensureSchema() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT unique_bp_activity_assignment UNIQUE (project_code, location_code, activity_code, business_partner_code)
     )
+  `)
+  await query(`
+    INSERT INTO business_partner_master (business_partner_code, business_partner_name)
+    SELECT DISTINCT ON (business_partner_code)
+      business_partner_code,
+      business_partner_name
+    FROM bp_activity_master
+    WHERE business_partner_code IS NOT NULL
+      AND btrim(business_partner_code) <> ''
+      AND business_partner_name IS NOT NULL
+      AND btrim(business_partner_name) <> ''
+    ORDER BY business_partner_code, business_partner_name
+    ON CONFLICT (business_partner_code) DO UPDATE
+    SET business_partner_name = EXCLUDED.business_partner_name,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE business_partner_master.business_partner_name IS DISTINCT FROM EXCLUDED.business_partner_name
   `)
 
   await query(`
@@ -252,6 +306,7 @@ export async function ensureSchema() {
     CREATE TABLE IF NOT EXISTS warehouse_location_master (
       id SERIAL PRIMARY KEY,
       project_code VARCHAR(50) NOT NULL,
+      project_description VARCHAR(255) NOT NULL DEFAULT '',
       warehouse_code VARCHAR(50) NOT NULL,
       warehouse_name VARCHAR(255) NOT NULL,
       location_code VARCHAR(100) NOT NULL,
@@ -261,6 +316,20 @@ export async function ensureSchema() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
       CONSTRAINT unique_wh_location_bin UNIQUE (warehouse_code, location_code)
     )
+  `)
+  await query("ALTER TABLE IF EXISTS warehouse_location_master ADD COLUMN IF NOT EXISTS project_description VARCHAR(255) NOT NULL DEFAULT ''")
+  await query(`
+    UPDATE warehouse_location_master AS location
+    SET
+      project_description = project.project_description,
+      updated_at = CURRENT_TIMESTAMP
+    FROM project_master AS project
+    WHERE location.project_code = project.project_code
+      AND (
+        location.project_description IS NULL
+        OR location.project_description = ''
+        OR location.project_description IS DISTINCT FROM project.project_description
+      )
   `)
 
   await query(`
@@ -281,7 +350,7 @@ export async function ensureSchema() {
   await query(`
     CREATE TABLE IF NOT EXISTS engineer_activity_master (
       id SERIAL PRIMARY KEY,
-      company VARCHAR(50) NOT NULL,
+      company VARCHAR(50) NOT NULL DEFAULT '',
       project_code VARCHAR(50) NOT NULL,
       project_description VARCHAR(255) NOT NULL,
       location_code VARCHAR(100) NOT NULL,
@@ -294,6 +363,7 @@ export async function ensureSchema() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `)
+  await query("ALTER TABLE IF EXISTS engineer_activity_master ALTER COLUMN company SET DEFAULT ''")
 
   await query(`
     CREATE UNIQUE INDEX IF NOT EXISTS unique_engineer_activity_assignment
@@ -323,6 +393,16 @@ export async function ensureSchema() {
   `)
 
   await query(`
+    CREATE TABLE IF NOT EXISTS purchase_office_code_master (
+      id SERIAL PRIMARY KEY,
+      purchase_office VARCHAR(100) UNIQUE NOT NULL,
+      purchase_office_description TEXT NOT NULL,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+    )
+  `)
+
+  await query(`
     CREATE TABLE IF NOT EXISTS purchase_office_master (
       id SERIAL PRIMARY KEY,
       purchase_order VARCHAR(50) UNIQUE NOT NULL,
@@ -335,9 +415,27 @@ export async function ensureSchema() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `)
+  await query(`
+    INSERT INTO purchase_office_code_master (purchase_office, purchase_office_description)
+    SELECT DISTINCT ON (purchase_office)
+      purchase_office,
+      purchase_office_description
+    FROM purchase_office_master
+    WHERE purchase_office IS NOT NULL
+      AND btrim(purchase_office) <> ''
+      AND purchase_office_description IS NOT NULL
+      AND btrim(purchase_office_description) <> ''
+    ORDER BY purchase_office, purchase_office_description
+    ON CONFLICT (purchase_office) DO UPDATE
+    SET purchase_office_description = EXCLUDED.purchase_office_description,
+        updated_at = CURRENT_TIMESTAMP
+    WHERE purchase_office_code_master.purchase_office_description IS DISTINCT FROM EXCLUDED.purchase_office_description
+  `)
 
   await query('CREATE INDEX IF NOT EXISTS idx_activity_master_code ON activity_master(activity_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_activity_master_project ON activity_master(project_code)')
+  await query('CREATE INDEX IF NOT EXISTS idx_business_partner_master_code ON business_partner_master(business_partner_code)')
+  await query('CREATE INDEX IF NOT EXISTS idx_business_partner_master_name ON business_partner_master(business_partner_name)')
   await query('CREATE INDEX IF NOT EXISTS idx_bp_activity_master_project ON bp_activity_master(project_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_bp_activity_master_location ON bp_activity_master(location_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_bp_activity_master_bp ON bp_activity_master(business_partner_code)')
@@ -354,6 +452,7 @@ export async function ensureSchema() {
   await query('CREATE INDEX IF NOT EXISTS idx_rental_order_master_status ON rental_order_master(status)')
   await query('CREATE INDEX IF NOT EXISTS idx_purchase_office_master_bp ON purchase_office_master(buy_from_business_partner)')
   await query('CREATE INDEX IF NOT EXISTS idx_purchase_office_master_office ON purchase_office_master(purchase_office)')
+  await query('CREATE INDEX IF NOT EXISTS idx_purchase_office_code_master_office ON purchase_office_code_master(purchase_office)')
 
   await query(`
     DO $$

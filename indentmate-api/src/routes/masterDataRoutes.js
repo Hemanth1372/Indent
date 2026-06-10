@@ -5,6 +5,7 @@ import {
   deleteMasterData,
   exportMasterData,
   importMasterData,
+  listMasterFilterOptions,
   listMasterData,
   updateMasterData,
   updateMasterStatus,
@@ -21,6 +22,7 @@ const upload = multer({
 
 masterDataRoutes.use(verifySuperAdmin)
 masterDataRoutes.get('/:masterKey/export', checkSuperAdmin, exportMasterData)
+masterDataRoutes.get('/:masterKey/filter-options', listMasterFilterOptions)
 masterDataRoutes.post('/:masterKey/import', checkSuperAdmin, upload.single('file'), importMasterData)
 masterDataRoutes.get('/:masterKey', listMasterData)
 masterDataRoutes.post('/:masterKey', createMasterData)

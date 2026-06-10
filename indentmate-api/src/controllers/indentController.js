@@ -10,6 +10,7 @@ const INDENT_SELECT_SQL = `
     h.project_code,
     pm.project_description AS project_name,
     h.source_warehouse,
+    wm.warehouse_description AS source_warehouse_name,
     h.source_location,
     h.delivery_location,
     COALESCE(dm.description_1, dm.delivery_point) AS delivery_location_name,
@@ -35,6 +36,7 @@ const INDENT_SELECT_SQL = `
   FROM indent_headers h
   LEFT JOIN users u ON u.login_name = h.created_by
   LEFT JOIN project_master pm ON pm.project_code = h.project_code
+  LEFT JOIN warehouse_master wm ON wm.warehouse_code = h.source_warehouse
   LEFT JOIN delivery_master dm ON dm.project_code = h.project_code AND dm.delivery_point = h.delivery_location
   LEFT JOIN LATERAL (
     SELECT
@@ -89,6 +91,20 @@ export async function listIndents(_req, res, next) {
   }
 }
 
+export async function getIndent(req, res, next) {
+  try {
+    const indent = await fetchIndentById(req.params.id)
+
+    if (!indent) {
+      return res.status(404).json({ message: 'Indent not found' })
+    }
+
+    return res.json({ data: indent })
+  } catch (error) {
+    return next(error)
+  }
+}
+
 export async function createIndent(req, res, next) {
   const client = await pool.connect()
 
@@ -100,6 +116,7 @@ export async function createIndent(req, res, next) {
     }
 
     const indentValues = normalizeIndentPayload(req.validated.body)
+    assertUniqueIndentItems(indentValues)
 
     await client.query('BEGIN')
     await client.query('LOCK TABLE indent_headers IN EXCLUSIVE MODE')
@@ -250,8 +267,8 @@ export async function updateIndentStatus(req, res, next) {
     const result = await client.query(
       `
         UPDATE indent_headers
-        SET status = $2,
-            approved_at = CASE WHEN $2 = 'Approved' THEN COALESCE(approved_at, CURRENT_TIMESTAMP) ELSE approved_at END,
+        SET status = $2::varchar,
+            approved_at = CASE WHEN $2::text = 'Approved' THEN COALESCE(approved_at, CURRENT_TIMESTAMP) ELSE approved_at END,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
         RETURNING id, indent_no
@@ -268,8 +285,8 @@ export async function updateIndentStatus(req, res, next) {
       `
         UPDATE indents
         SET status = CASE
-              WHEN $2 IN ('Pending', 'Approved', 'Rejected', 'Issued') THEN $2::indent_status
-              WHEN $2 IN ('Issue', 'PartiallyIssued', 'Completed') THEN 'Issued'::indent_status
+              WHEN $2::text IN ('Pending', 'Approved', 'Rejected', 'Issued') THEN ($2::text)::indent_status
+              WHEN $2::text IN ('Issue', 'PartiallyIssued', 'Completed') THEN 'Issued'::indent_status
               ELSE status
             END,
             updated_at = CURRENT_TIMESTAMP
@@ -454,6 +471,30 @@ function normalizeIndentPayload(body) {
   }
 }
 
+function assertUniqueIndentItems(indentValues) {
+  const seenItems = new Map()
+  const businessPartner = normalizeDuplicateKey(indentValues.to_entity_id)
+
+  for (const item of indentValues.items) {
+    const itemCode = normalizeDuplicateKey(item.item_code)
+    const locationCode = normalizeDuplicateKey(item.location_code)
+    const activityCode = normalizeDuplicateKey(item.activity_code)
+    const duplicateKey = [itemCode, locationCode, activityCode, businessPartner].join('|')
+
+    if (seenItems.has(duplicateKey)) {
+      const error = new Error(`Material ${item.item_code} is already there for the same location, activity, and business partner.`)
+      error.statusCode = 400
+      throw error
+    }
+
+    seenItems.set(duplicateKey, true)
+  }
+}
+
+function normalizeDuplicateKey(value) {
+  return String(value ?? '').trim().toLowerCase()
+}
+
 function inferDestinationType(body) {
   if (body.orderType) return body.orderType
   if (body.equipmentDisplay) return 'Equipment'
@@ -588,6 +629,10 @@ async function fetchIndentById(id) {
 }
 
 function handleIndentError(error, res, next) {
+  if (error.statusCode) {
+    return res.status(error.statusCode).json({ message: error.message })
+  }
+
   if (error.code === '23505') {
     return res.status(409).json({ message: 'An indent with this number already exists' })
   }

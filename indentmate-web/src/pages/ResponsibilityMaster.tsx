@@ -1,5 +1,5 @@
 import { Alert, Button, Checkbox, Dropdown, Form, Input, Modal, Select, Spin, message } from 'antd'
-import { Download, Eye, EyeOff, KeyRound, MoreVertical, Pencil, Plus, ShieldCheck, ToggleLeft, ToggleRight, Upload } from 'lucide-react'
+import { Download, Eye, EyeOff, Filter, KeyRound, MoreVertical, Pencil, Plus, ShieldCheck, ToggleLeft, ToggleRight, Upload, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
 import { useAuth } from '../context/AuthContext'
@@ -63,6 +63,16 @@ type UserListResponse = {
     currentPage: number
     limit: number
   }
+}
+
+type UserFilter = {
+  id: string
+  field: string
+  value: string
+}
+
+type FilterValueOptionsResponse = {
+  data: Array<string | { label: string; value: string }>
 }
 
 const searchFields = [
@@ -132,8 +142,11 @@ export default function ResponsibilityMaster() {
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
   const [totalRecords, setTotalRecords] = useState(0)
-  const [searchField, setSearchField] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
+  const [filterModalOpen, setFilterModalOpen] = useState(false)
+  const [draftFilters, setDraftFilters] = useState<UserFilter[]>([])
+  const [activeFilters, setActiveFilters] = useState<UserFilter[]>([])
+  const [filterValueOptions, setFilterValueOptions] = useState<Record<string, Array<{ label: string; value: string }>>>({})
+  const [filterValueOptionsLoading, setFilterValueOptionsLoading] = useState<Record<string, boolean>>({})
   const [isFilterActive, setIsFilterActive] = useState(false)
   const [importFile, setImportFile] = useState<File | null>(null)
   const [detectedHeaders, setDetectedHeaders] = useState<string[]>([])
@@ -150,21 +163,39 @@ export default function ResponsibilityMaster() {
   const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.primary_role === 'Super Admin'
 
   useEffect(() => {
-    loadUsers(isFilterActive && searchField && searchQuery.trim()
-      ? { page: currentPage, field: searchField, value: searchQuery.trim() }
-      : { page: currentPage })
+    loadUsers(isFilterActive ? filterRequestParams(currentPage) : { filters: [], page: currentPage })
   }, [currentPage])
 
-  async function loadUsers(params?: { page?: number; field?: string; value?: string }) {
+  function normalizedFilters(filters = activeFilters) {
+    return filters
+      .map((filter) => ({
+        ...filter,
+        field: filter.field.trim(),
+        value: filter.value.trim(),
+      }))
+      .filter((filter) => filter.field && filter.value)
+  }
+
+  function filterRequestParams(page?: number) {
+    const filters = normalizedFilters()
+    return filters.length > 0 ? { filters, page } : { page }
+  }
+
+  async function loadUsers(params?: { page?: number; field?: string; value?: string; filters?: UserFilter[] }) {
     setLoading(true)
     setError(null)
 
     try {
+      const filters = normalizedFilters(params?.filters)
       const { data } = await api.get<UserListResponse>('/api/responsibilities', {
         params: {
           page: params?.page ?? currentPage,
           limit: PAGE_SIZE,
-          ...(params?.field && params?.value ? { field: params.field, value: params.value } : {}),
+          ...(filters.length > 0
+            ? { filters: JSON.stringify(filters.map(({ field, value }) => ({ field, value }))) }
+            : params?.field && params?.value
+              ? { field: params.field, value: params.value }
+              : {}),
         },
       })
       setUsers(data.data)
@@ -255,27 +286,106 @@ export default function ResponsibilityMaster() {
     })
   }
 
-  async function handleSearch() {
-    const trimmedQuery = searchQuery.trim()
+  function availableFilterOptions(currentFilterId?: string) {
+    const selectedFields = new Set(
+      draftFilters
+        .filter((filter) => filter.id !== currentFilterId)
+        .map((filter) => filter.field)
+        .filter(Boolean),
+    )
 
-    if (!searchField || !trimmedQuery) {
-      message.warning('Select a filter field and enter a search value.')
+    return searchFields
+      .filter((field) => !selectedFields.has(field.value))
+      .map((field) => ({ label: field.label, value: field.value }))
+  }
+
+  async function loadFilterValueOptions(field: string) {
+    if (!field || filterValueOptions[field] || filterValueOptionsLoading[field]) {
       return
     }
 
+    setFilterValueOptionsLoading((currentLoading) => ({ ...currentLoading, [field]: true }))
+
+    try {
+      const { data } = await api.get<FilterValueOptionsResponse>('/api/responsibilities/filter-options', {
+        params: { field },
+      })
+      setFilterValueOptions((currentOptions) => ({
+        ...currentOptions,
+        [field]: data.data.map((option) => typeof option === 'string' ? { label: option, value: option } : option),
+      }))
+    } catch (requestError) {
+      console.error(requestError)
+      message.error('Could not load filter values.')
+    } finally {
+      setFilterValueOptionsLoading((currentLoading) => ({ ...currentLoading, [field]: false }))
+    }
+  }
+
+  function handleOpenFilterModal() {
+    const filters = normalizedFilters().map((filter) => ({ ...filter }))
+    setDraftFilters(filters)
+    filters.forEach((filter) => {
+      void loadFilterValueOptions(filter.field)
+    })
+    setFilterModalOpen(true)
+  }
+
+  function handleAppendDraftFilter(field?: string) {
+    if (!field) {
+      return
+    }
+
+    void loadFilterValueOptions(field)
+    setDraftFilters((currentFilters) => [
+      ...currentFilters,
+      { id: `${field}-${Date.now()}-${currentFilters.length}`, field, value: '' },
+    ])
+  }
+
+  function updateDraftFilter(id: string, patch: Partial<UserFilter>) {
+    if (patch.field) {
+      void loadFilterValueOptions(patch.field)
+    }
+
+    setDraftFilters((currentFilters) =>
+      currentFilters.map((filter) => filter.id === id ? { ...filter, ...patch } : filter),
+    )
+  }
+
+  function removeDraftFilter(id: string) {
+    setDraftFilters((currentFilters) => currentFilters.filter((filter) => filter.id !== id))
+  }
+
+  async function handleApplyFilters() {
+    const filters = normalizedFilters(draftFilters)
+
+    if (draftFilters.some((filter) => filter.field && !filter.value.trim())) {
+      message.warning('Select a value for each selected filter field.')
+      return
+    }
+
+    if (filters.length === 0) {
+      message.warning('Select at least one filter field and value.')
+      return
+    }
+
+    setActiveFilters(filters)
     setIsFilterActive(true)
     setCurrentPage(1)
+    setFilterModalOpen(false)
     clearSelectionBuffer()
-    await loadUsers({ page: 1, field: searchField, value: trimmedQuery })
+    await loadUsers({ page: 1, filters })
   }
 
   async function handleClearSearch() {
-    setSearchField('')
-    setSearchQuery('')
+    setDraftFilters([])
+    setActiveFilters([])
     setIsFilterActive(false)
+    setFilterModalOpen(false)
     setCurrentPage(1)
     clearSelectionBuffer()
-    await loadUsers({ page: 1 })
+    await loadUsers({ filters: [], page: 1 })
   }
 
   function openCreateModal() {
@@ -327,9 +437,7 @@ export default function ResponsibilityMaster() {
       setEditModalOpen(false)
       setSelectedUser(null)
       editForm.resetFields()
-      await loadUsers(isFilterActive && searchField && searchQuery.trim()
-        ? { page: currentPage, field: searchField, value: searchQuery.trim() }
-        : { page: currentPage })
+      await loadUsers(isFilterActive ? filterRequestParams(currentPage) : { filters: [], page: currentPage })
       message.success('User Master record updated successfully')
     } catch (requestError: any) {
       console.error(requestError)
@@ -371,9 +479,7 @@ export default function ResponsibilityMaster() {
       setPasswordModalOpen(false)
       setSelectedUser(null)
       passwordForm.resetFields()
-      await loadUsers(isFilterActive && searchField && searchQuery.trim()
-        ? { page: currentPage, field: searchField, value: searchQuery.trim() }
-        : { page: currentPage })
+      await loadUsers(isFilterActive ? filterRequestParams(currentPage) : { filters: [], page: currentPage })
       message.success('PIN updated successfully')
     } catch (requestError: any) {
       console.error(requestError)
@@ -454,9 +560,7 @@ export default function ResponsibilityMaster() {
       assignmentForm.resetFields()
       setEditingAssignmentId(null)
       await loadAssignments(selectedUser.employee_id)
-      await loadUsers(isFilterActive && searchField && searchQuery.trim()
-        ? { page: currentPage, field: searchField, value: searchQuery.trim() }
-        : { page: currentPage })
+      await loadUsers(isFilterActive ? filterRequestParams(currentPage) : { filters: [], page: currentPage })
     } catch (requestError: any) {
       console.error(requestError)
       message.error(requestError.response?.data?.message ?? 'Failed to save project assignment')
@@ -564,7 +668,9 @@ export default function ResponsibilityMaster() {
       const selectedKeys = Array.from(selectedRowKeys)
       const exportParams = selectedKeys.length > 0
         ? { selectedKeys: selectedKeys.join(',') }
-        : undefined
+        : isFilterActive
+          ? { filters: JSON.stringify(normalizedFilters().map(({ field, value }) => ({ field, value }))) }
+          : undefined
       const { data } = await api.get<Blob>('/api/responsibilities/export', {
         params: exportParams,
         responseType: 'blob',
@@ -608,30 +714,6 @@ export default function ResponsibilityMaster() {
           <p className="mt-1 text-sm text-slate-500">Manage user identity, login PINs, activation, and project assignments.</p>
         </div>
 
-        <div className="mt-4 flex flex-wrap items-center gap-[15px]">
-          <Select
-            allowClear
-            className="min-w-[220px]"
-            onChange={(value) => {
-              setSearchField(value ?? '')
-              setSearchQuery('')
-            }}
-            options={searchFields.map((field) => ({ label: field.label, value: field.value }))}
-            placeholder="Select Field"
-            value={searchField || undefined}
-          />
-          <Input
-            className="max-w-[360px]"
-            disabled={!searchField}
-            onChange={(event) => setSearchQuery(event.target.value)}
-            onPressEnter={handleSearch}
-            placeholder={searchFields.find((field) => field.value === searchField)?.placeholder ?? 'Select a field first...'}
-            value={searchQuery}
-          />
-          <Button onClick={handleSearch} type="primary">Search</Button>
-          {isFilterActive && <Button onClick={handleClearSearch} type="text">Clear</Button>}
-        </div>
-
         <div className="mt-4 flex items-center justify-between gap-3">
           <span className="rounded-md bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
             {totalRecords} Users
@@ -642,6 +724,15 @@ export default function ResponsibilityMaster() {
             </span>
           )}
           <div className="flex flex-wrap items-center justify-end gap-2">
+            <Button className="relative" icon={<Filter size={16} />} onClick={handleOpenFilterModal} title="Filter users">
+              Filter
+              {activeFilters.length > 0 && (
+                <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+                  {activeFilters.length}
+                </span>
+              )}
+            </Button>
+            {isFilterActive && <Button onClick={handleClearSearch} type="text">Clear</Button>}
             <input
               accept=".xlsx,.xls,.csv"
               className="hidden"
@@ -650,10 +741,10 @@ export default function ResponsibilityMaster() {
               type="file"
             />
             <Button disabled={!isSuperAdmin || importing} icon={<Upload size={16} />} loading={importing} onClick={() => fileInputRef.current?.click()}>
-              Import Assignments
+              Import
             </Button>
             <Button disabled={!isSuperAdmin || exporting} icon={<Download size={16} />} loading={exporting} onClick={handleExport}>
-              Export Assignments
+              Export
             </Button>
             <Button icon={<Plus size={16} />} onClick={openCreateModal} type="primary">
               Add User
@@ -786,6 +877,76 @@ export default function ResponsibilityMaster() {
           </div>
         </>
       )}
+
+      <Modal
+        okText="Apply Filters"
+        onCancel={() => setFilterModalOpen(false)}
+        onOk={handleApplyFilters}
+        open={filterModalOpen}
+        title="Filter Records"
+        width={680}
+      >
+        <div className="space-y-3">
+          {availableFilterOptions().length > 0 && (
+            <Select
+              className="w-full"
+              onChange={handleAppendDraftFilter}
+              options={availableFilterOptions()}
+              placeholder="Select Field"
+              value={undefined}
+            />
+          )}
+
+          {draftFilters.map((filter) => {
+            const selectedField = searchFields.find((field) => field.value === filter.field)
+
+            return (
+              <div className="grid grid-cols-[minmax(170px,0.9fr)_minmax(220px,1.25fr)_36px] items-center gap-3" key={filter.id}>
+                <Select
+                  onChange={(value) => updateDraftFilter(filter.id, { field: value, value: '' })}
+                  options={availableFilterOptions(filter.id)}
+                  placeholder="Select Field"
+                  value={filter.field || undefined}
+                />
+                <Select
+                  allowClear
+                  loading={filterValueOptionsLoading[filter.field]}
+                  onChange={(value) => updateDraftFilter(filter.id, { value: value ?? '' })}
+                  onDropdownVisibleChange={(open) => {
+                    if (open) {
+                      void loadFilterValueOptions(filter.field)
+                    }
+                  }}
+                  options={filterValueOptions[filter.field] ?? []}
+                  placeholder={selectedField?.placeholder ?? 'Select filter value'}
+                  showSearch
+                  value={filter.value || undefined}
+                />
+                <button
+                  className="grid h-9 w-9 place-items-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                  onClick={() => removeDraftFilter(filter.id)}
+                  title="Remove filter"
+                  type="button"
+                >
+                  <X size={16} />
+                </button>
+              </div>
+            )
+          })}
+
+          {draftFilters.length === 0 && (
+            <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+              Select a field to start filtering users.
+            </div>
+          )}
+
+          {isFilterActive && (
+            <Button onClick={handleClearSearch} type="text">
+              Clear all filters
+            </Button>
+          )}
+        </div>
+      </Modal>
 
       <UserModal
         confirmLoading={creating}

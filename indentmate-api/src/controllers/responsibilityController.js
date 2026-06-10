@@ -22,6 +22,49 @@ const SEARCHABLE_RESPONSIBILITY_FIELDS = {
   employee_name: 'u.employee_name',
 }
 
+function parseFilterQuery(rawFilters) {
+  if (!rawFilters) {
+    return []
+  }
+
+  try {
+    const parsedFilters = typeof rawFilters === 'string' ? JSON.parse(rawFilters) : rawFilters
+
+    if (!Array.isArray(parsedFilters)) {
+      return []
+    }
+
+    return parsedFilters
+      .map((filter) => ({
+        field: String(filter?.field ?? '').trim(),
+        value: String(filter?.value ?? '').trim(),
+      }))
+      .filter((filter) => filter.field && filter.value)
+  } catch {
+    return null
+  }
+}
+
+function buildResponsibilityFilters(filters) {
+  const whereConditions = ['COALESCE(u.is_deleted, FALSE) = FALSE']
+  const params = []
+
+  for (const filter of filters) {
+    const columnName = SEARCHABLE_RESPONSIBILITY_FIELDS[filter.field]
+
+    if (!columnName) {
+      const error = new Error('Invalid filter field')
+      error.statusCode = 400
+      throw error
+    }
+
+    params.push(`%${filter.value}%`)
+    whereConditions.push(`${columnName} ILIKE $${params.length}`)
+  }
+
+  return { whereConditions, params }
+}
+
 const RESPONSIBILITY_IMPORT_COLUMNS = [
   { label: 'Employee Id', excelHeader: 'Employee ID', dbColumn: 'employee_id', type: 'string', isReadOnly: true },
   { label: 'Employee Name', excelHeader: 'Employee Name', dbColumn: 'employee_name', type: 'string' },
@@ -442,6 +485,11 @@ export async function listResponsibilities(req, res, next) {
       : 100
     const searchField = String(req.query?.field ?? '').trim()
     const searchValue = String(req.query?.value ?? '').trim()
+    const parsedFilters = parseFilterQuery(req.query?.filters)
+
+    if (parsedFilters === null) {
+      return res.status(400).json({ message: 'Invalid filter payload' })
+    }
 
     if (searchField || searchValue) {
       if (!searchField || !searchValue) {
@@ -453,12 +501,13 @@ export async function listResponsibilities(req, res, next) {
       }
     }
 
-    const whereConditions = ['COALESCE(u.is_deleted, FALSE) = FALSE']
-    if (searchField && searchValue) {
-      whereConditions.push(`${SEARCHABLE_RESPONSIBILITY_FIELDS[searchField]} ILIKE $1`)
-    }
+    const activeFilters = parsedFilters.length > 0
+      ? parsedFilters
+      : searchField && searchValue
+        ? [{ field: searchField, value: searchValue }]
+        : []
+    const { whereConditions, params: filterParams } = buildResponsibilityFilters(activeFilters)
     const whereClause = `WHERE ${whereConditions.join(' AND ')}`
-    const filterParams = searchField && searchValue ? [`%${searchValue}%`] : []
     const countResult = await query(
       `
         SELECT COUNT(*)::int AS total
@@ -509,6 +558,44 @@ export async function listResponsibilities(req, res, next) {
         ...row,
         id: row.id === 0 ? row.employee_id : row.id,
         is_active: row.status === 'Active',
+      })),
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function listResponsibilityFilterOptions(req, res, next) {
+  try {
+    const field = String(req.query?.field ?? '').trim()
+    const columnName = SEARCHABLE_RESPONSIBILITY_FIELDS[field]
+
+    if (!columnName) {
+      return res.status(400).json({ message: 'Invalid filter field' })
+    }
+
+    const result = await query(
+      `
+        SELECT DISTINCT
+          ${columnName}::TEXT AS value,
+          CASE
+            WHEN $1 = 'employee_id' THEN u.employee_name::TEXT
+            ELSE u.login_name::TEXT
+          END AS description
+        FROM users u
+        WHERE COALESCE(u.is_deleted, FALSE) = FALSE
+          AND ${columnName} IS NOT NULL
+          AND TRIM(${columnName}::TEXT) <> ''
+        ORDER BY value ASC
+        LIMIT 500
+      `,
+      [field],
+    )
+
+    return res.json({
+      data: result.rows.map((row) => ({
+        value: row.value,
+        label: row.description && row.description !== row.value ? `${row.value} (${row.description})` : row.value,
       })),
     })
   } catch (error) {
@@ -858,6 +945,11 @@ export async function importResponsibilities(req, res, next) {
 
 export async function exportResponsibilities(req, res, next) {
   try {
+    const exportSearchFields = {
+      employee_id: 'employee_id',
+      employee_name: 'employee_name',
+    }
+    const parsedFilters = parseFilterQuery(req.query?.filters)
     const searchField = String(req.query?.field ?? '').trim()
     const searchValue = String(req.query?.value ?? '').trim()
     const selectedKeys = String(req.query?.selectedKeys ?? '')
@@ -865,12 +957,16 @@ export async function exportResponsibilities(req, res, next) {
       .map((key) => key.trim())
       .filter(Boolean)
 
+    if (parsedFilters === null) {
+      return res.status(400).json({ message: 'Invalid filter payload' })
+    }
+
     if (selectedKeys.length === 0 && (searchField || searchValue)) {
       if (!searchField || !searchValue) {
         return res.status(400).json({ message: 'Both filter field and value are required' })
       }
 
-      if (!Object.prototype.hasOwnProperty.call(SEARCHABLE_RESPONSIBILITY_FIELDS, searchField)) {
+      if (!Object.prototype.hasOwnProperty.call(exportSearchFields, searchField)) {
         return res.status(400).json({ message: 'Invalid filter field' })
       }
     }
@@ -881,9 +977,26 @@ export async function exportResponsibilities(req, res, next) {
     if (selectedKeys.length > 0) {
       whereClause = 'WHERE employee_id = ANY($1::text[]) OR id::TEXT = ANY($1::text[])'
       filterParams = [selectedKeys]
-    } else if (searchField && searchValue) {
-      whereClause = `WHERE ${SEARCHABLE_RESPONSIBILITY_FIELDS[searchField]} ILIKE $1`
-      filterParams = [`%${searchValue}%`]
+    } else {
+      const activeFilters = parsedFilters.length > 0
+        ? parsedFilters
+        : searchField && searchValue
+          ? [{ field: searchField, value: searchValue }]
+          : []
+      const whereConditions = []
+
+      for (const filter of activeFilters) {
+        const columnName = exportSearchFields[filter.field]
+
+        if (!columnName) {
+          return res.status(400).json({ message: 'Invalid filter field' })
+        }
+
+        filterParams.push(`%${filter.value}%`)
+        whereConditions.push(`${columnName} ILIKE $${filterParams.length}`)
+      }
+
+      whereClause = whereConditions.length > 0 ? `WHERE ${whereConditions.join(' AND ')}` : ''
     }
 
     const result = await query(

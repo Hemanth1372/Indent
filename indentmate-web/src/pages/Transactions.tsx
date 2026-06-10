@@ -1,11 +1,14 @@
-import { AlertCircle, ChevronDown, ChevronRight, RefreshCw } from 'lucide-react'
+import { AlertCircle, ArrowUpRight, Building2, CalendarDays, Factory, MapPin, RefreshCw, Send, Zap } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
 import { api } from '../services/api'
 
 type IndentLineItem = {
   id?: string
   line_number: number
   item_code: string
+  item_name?: string
   uom: string
   required_qty: string | number
   issued_qty: string | number
@@ -13,8 +16,18 @@ type IndentLineItem = {
 
 type IndentTransaction = {
   id: string
+  app_request_id?: string | null
   indent_no: string
   project_code: string
+  project_name?: string | null
+  source_warehouse?: string | null
+  source_warehouse_name?: string | null
+  source_location?: string | null
+  delivery_location?: string | null
+  delivery_location_name?: string | null
+  indent_type?: string | null
+  to_entity_type?: string | null
+  to_entity_id?: string | null
   status: string
   created_at: string
   items: IndentLineItem[]
@@ -38,8 +51,8 @@ const statusBadgeClasses: Record<string, string> = {
 }
 
 export default function Transactions() {
+  const navigate = useNavigate()
   const [transactions, setTransactions] = useState<IndentTransaction[]>([])
-  const [expandedId, setExpandedId] = useState<string | null>(null)
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -54,23 +67,6 @@ export default function Transactions() {
       setErrorMessage('Unable to load transactions.')
     } finally {
       setIsLoading(false)
-    }
-  }
-
-  async function handleStatusChange(id: string, newStatus: 'Approved' | 'Rejected' | 'Issued') {
-    const previousTransactions = transactions
-    setTransactions((current) =>
-      current.map((transaction) =>
-        transaction.id === id ? { ...transaction, status: newStatus } : transaction,
-      ),
-    )
-
-    try {
-      await api.patch(`/api/indents/${id}/status`, { status: newStatus })
-      setErrorMessage('')
-    } catch {
-      setTransactions(previousTransactions)
-      setErrorMessage(`Unable to update status to ${newStatus}.`)
     }
   }
 
@@ -105,43 +101,72 @@ export default function Transactions() {
 
       <div className="mt-5 overflow-hidden rounded-lg border border-slate-200 bg-white shadow-sm">
         <div className="overflow-x-auto">
-          <table className="w-full min-w-[860px] border-collapse text-left text-sm">
+          <table className="w-full min-w-[1180px] border-collapse text-left text-sm">
             <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
               <tr>
-                <th className="w-12 px-4 py-3" />
-                <th className="px-4 py-3">Indent No</th>
-                <th className="px-4 py-3">Project Code</th>
+                <th className="w-20 px-4 py-3 text-center">Open</th>
+                <th className="px-4 py-3">Request ID</th>
+                <th className="px-4 py-3">Indent</th>
+                <th className="px-4 py-3">Date</th>
+                <th className="px-4 py-3">Project</th>
+                <th className="px-4 py-3">Warehouse</th>
+                <th className="px-4 py-3">Type</th>
+                <th className="px-4 py-3">From</th>
+                <th className="px-4 py-3">To</th>
                 <th className="px-4 py-3">Status</th>
-                <th className="px-4 py-3">Created At</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-100">
               {isLoading ? (
                 <tr>
-                  <td className="px-4 py-8 text-center text-slate-500" colSpan={5}>
+                  <td className="px-4 py-8 text-center text-slate-500" colSpan={10}>
                     Loading transactions...
                   </td>
                 </tr>
               ) : transactions.length === 0 ? (
                 <tr>
-                  <td className="px-4 py-8 text-center text-slate-500" colSpan={5}>
+                  <td className="px-4 py-8 text-center text-slate-500" colSpan={10}>
                     No transactions created yet.
                   </td>
                 </tr>
               ) : (
-                transactions.map((transaction) => {
-                  const isExpanded = expandedId === transaction.id
-
-                  return (
-                    <FragmentRow
-                      isExpanded={isExpanded}
-                      key={transaction.id}
-                      onStatusChange={handleStatusChange}
-                      onToggle={() => setExpandedId(isExpanded ? null : transaction.id)}
-                      transaction={transaction}
-                    />
-                  )
-                })
+                transactions.map((transaction) => (
+                  <tr className="transition hover:bg-blue-50/50" key={transaction.id}>
+                    <td className="px-4 py-4 text-center">
+                      <button
+                        className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100"
+                        onClick={() => navigate(`/transactions/${transaction.id}`)}
+                        title={`Open ${transaction.indent_no}`}
+                        type="button"
+                      >
+                        <ArrowUpRight size={17} />
+                      </button>
+                    </td>
+                    <td className="px-4 py-4 font-mono font-bold text-emerald-700">{transaction.app_request_id || '-'}</td>
+                    <td className="px-4 py-4 font-mono font-bold text-slate-900">{transaction.indent_no}</td>
+                    <td className="px-4 py-4 text-slate-700">
+                      <MetaText icon={<CalendarDays size={14} />} value={formatShortDate(transaction.created_at)} />
+                    </td>
+                    <td className="px-4 py-4 text-slate-700">
+                      <MetaText icon={<Building2 size={14} />} value={formatWithParentheses(transaction.project_code, transaction.project_name)} />
+                    </td>
+                    <td className="px-4 py-4 text-slate-700">
+                      <MetaText icon={<Factory size={14} />} value={formatWithParentheses(transaction.source_warehouse, transaction.source_warehouse_name)} />
+                    </td>
+                    <td className="px-4 py-4 text-slate-700">
+                      <MetaText icon={<Zap size={14} />} value={transaction.indent_type || '-'} />
+                    </td>
+                    <td className="px-4 py-4 text-slate-700">
+                      <MetaText icon={<MapPin size={14} />} value={transaction.source_location || '-'} />
+                    </td>
+                    <td className="px-4 py-4 text-slate-700">
+                      <MetaText icon={<Send size={14} />} value={transaction.to_entity_id || transaction.to_entity_type || '-'} />
+                    </td>
+                    <td className="px-4 py-4">
+                      <StatusBadge status={transaction.status} />
+                    </td>
+                  </tr>
+                ))
               )}
             </tbody>
           </table>
@@ -151,81 +176,12 @@ export default function Transactions() {
   )
 }
 
-function FragmentRow({
-  isExpanded,
-  onStatusChange,
-  onToggle,
-  transaction,
-}: {
-  isExpanded: boolean
-  onStatusChange: (id: string, newStatus: 'Approved' | 'Rejected' | 'Issued') => void
-  onToggle: () => void
-  transaction: IndentTransaction
-}) {
+function MetaText({ icon, value }: { icon: ReactNode; value: string }) {
   return (
-    <>
-      <tr className="cursor-pointer transition hover:bg-blue-50/60" onClick={onToggle}>
-        <td className="px-4 py-3 text-slate-500">
-          {isExpanded ? <ChevronDown size={18} /> : <ChevronRight size={18} />}
-        </td>
-        <td className="px-4 py-3 font-mono font-bold text-slate-900">{transaction.indent_no}</td>
-        <td className="px-4 py-3 font-semibold text-slate-800">{transaction.project_code}</td>
-        <td className="px-4 py-3">
-          <StatusBadge status={transaction.status} />
-        </td>
-        <td className="px-4 py-3 text-slate-600">{formatDate(transaction.created_at)}</td>
-      </tr>
-
-      {isExpanded ? (
-        <tr>
-          <td className="bg-slate-50 px-4 py-4" colSpan={5}>
-            <div className="rounded-md border border-slate-200 bg-white">
-              <div className="flex flex-col gap-3 border-b border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
-                <p className="text-sm font-bold text-slate-800">Line Items</p>
-                <div className="flex flex-wrap gap-2">
-                  <ActionButton label="Approve" onClick={() => onStatusChange(transaction.id, 'Approved')} tone="approve" />
-                  <ActionButton label="Reject" onClick={() => onStatusChange(transaction.id, 'Rejected')} tone="reject" />
-                  <ActionButton label="Issue" onClick={() => onStatusChange(transaction.id, 'Issued')} tone="issue" />
-                </div>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[640px] border-collapse text-left text-sm">
-                  <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
-                    <tr>
-                      <th className="px-4 py-3">Line</th>
-                      <th className="px-4 py-3">Item Code</th>
-                      <th className="px-4 py-3">UOM</th>
-                      <th className="px-4 py-3">Required Qty</th>
-                      <th className="px-4 py-3">Issued Qty</th>
-                    </tr>
-                  </thead>
-                  <tbody className="divide-y divide-slate-100">
-                    {transaction.items.length === 0 ? (
-                      <tr>
-                        <td className="px-4 py-5 text-center text-slate-500" colSpan={5}>
-                          No line items found.
-                        </td>
-                      </tr>
-                    ) : (
-                      transaction.items.map((item) => (
-                        <tr key={item.id ?? `${transaction.id}-${item.line_number}`}>
-                          <td className="px-4 py-3 font-semibold text-slate-700">{item.line_number}</td>
-                          <td className="px-4 py-3 font-mono font-bold text-slate-900">{item.item_code}</td>
-                          <td className="px-4 py-3 text-slate-700">{item.uom}</td>
-                          <td className="px-4 py-3 text-slate-700">{formatQty(item.required_qty)}</td>
-                          <td className="px-4 py-3 text-slate-700">{formatQty(item.issued_qty)}</td>
-                        </tr>
-                      ))
-                    )}
-                  </tbody>
-                </table>
-              </div>
-            </div>
-          </td>
-        </tr>
-      ) : null}
-    </>
+    <span className="inline-flex min-w-0 items-center gap-2">
+      <span className="shrink-0 text-slate-400">{icon}</span>
+      <span className="truncate">{value}</span>
+    </span>
   )
 }
 
@@ -237,46 +193,21 @@ function StatusBadge({ status }: { status: string }) {
   )
 }
 
-function ActionButton({
-  label,
-  onClick,
-  tone,
-}: {
-  label: string
-  onClick: () => void
-  tone: 'approve' | 'reject' | 'issue'
-}) {
-  const toneClasses = {
-    approve: 'border-emerald-200 bg-emerald-50 text-emerald-700 hover:bg-emerald-100',
-    reject: 'border-red-200 bg-red-50 text-red-700 hover:bg-red-100',
-    issue: 'border-cyan-200 bg-cyan-50 text-cyan-700 hover:bg-cyan-100',
+function formatWithParentheses(code?: string | null, description?: string | null) {
+  const cleanCode = String(code ?? '').trim()
+  const cleanDescription = String(description ?? '').trim()
+
+  if (cleanCode && cleanDescription) {
+    return `${cleanCode} (${cleanDescription})`
   }
 
-  return (
-    <button
-      className={`h-9 rounded-md border px-3 text-sm font-bold transition ${toneClasses[tone]}`}
-      onClick={(event) => {
-        event.stopPropagation()
-        onClick()
-      }}
-      type="button"
-    >
-      {label}
-    </button>
-  )
+  return cleanCode || cleanDescription || '-'
 }
 
-function formatDate(value: string) {
+function formatShortDate(value: string) {
   return new Intl.DateTimeFormat('en-IN', {
     day: '2-digit',
-    month: 'short',
+    month: '2-digit',
     year: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
   }).format(new Date(value))
-}
-
-function formatQty(value: string | number) {
-  const parsed = typeof value === 'number' ? value : Number.parseFloat(value)
-  return Number.isFinite(parsed) ? parsed.toLocaleString('en-IN') : value
 }

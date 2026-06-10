@@ -2,6 +2,7 @@ import { Router } from 'express'
 import {
   createIndent,
   deleteIndent,
+  getIndent,
   listIndents,
   updateIndentStatus,
 } from '../controllers/indentController.js'
@@ -17,6 +18,7 @@ import {
 export const indentRoutes = Router()
 
 indentRoutes.get('/', verifySuperAdmin, listIndents)
+indentRoutes.get('/:id', verifySuperAdmin, getIndent)
 indentRoutes.post('/', verifyToken, validate(createIndentSchema), createIndent)
 indentRoutes.patch('/:id/status', verifySuperAdmin, validate(updateIndentStatusSchema), updateIndentStatus)
 indentRoutes.delete('/:id', verifySuperAdmin, validate(indentIdSchema), deleteIndent)

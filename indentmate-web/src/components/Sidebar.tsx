@@ -19,6 +19,7 @@ const mastersGroups = [
       'User Master',
       'User Project Assignment Master',
       'Role Master',
+      'Business Partner Master',
       'Business Partner Activity Master',
       'Engineer by Activity Master',
     ],
@@ -39,7 +40,8 @@ const mastersGroups = [
       'Activity Master',
       'Service Orders',
       'Rental Orders',
-      'Purchase Office',
+      'Purchase Order Master',
+      'Purchase Office Master',
     ],
   },
   {
@@ -69,8 +71,10 @@ function getMasterPath(groupKey: string, item: string) {
     'Activity Master',
     'Service Orders',
     'Rental Orders',
-    'Purchase Office',
+    'Purchase Order Master',
+    'Purchase Office Master',
     'Engineer by Activity Master',
+    'Business Partner Master',
     'Business Partner Activity Master',
     'Location Master',
     'Delivery Point Master',
@@ -92,6 +96,10 @@ function getMasterPath(groupKey: string, item: string) {
       return '/master-data/business-partner-master'
     }
 
+    if (item === 'Business Partner Master') {
+      return '/master-data/business-partner-code-master'
+    }
+
     if (item === 'Warehouse Location Master') {
       return '/master-data/warehouse-bin-master'
     }
@@ -104,8 +112,12 @@ function getMasterPath(groupKey: string, item: string) {
       return '/master-data/rental-order-master'
     }
 
-    if (item === 'Purchase Office') {
+    if (item === 'Purchase Order Master') {
       return '/master-data/purchase-office-master'
+    }
+
+    if (item === 'Purchase Office Master') {
+      return '/master-data/purchase-office-code-master'
     }
 
     if (item === 'Engineer by Activity Master') {
@@ -150,8 +162,18 @@ export default function Sidebar({ open }: SidebarProps) {
         open ? 'translate-x-0' : '-translate-x-full'
       }`}
     >
-      <div className="px-8 pb-7 pt-20">
-        <h1 className="text-lg font-bold tracking-tight text-white">NCC Indent</h1>
+      <div className="px-8 pb-7 pt-16">
+        <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 shadow-[0_16px_38px_rgba(0,0,0,0.18)]">
+          <div className="flex items-center gap-3">
+            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[#35c4a1] text-base font-black tracking-[-0.08em] text-[#12304a] shadow-lg shadow-emerald-950/25">
+              NCC
+            </div>
+            <div>
+              <h1 className="text-xl font-black tracking-tight text-white">NCC Indent</h1>
+              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#8ee2ce]">Control Desk</p>
+            </div>
+          </div>
+        </div>
         <div className="mt-5 flex gap-3">
           <Link
             className="grid h-10 w-10 place-items-center rounded-lg bg-white/10 text-slate-200 transition hover:bg-white/15"
@@ -259,7 +281,7 @@ export default function Sidebar({ open }: SidebarProps) {
       </nav>
 
       <div className="border-t border-white/5 px-24 py-4 text-[11px] text-slate-400">
-        v1.0.0 - NCC IT TEAM
+        v1.0.0 - NCC TEAM
       </div>
     </aside>
   )

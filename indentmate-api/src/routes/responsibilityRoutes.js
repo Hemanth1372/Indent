@@ -10,6 +10,7 @@ import {
   exportResponsibilities,
   importResponsibilities,
   listResponsibilities,
+  listResponsibilityFilterOptions,
   listResponsibilityOptions,
   listUserProjectAssignments,
   updateResponsibility,
@@ -44,6 +45,7 @@ responsibilityRoutes.use(verifySuperAdmin)
 responsibilityRoutes.get('/export', checkSuperAdmin, exportResponsibilities)
 responsibilityRoutes.post('/import', checkSuperAdmin, upload.single('file'), importResponsibilities)
 responsibilityRoutes.get('/options', listResponsibilityOptions)
+responsibilityRoutes.get('/filter-options', listResponsibilityFilterOptions)
 responsibilityRoutes.post('/users', checkSuperAdmin, validate(createUserMasterSchema), createUserMaster)
 responsibilityRoutes.put('/users/:employeeId', checkSuperAdmin, validate(updateUserMasterSchema), updateUserMaster)
 responsibilityRoutes.patch('/users/:employeeId/toggle-status', checkSuperAdmin, validate(updateUserMasterStatusSchema), updateUserMasterStatus)

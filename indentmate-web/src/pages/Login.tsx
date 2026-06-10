@@ -1,6 +1,7 @@
 import { KeyRound, Lock, LogIn, User } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
 import { useNavigate } from 'react-router-dom'
+import headerLogo from '../assets/header-logo.png'
 import { useAuth } from '../context/AuthContext'
 
 export default function Login() {
@@ -112,11 +113,9 @@ export default function Login() {
     <main className="login-page">
       <section className="login-panel">
         <div className="login-brand">
-          <span className="brand-mark">IM</span>
-          <div>
-            <h1>IndentMate Admin</h1>
-            <p>{resetMode ? 'Change admin password' : 'Sign in to continue'}</p>
-          </div>
+          <img alt="NCC Limited" className="ncc-logo" src={headerLogo} />
+          <h1>Indent</h1>
+          {resetMode && <p>Change admin password</p>}
         </div>
 
         <form className="login-form" onSubmit={resetMode ? handleForgotPasswordSubmit : handleSubmit}>
@@ -194,6 +193,7 @@ export default function Login() {
           </button>
         </form>
       </section>
+      <footer className="login-footer">v1.0.0 • NCC Team</footer>
     </main>
   )
 }

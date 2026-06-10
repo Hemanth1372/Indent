@@ -1,5 +1,5 @@
 import { Alert, Button, Checkbox, Dropdown, Form, Input, Modal, Select, Spin, Switch, message } from 'antd'
-import { Download, MoreVertical, Pencil, Plus, Upload } from 'lucide-react'
+import { Download, Filter, MoreVertical, Pencil, Plus, Upload, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { useParams } from 'react-router-dom'
 import * as XLSX from 'xlsx'
@@ -96,10 +96,12 @@ const MASTER_IMPORT_METADATA: Record<string, MasterImportMetadata> = {
     excelLookupKey: 'Service Order',
     columns: [
       { label: 'Service Order', excelHeader: 'Service Order', dbColumn: 'service_order_no', isReadOnly: true },
-      { label: 'Status', excelHeader: 'Status', dbColumn: 'status' },
+      { label: 'Project Code', excelHeader: 'Project Code', aliases: ['Project Site', 'Site'], dbColumn: 'project_site' },
+      { label: 'Project Description', excelHeader: 'Project Description', dbColumn: 'project_description' },
       { label: 'Item Code', excelHeader: 'Item Code', dbColumn: 'item_code' },
+      { label: 'Item Description', excelHeader: 'Item Description', dbColumn: 'item_description' },
       { label: 'Serial Number', excelHeader: 'Serial Number', dbColumn: 'serial_number' },
-      { label: 'Project Site', excelHeader: 'Project Site', aliases: ['Site'], dbColumn: 'project_site' },
+      { label: 'Status', excelHeader: 'Status', dbColumn: 'status' },
       { label: 'Description', excelHeader: 'Description', dbColumn: 'description' },
     ],
   },
@@ -116,13 +118,20 @@ const MASTER_IMPORT_METADATA: Record<string, MasterImportMetadata> = {
       { label: 'Business Partner Name', excelHeader: 'BP Name', dbColumn: 'business_partner_name' },
     ],
   },
+  'business-partner-code-master': {
+    excelLookupKey: 'Business Partner',
+    columns: [
+      { label: 'Business Partner Code', excelHeader: 'Business Partner', dbColumn: 'business_partner_code', isReadOnly: true },
+      { label: 'Business Partner Name', excelHeader: 'BP Name', dbColumn: 'business_partner_name' },
+    ],
+  },
   'warehouse-master': {
     excelLookupKey: 'Warehouse',
     columns: [
       { label: 'Warehouse Code', excelHeader: 'Warehouse', dbColumn: 'warehouse_code', isReadOnly: true },
       { label: 'Warehouse Description', excelHeader: 'Warehouse Description', dbColumn: 'warehouse_description' },
-      { label: 'Site Code', excelHeader: 'Site', dbColumn: 'project_site' },
-      { label: 'Site Description', excelHeader: 'Site Description', dbColumn: 'site_description' },
+      { label: 'Project Code', excelHeader: 'Project Code', aliases: ['Site'], dbColumn: 'project_site' },
+      { label: 'Project Description', excelHeader: 'Project Description', aliases: ['Site Description'], dbColumn: 'site_description' },
       { label: 'Material Warehouse', excelHeader: 'Material Warehouse (Yes/No)', dbColumn: 'is_material_warehouse' },
       { label: 'Virtual Warehouse', excelHeader: 'Virtual Warehouse (Yes/No)', dbColumn: 'is_virtual_warehouse' },
     ],
@@ -131,8 +140,9 @@ const MASTER_IMPORT_METADATA: Record<string, MasterImportMetadata> = {
     excelLookupKey: 'Location',
     columns: [
       { label: 'Project Code', excelHeader: 'Project', dbColumn: 'project_code' },
+      { label: 'Project Description', excelHeader: 'Project Description', dbColumn: 'project_description' },
       { label: 'Warehouse Code', excelHeader: 'Warehouse', dbColumn: 'warehouse_code' },
-      { label: 'Warehouse Name', excelHeader: 'Warehouse Location', dbColumn: 'warehouse_name' },
+      { label: 'Warehouse Description', excelHeader: 'Warehouse Description', aliases: ['Warehouse Location', 'Warehouse Name'], dbColumn: 'warehouse_name' },
       { label: 'Location Code', excelHeader: 'Location', dbColumn: 'location_code', isReadOnly: true },
       { label: 'Location Description', excelHeader: 'Location Description', dbColumn: 'location_description' },
       { label: 'Location Category', excelHeader: 'Location Category', dbColumn: 'location_category' },
@@ -141,10 +151,10 @@ const MASTER_IMPORT_METADATA: Record<string, MasterImportMetadata> = {
   'delivery-point-master': {
     excelLookupKey: 'Address Code',
     columns: [
-      { label: 'Address Code', excelHeader: 'Address Code', dbColumn: 'address_code', isReadOnly: true },
-      { label: 'Address Description', excelHeader: 'Address Code Description', dbColumn: 'address_description' },
       { label: 'Project Code', excelHeader: 'Project Code', dbColumn: 'project_code' },
       { label: 'Project Description', excelHeader: 'Project Description', dbColumn: 'project_description' },
+      { label: 'Address Code', excelHeader: 'Address Code', dbColumn: 'address_code', isReadOnly: true },
+      { label: 'Address Description', excelHeader: 'Address Code Description', dbColumn: 'address_description' },
       { label: 'Delivery Point', excelHeader: 'Delivery Point', dbColumn: 'delivery_point' },
       { label: 'Description I', excelHeader: 'Description I', dbColumn: 'description_1' },
     ],
@@ -152,7 +162,6 @@ const MASTER_IMPORT_METADATA: Record<string, MasterImportMetadata> = {
   'engineer-activity-master': {
     excelLookupKey: 'Employee ID',
     columns: [
-      { label: 'Company', excelHeader: 'Company', dbColumn: 'company', isReadOnly: true },
       { label: 'Project Code', excelHeader: 'Project', dbColumn: 'project_code' },
       { label: 'Project Description', excelHeader: 'Project Description', dbColumn: 'project_description' },
       { label: 'Location Code', excelHeader: 'Location', dbColumn: 'location_code' },
@@ -177,13 +186,20 @@ const MASTER_IMPORT_METADATA: Record<string, MasterImportMetadata> = {
     ],
   },
   'purchase-office-master': {
-    excelLookupKey: 'Order',
+    excelLookupKey: 'Purchase Order',
     columns: [
-      { label: 'Order', excelHeader: 'Order', dbColumn: 'purchase_order', isReadOnly: true },
+      { label: 'Purchase Order', excelHeader: 'Purchase Order', aliases: ['Order'], dbColumn: 'purchase_order', isReadOnly: true },
       { label: 'Buy-from BP', excelHeader: 'Buy-from Business Partner', dbColumn: 'buy_from_business_partner' },
       { label: 'BP Description', excelHeader: 'BP Description', dbColumn: 'bp_description' },
       { label: 'Status', excelHeader: 'Status', dbColumn: 'status' },
       { label: 'Purchase Office', excelHeader: 'Purchase Office', dbColumn: 'purchase_office' },
+      { label: 'Purchase Office Description', excelHeader: 'Purchase Office Description', dbColumn: 'purchase_office_description' },
+    ],
+  },
+  'purchase-office-code-master': {
+    excelLookupKey: 'Purchase Office',
+    columns: [
+      { label: 'Purchase Office', excelHeader: 'Purchase Office', dbColumn: 'purchase_office', isReadOnly: true },
       { label: 'Purchase Office Description', excelHeader: 'Purchase Office Description', dbColumn: 'purchase_office_description' },
     ],
   },
@@ -283,8 +299,18 @@ const masterConfigs: Record<string, MasterConfig> = {
       { key: 'project_code', label: 'Project Code', required: true },
       { key: 'project_description', label: 'Project Description', required: true },
       { key: 'dpr_engineer_control', label: 'Dpr Engineer Control', required: true },
-      { key: 'multi_location_activity', label: 'Multi Location Activity', required: true },
-      { key: 'project_location_linked_activities', label: 'Project Location Linked to Activities', required: true },
+      {
+        key: 'multi_location_activity',
+        label: 'Multi Location Activity',
+        required: true,
+        options: [{ label: 'Yes', value: 'YES' }, { label: 'No', value: 'NO' }],
+      },
+      {
+        key: 'project_location_linked_activities',
+        label: 'Project Location Linked to Activities',
+        required: true,
+        options: [{ label: 'Yes', value: 'YES' }, { label: 'No', value: 'NO' }],
+      },
     ],
     columns: [
       { key: 'project_code', label: 'Project Code' },
@@ -306,8 +332,8 @@ const masterConfigs: Record<string, MasterConfig> = {
     subtitle: 'Enterprise task schedules, critical dependencies, and resource tracking',
     countLabel: 'Records',
     fields: [
-      { key: 'activity_code', label: 'Activity Code', required: true },
       { key: 'project_code', label: 'Project Code', required: true },
+      { key: 'activity_code', label: 'Activity Code', required: true },
       { key: 'description', label: 'Description', required: true, type: 'textarea' },
       { key: 'activity_type', label: 'Activity Type', required: true },
       { key: 'critical_capacity_type', label: 'Critical Capacity Type', required: true },
@@ -317,8 +343,9 @@ const masterConfigs: Record<string, MasterConfig> = {
       { key: 'scheduled_finish_date', label: 'Scheduled Finish Date', type: 'datetime' },
     ],
     columns: [
-      { key: 'activity_code', label: 'Activity Code' },
       { key: 'project_code', label: 'Project Code' },
+      { key: 'project_description', label: 'Project Description' },
+      { key: 'activity_code', label: 'Activity Code' },
       { key: 'description', label: 'Description' },
       { key: 'activity_type', label: 'Activity Type' },
       { key: 'critical_capacity_type', label: 'Critical Capacity' },
@@ -365,8 +392,8 @@ const masterConfigs: Record<string, MasterConfig> = {
     subtitle: 'Enterprise inventory ledger, material catalogs, and stock counts per site',
     countLabel: 'Records',
     fields: [
-      { key: 'project_site', label: 'Site Code', required: true },
-      { key: 'site_description', label: 'Site Description', required: true },
+      { key: 'project_site', label: 'Project Code', required: true },
+      { key: 'site_description', label: 'Project Description', required: true },
       { key: 'warehouse_code', label: 'Warehouse Code' },
       { key: 'warehouse_description', label: 'Warehouse Description' },
       { key: 'on_hand_qty', label: 'On Hand Qty', type: 'number' },
@@ -376,10 +403,10 @@ const masterConfigs: Record<string, MasterConfig> = {
       { key: 'item_type', label: 'Item Type', required: true },
     ],
     columns: [
-      { key: 'project_site', label: 'Site' },
-      { key: 'site_description', label: 'Site Description' },
+      { key: 'project_site', label: 'Project Code' },
+      { key: 'site_description', label: 'Project Description' },
       { key: 'warehouse_code', label: 'Warehouse Code' },
-      { key: 'warehouse_description', label: 'Warehouse Desc' },
+      { key: 'warehouse_description', label: 'Warehouse Description' },
       { key: 'on_hand_qty', label: 'On Hand Qty', type: 'number' },
       { key: 'item_code', label: 'Item Code' },
       { key: 'item_description', label: 'Item Description' },
@@ -387,8 +414,8 @@ const masterConfigs: Record<string, MasterConfig> = {
       { key: 'item_type', label: 'Item Type' },
     ],
     searchFields: [
-      { label: 'Site Code', value: 'project_site', placeholder: 'Enter Site Code (e.g. EODBHS001)...' },
-      { label: 'Site Description', value: 'site_description', placeholder: 'Enter Site Description...' },
+      { label: 'Project Code', value: 'project_site', placeholder: 'Enter Project Code (e.g. EODBHS001)...' },
+      { label: 'Project Description', value: 'site_description', placeholder: 'Enter Project Description...' },
       { label: 'Warehouse Code', value: 'warehouse_code', placeholder: 'Enter Warehouse Code (e.g. B80039)...' },
       { label: 'Item Code', value: 'item_code', placeholder: 'Enter Item Code (e.g. 1113131)...' },
       { label: 'Item Description', value: 'item_description', placeholder: 'Enter Item Description...' },
@@ -404,27 +431,31 @@ const masterConfigs: Record<string, MasterConfig> = {
     editModalTitle: 'Edit Service Order Master',
     fields: [
       { key: 'service_order_no', label: 'Service Order', required: true },
-      { key: 'status', label: 'Status', required: true },
-      { key: 'item_code', label: 'Item Code' },
+      { key: 'project_site', label: 'Project Code', required: true },
+      { key: 'project_description', label: 'Project Description', required: true },
+      { key: 'item_code', label: 'Item Code', required: true },
+      { key: 'item_description', label: 'Item Description', required: true, type: 'textarea' },
       { key: 'serial_number', label: 'Serial Number' },
-      { key: 'project_site', label: 'Project Site', required: true },
+      { key: 'status', label: 'Status', required: true },
       { key: 'description', label: 'Description', type: 'textarea' },
     ],
     columns: [
       { key: 'service_order_no', label: 'Service Order' },
-      { key: 'status', label: 'Status' },
+      { key: 'project_site', label: 'Project Code' },
+      { key: 'project_description', label: 'Project Description' },
       { key: 'item_code', label: 'Item Code' },
+      { key: 'item_description', label: 'Item Description', minWidth: '220px' },
       { key: 'serial_number', label: 'Serial Number' },
-      { key: 'project_site', label: 'Project Site' },
-      { key: 'description', label: 'Description', minWidth: '220px' },
+      { key: 'status', label: 'Status' },
     ],
     searchFields: [
       { label: 'Service Order', value: 'service_order_no', placeholder: 'Enter Service Order (e.g. BDSR00001)...' },
-      { label: 'Status', value: 'status', placeholder: 'Enter Status (e.g. Released)...' },
+      { label: 'Project Code', value: 'project_site', placeholder: 'Enter Project Code (e.g. EODBHS001)...' },
+      { label: 'Project Description', value: 'project_description', placeholder: 'Enter Project Description...' },
       { label: 'Item Code', value: 'item_code', placeholder: 'Enter Item Code...' },
+      { label: 'Item Description', value: 'item_description', placeholder: 'Enter Item Description...' },
       { label: 'Serial Number', value: 'serial_number', placeholder: 'Enter Serial Number...' },
-      { label: 'Project Site', value: 'project_site', placeholder: 'Enter Project Site (e.g. EODBHS001)...' },
-      { label: 'Description', value: 'description', placeholder: 'Enter Description...' },
+      { label: 'Status', value: 'status', placeholder: 'Enter Status (e.g. Released)...' },
     ],
   },
   'business-partner-master': {
@@ -446,6 +477,7 @@ const masterConfigs: Record<string, MasterConfig> = {
     ],
     columns: [
       { key: 'project_code', label: 'Project Code' },
+      { key: 'project_description', label: 'Project Description' },
       { key: 'location_code', label: 'Location Code' },
       { key: 'location_description', label: 'Location Description' },
       { key: 'activity_code', label: 'Activity Code' },
@@ -462,6 +494,26 @@ const masterConfigs: Record<string, MasterConfig> = {
       { label: 'Business Partner Name', value: 'business_partner_name', placeholder: 'Enter Business Partner Name...' },
     ],
   },
+  'business-partner-code-master': {
+    title: 'Business Partner Master',
+    subtitle: 'Business partner code and name catalog used by BP activity assignments',
+    countLabel: 'Partners',
+    addButtonLabel: 'Add Business Partner',
+    addModalTitle: 'Add Business Partner',
+    editModalTitle: 'Edit Business Partner',
+    fields: [
+      { key: 'business_partner_code', label: 'Business Partner Code', required: true },
+      { key: 'business_partner_name', label: 'Business Partner Name', required: true },
+    ],
+    columns: [
+      { key: 'business_partner_code', label: 'Business Partner Code' },
+      { key: 'business_partner_name', label: 'Business Partner Name', minWidth: '240px' },
+    ],
+    searchFields: [
+      { label: 'Business Partner Code', value: 'business_partner_code', placeholder: 'Enter Business Partner Code...' },
+      { label: 'Business Partner Name', value: 'business_partner_name', placeholder: 'Enter Business Partner Name...' },
+    ],
+  },
   'warehouse-master': {
     title: 'Warehouse Master',
     subtitle: 'Corporate storage facilities, material yards, and virtual site boundaries',
@@ -469,24 +521,24 @@ const masterConfigs: Record<string, MasterConfig> = {
     fields: [
       { key: 'warehouse_code', label: 'Warehouse Code', required: true },
       { key: 'warehouse_description', label: 'Warehouse Description', required: true },
-      { key: 'project_site', label: 'Site Code', required: true },
-      { key: 'site_description', label: 'Site Description', required: true },
+      { key: 'project_site', label: 'Project Code', required: true },
+      { key: 'site_description', label: 'Project Description', required: true },
       { key: 'is_material_warehouse', label: 'Material Warehouse', required: true, type: 'checkboxText' },
       { key: 'is_virtual_warehouse', label: 'Virtual Warehouse', required: true, type: 'checkboxText' },
     ],
     columns: [
       { key: 'warehouse_code', label: 'Warehouse Code' },
       { key: 'warehouse_description', label: 'Warehouse Description' },
-      { key: 'project_site', label: 'Site Code' },
-      { key: 'site_description', label: 'Site Description' },
+      { key: 'project_site', label: 'Project Code' },
+      { key: 'site_description', label: 'Project Description' },
       { key: 'is_material_warehouse', label: 'Material Warehouse', type: 'checkboxText' },
       { key: 'is_virtual_warehouse', label: 'Virtual Warehouse', type: 'checkboxText' },
     ],
     searchFields: [
       { label: 'Warehouse Code', value: 'warehouse_code', placeholder: 'Enter Warehouse Code (e.g. B80002)...' },
       { label: 'Warehouse Description', value: 'warehouse_description', placeholder: 'Enter Warehouse Description...' },
-      { label: 'Site Code', value: 'project_site', placeholder: 'Enter Site Code (e.g. NHRBGB001)...' },
-      { label: 'Site Description', value: 'site_description', placeholder: 'Enter Site Description...' },
+      { label: 'Project Code', value: 'project_site', placeholder: 'Enter Project Code (e.g. NHRBGB001)...' },
+      { label: 'Project Description', value: 'site_description', placeholder: 'Enter Project Description...' },
     ],
   },
   'warehouse-bin-master': {
@@ -495,34 +547,27 @@ const masterConfigs: Record<string, MasterConfig> = {
     countLabel: 'Records',
     fields: [
       { key: 'project_code', label: 'Project Code', required: true },
+      { key: 'project_description', label: 'Project Description', required: true },
       { key: 'warehouse_code', label: 'Warehouse Code', required: true },
-      { key: 'warehouse_name', label: 'Warehouse Name', required: true },
+      { key: 'warehouse_name', label: 'Warehouse Description', required: true },
       { key: 'location_code', label: 'Location Code', required: true },
       { key: 'location_description', label: 'Location Description', required: true, type: 'textarea' },
-      {
-        key: 'location_category',
-        label: 'Location Category',
-        required: true,
-        options: [
-          { label: 'Storage', value: 'Storage' },
-          { label: 'Consumption', value: 'Consumption' },
-          { label: 'Subcon/Prw', value: 'Subcon/Prw' },
-          { label: 'Employee', value: 'Employee' },
-        ],
-      },
+      { key: 'location_category', label: 'Location Category', required: true },
     ],
     columns: [
       { key: 'project_code', label: 'Project Code' },
+      { key: 'project_description', label: 'Project Description' },
       { key: 'warehouse_code', label: 'Warehouse Code' },
-      { key: 'warehouse_name', label: 'Warehouse Name' },
+      { key: 'warehouse_name', label: 'Warehouse Description' },
       { key: 'location_code', label: 'Location Code' },
       { key: 'location_description', label: 'Location Description' },
       { key: 'location_category', label: 'Category' },
     ],
     searchFields: [
       { label: 'Project Code', value: 'project_code', placeholder: 'Enter Project Code (e.g. NUPEDS014)...' },
+      { label: 'Project Description', value: 'project_description', placeholder: 'Enter Project Description...' },
       { label: 'Warehouse Code', value: 'warehouse_code', placeholder: 'Enter Warehouse Code (e.g. E8V001)...' },
-      { label: 'Warehouse Name', value: 'warehouse_name', placeholder: 'Enter Warehouse Name...' },
+      { label: 'Warehouse Description', value: 'warehouse_name', placeholder: 'Enter Warehouse Description...' },
       { label: 'Location Code', value: 'location_code', placeholder: 'Enter Location Code (e.g. SC0000101)...' },
       { label: 'Location Category', value: 'location_category', placeholder: 'Enter Location Category (Storage, Consumption, Subcon/Prw, Employee)...' },
     ],
@@ -532,26 +577,26 @@ const masterConfigs: Record<string, MasterConfig> = {
     subtitle: 'Enterprise site delivery points, logistics coordinates, and project addresses',
     countLabel: 'Records',
     fields: [
-      { key: 'address_code', label: 'Address Code', required: true },
-      { key: 'address_description', label: 'Address Description', required: true, type: 'textarea' },
       { key: 'project_code', label: 'Project Code', required: true },
       { key: 'project_description', label: 'Project Description', required: true },
+      { key: 'address_code', label: 'Address Code', required: true },
+      { key: 'address_description', label: 'Address Description', required: true, type: 'textarea' },
       { key: 'delivery_point', label: 'Delivery Point', required: true },
       { key: 'description_1', label: 'Description I', type: 'textarea' },
     ],
     columns: [
-      { key: 'address_code', label: 'Address Code' },
-      { key: 'address_description', label: 'Address Description' },
       { key: 'project_code', label: 'Project Code' },
       { key: 'project_description', label: 'Project Description' },
+      { key: 'address_code', label: 'Address Code' },
+      { key: 'address_description', label: 'Address Description' },
       { key: 'delivery_point', label: 'Delivery Point' },
       { key: 'description_1', label: 'Description I' },
     ],
     searchFields: [
-      { label: 'Address Code', value: 'address_code', placeholder: 'Enter Address Code (e.g. AD0000072)...' },
-      { label: 'Address Description', value: 'address_description', placeholder: 'Enter Address Description...' },
       { label: 'Project Code', value: 'project_code', placeholder: 'Enter Project Code (e.g. NHRBGB001)...' },
       { label: 'Project Description', value: 'project_description', placeholder: 'Enter Project Description...' },
+      { label: 'Address Code', value: 'address_code', placeholder: 'Enter Address Code (e.g. AD0000072)...' },
+      { label: 'Address Description', value: 'address_description', placeholder: 'Enter Address Description...' },
       { label: 'Delivery Point', value: 'delivery_point', placeholder: 'Enter Delivery Point (e.g. 0148)...' },
       { label: 'Description I', value: 'description_1', placeholder: 'Enter Description I...' },
     ],
@@ -564,7 +609,6 @@ const masterConfigs: Record<string, MasterConfig> = {
     addModalTitle: 'Add Engineer Assignment',
     editModalTitle: 'Edit Engineer Assignment',
     fields: [
-      { key: 'company', label: 'Company', required: true },
       { key: 'project_code', label: 'Project Code', required: true },
       { key: 'project_description', label: 'Project Description', required: true },
       { key: 'location_code', label: 'Location Code', required: true },
@@ -575,8 +619,8 @@ const masterConfigs: Record<string, MasterConfig> = {
       { key: 'employee_name', label: 'Employee Name', required: true },
     ],
     columns: [
-      { key: 'company', label: 'Company' },
       { key: 'project_code', label: 'Project Code' },
+      { key: 'project_description', label: 'Project Description' },
       { key: 'location_code', label: 'Location Code' },
       { key: 'location_description', label: 'Location Description' },
       { key: 'activity_code', label: 'Activity Code' },
@@ -585,7 +629,6 @@ const masterConfigs: Record<string, MasterConfig> = {
       { key: 'employee_name', label: 'Employee Name' },
     ],
     searchFields: [
-      { label: 'Company', value: 'company', placeholder: 'Enter Company...' },
       { label: 'Project Code', value: 'project_code', placeholder: 'Enter Project Code...' },
       { label: 'Project Description', value: 'project_description', placeholder: 'Enter Project Description...' },
       { label: 'Location Code', value: 'location_code', placeholder: 'Enter Location Code...' },
@@ -633,33 +676,53 @@ const masterConfigs: Record<string, MasterConfig> = {
     ],
   },
   'purchase-office-master': {
-    title: 'Purchase Office Master',
+    title: 'Purchase Order Master',
     subtitle: 'Purchase order office ownership and buy-from business partner details',
     countLabel: 'Records',
-    addButtonLabel: 'Add Purchase Office',
-    addModalTitle: 'Add Purchase Office',
-    editModalTitle: 'Edit Purchase Office',
+    addButtonLabel: 'Add Purchase Order',
+    addModalTitle: 'Add Purchase Order',
+    editModalTitle: 'Edit Purchase Order',
     fields: [
-      { key: 'purchase_order', label: 'Order', required: true },
-      { key: 'buy_from_business_partner', label: 'Buy-from Business Partner', required: true },
+      { key: 'purchase_order', label: 'Purchase Order', required: true },
+      { key: 'buy_from_business_partner', label: 'BP Code', required: true },
       { key: 'bp_description', label: 'BP Description', required: true, type: 'textarea' },
       { key: 'status', label: 'Status', required: true },
       { key: 'purchase_office', label: 'Purchase Office', required: true },
       { key: 'purchase_office_description', label: 'Purchase Office Description', required: true, type: 'textarea' },
     ],
     columns: [
-      { key: 'purchase_order', label: 'Order' },
-      { key: 'buy_from_business_partner', label: 'Buy-from BP' },
+      { key: 'purchase_order', label: 'Purchase Order' },
+      { key: 'buy_from_business_partner', label: 'BP Code' },
       { key: 'bp_description', label: 'BP Description' },
       { key: 'status', label: 'Status' },
       { key: 'purchase_office', label: 'Purchase Office' },
       { key: 'purchase_office_description', label: 'Purchase Office Description' },
     ],
     searchFields: [
-      { label: 'Order', value: 'purchase_order', placeholder: 'Enter Order...' },
-      { label: 'Buy-from BP', value: 'buy_from_business_partner', placeholder: 'Enter Buy-from Business Partner...' },
+      { label: 'Purchase Order', value: 'purchase_order', placeholder: 'Enter Purchase Order...' },
+      { label: 'BP Code', value: 'buy_from_business_partner', placeholder: 'Enter BP Code...' },
       { label: 'BP Description', value: 'bp_description', placeholder: 'Enter BP Description...' },
       { label: 'Status', value: 'status', placeholder: 'Enter Status...' },
+      { label: 'Purchase Office', value: 'purchase_office', placeholder: 'Enter Purchase Office...' },
+      { label: 'Purchase Office Description', value: 'purchase_office_description', placeholder: 'Enter Purchase Office Description...' },
+    ],
+  },
+  'purchase-office-code-master': {
+    title: 'Purchase Office Master',
+    subtitle: 'Purchase office code and description catalog used by purchase orders',
+    countLabel: 'Purchase Offices',
+    addButtonLabel: 'Add Purchase Office',
+    addModalTitle: 'Add Purchase Office',
+    editModalTitle: 'Edit Purchase Office',
+    fields: [
+      { key: 'purchase_office', label: 'Purchase Office', required: true },
+      { key: 'purchase_office_description', label: 'Purchase Office Description', required: true, type: 'textarea' },
+    ],
+    columns: [
+      { key: 'purchase_office', label: 'Purchase Office' },
+      { key: 'purchase_office_description', label: 'Purchase Office Description', minWidth: '260px' },
+    ],
+    searchFields: [
       { label: 'Purchase Office', value: 'purchase_office', placeholder: 'Enter Purchase Office...' },
       { label: 'Purchase Office Description', value: 'purchase_office_description', placeholder: 'Enter Purchase Office Description...' },
     ],
@@ -671,6 +734,39 @@ type MasterRecord = Record<string, unknown>
 type ProjectOption = {
   code: string
   description: string
+}
+
+type LocationOption = {
+  project_code: string
+  project_name: string
+  location_code: string
+  description: string
+}
+
+type BusinessPartnerOption = {
+  business_partner_code: string
+  business_partner_name: string
+}
+
+type ItemOption = {
+  project_site: string
+  site_description: string
+  item_code: string
+  item_description: string
+  purchase_unit: string
+  item_type: string
+}
+
+type PurchaseOfficeOption = {
+  purchase_office: string
+  purchase_office_description: string
+}
+
+type WarehouseOption = {
+  warehouse_code: string
+  warehouse_description: string
+  project_site: string
+  site_description: string
 }
 
 type UserOption = {
@@ -693,13 +789,24 @@ type MasterListResponse = {
   }
 }
 
+type FilterValueOptionsResponse = {
+  data: Array<string | { label: string; value: string }>
+}
+
 const PROJECT_CODE_FIELD_KEYS = ['project_code', 'project_id', 'project_site']
 const PROJECT_DESCRIPTION_FIELD_KEYS = ['project_description', 'project_name', 'site_description']
 
 type LoadParams = {
   field?: string
   value?: string
+  filters?: MasterFilter[]
   page?: number
+}
+
+type MasterFilter = {
+  id: string
+  field: string
+  value: string
 }
 
 type ProjectSyncSummary = {
@@ -818,7 +925,7 @@ function isFlagField(field: MasterField) {
 }
 
 function supportsInlineEdit(masterKey: string) {
-  return ['responsibility-master', 'role-master', 'project-master', 'location-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master', 'engineer-activity-master', 'rental-order-master', 'purchase-office-master'].includes(masterKey)
+  return ['responsibility-master', 'role-master', 'project-master', 'location-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master', 'business-partner-code-master', 'engineer-activity-master', 'rental-order-master', 'purchase-office-master', 'purchase-office-code-master'].includes(masterKey)
 }
 
 function toDateInputValue(value: unknown) {
@@ -847,7 +954,7 @@ function toDateInputValue(value: unknown) {
 }
 
 function isPaginatedMaster(masterKey: string) {
-  return ['responsibility-master', 'role-master', 'project-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'location-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master', 'engineer-activity-master', 'rental-order-master', 'purchase-office-master'].includes(masterKey)
+  return ['responsibility-master', 'role-master', 'project-master', 'activity-master', 'item-master', 'service-order-master', 'delivery-point-master', 'location-master', 'warehouse-master', 'warehouse-bin-master', 'business-partner-master', 'business-partner-code-master', 'engineer-activity-master', 'rental-order-master', 'purchase-office-master', 'purchase-office-code-master'].includes(masterKey)
 }
 
 function normalizeFormPayload(values: MasterRecord, fields: MasterField[]) {
@@ -929,6 +1036,26 @@ export default function GenericMasterPage() {
   const [records, setRecords] = useState<MasterRecord[]>([])
   const [projectOptions, setProjectOptions] = useState<ProjectOption[]>([])
   const [projectOptionsLoading, setProjectOptionsLoading] = useState(false)
+  const [locationOptions, setLocationOptions] = useState<LocationOption[]>([])
+  const [locationOptionsLoading, setLocationOptionsLoading] = useState(false)
+  const [businessPartnerOptions, setBusinessPartnerOptions] = useState<BusinessPartnerOption[]>([])
+  const [businessPartnerOptionsLoading, setBusinessPartnerOptionsLoading] = useState(false)
+  const [itemOptions, setItemOptions] = useState<ItemOption[]>([])
+  const [itemOptionsLoading, setItemOptionsLoading] = useState(false)
+  const [serviceStatusOptions, setServiceStatusOptions] = useState<Array<{ label: string; value: string }>>([])
+  const [serviceStatusOptionsLoading, setServiceStatusOptionsLoading] = useState(false)
+  const [serviceSerialByItemCode, setServiceSerialByItemCode] = useState<Record<string, string>>({})
+  const [rentalStatusOptions, setRentalStatusOptions] = useState<Array<{ label: string; value: string }>>([])
+  const [rentalStatusOptionsLoading, setRentalStatusOptionsLoading] = useState(false)
+  const [activityAuthStatusOptions, setActivityAuthStatusOptions] = useState<Array<{ label: string; value: string }>>([])
+  const [activityResourceRequiredOptions, setActivityResourceRequiredOptions] = useState<Array<{ label: string; value: string }>>([])
+  const [activityOptionValuesLoading, setActivityOptionValuesLoading] = useState(false)
+  const [purchaseOfficeOptions, setPurchaseOfficeOptions] = useState<PurchaseOfficeOption[]>([])
+  const [purchaseOfficeOptionsLoading, setPurchaseOfficeOptionsLoading] = useState(false)
+  const [purchaseOrderStatusOptions, setPurchaseOrderStatusOptions] = useState<Array<{ label: string; value: string }>>([])
+  const [purchaseOrderStatusOptionsLoading, setPurchaseOrderStatusOptionsLoading] = useState(false)
+  const [warehouseOptions, setWarehouseOptions] = useState<WarehouseOption[]>([])
+  const [warehouseOptionsLoading, setWarehouseOptionsLoading] = useState(false)
   const [userOptions, setUserOptions] = useState<UserOption[]>([])
   const [userOptionsLoading, setUserOptionsLoading] = useState(false)
   const [roleOptions, setRoleOptions] = useState<RoleOption[]>([])
@@ -969,8 +1096,11 @@ export default function GenericMasterPage() {
   const [isEditModalOpen, setIsEditModalOpen] = useState(false)
   const [selectedLocationId, setSelectedLocationId] = useState<string | number | null>(null)
   const [error, setError] = useState<string | null>(null)
-  const [searchField, setSearchField] = useState('')
-  const [searchQuery, setSearchQuery] = useState('')
+  const [filterModalOpen, setFilterModalOpen] = useState(false)
+  const [draftFilters, setDraftFilters] = useState<MasterFilter[]>([])
+  const [activeFilters, setActiveFilters] = useState<MasterFilter[]>([])
+  const [filterValueOptions, setFilterValueOptions] = useState<Record<string, Array<{ label: string; value: string }>>>({})
+  const [filterValueOptionsLoading, setFilterValueOptionsLoading] = useState<Record<string, boolean>>({})
   const [isFilterActive, setIsFilterActive] = useState(false)
   const [currentPage, setCurrentPage] = useState(1)
   const [totalPages, setTotalPages] = useState(1)
@@ -999,6 +1129,94 @@ export default function GenericMasterPage() {
       value: project.description,
     })),
     [projectOptions],
+  )
+  const locationCodeSelectOptions = useMemo(
+    () => locationOptions.map((location) => ({
+      label: location.description ? `${location.location_code} - ${location.description}` : location.location_code,
+      value: location.location_code,
+    })),
+    [locationOptions],
+  )
+  const locationDescriptionSelectOptions = useMemo(
+    () => locationOptions.map((location) => ({
+      label: location.location_code ? `${location.description} - ${location.location_code}` : location.description,
+      value: location.description,
+    })),
+    [locationOptions],
+  )
+  const businessPartnerCodeSelectOptions = useMemo(
+    () => businessPartnerOptions.map((partner) => ({
+      label: partner.business_partner_name
+        ? `${partner.business_partner_code} - ${partner.business_partner_name}`
+        : partner.business_partner_code,
+      value: partner.business_partner_code,
+    })),
+    [businessPartnerOptions],
+  )
+  const businessPartnerNameSelectOptions = useMemo(
+    () => businessPartnerOptions.map((partner) => ({
+      label: partner.business_partner_code
+        ? `${partner.business_partner_name} - ${partner.business_partner_code}`
+        : partner.business_partner_name,
+      value: partner.business_partner_name,
+    })),
+    [businessPartnerOptions],
+  )
+  const itemCodeSelectOptions = useMemo(
+    () => itemOptions.map((item) => ({
+      label: item.item_description ? `${item.item_code} - ${item.item_description}` : item.item_code,
+      value: item.item_code,
+    })),
+    [itemOptions],
+  )
+  const itemDescriptionSelectOptions = useMemo(
+    () => itemOptions.map((item) => ({
+      label: item.item_code ? `${item.item_description} - ${item.item_code}` : item.item_description,
+      value: item.item_description,
+    })),
+    [itemOptions],
+  )
+  const purchaseOfficeCodeSelectOptions = useMemo(
+    () => purchaseOfficeOptions.map((office) => ({
+      label: office.purchase_office_description
+        ? `${office.purchase_office} - ${office.purchase_office_description}`
+        : office.purchase_office,
+      value: office.purchase_office,
+    })),
+    [purchaseOfficeOptions],
+  )
+  const purchaseOfficeDescriptionSelectOptions = useMemo(
+    () => purchaseOfficeOptions.map((office) => ({
+      label: office.purchase_office
+        ? `${office.purchase_office_description} - ${office.purchase_office}`
+        : office.purchase_office_description,
+      value: office.purchase_office_description,
+    })),
+    [purchaseOfficeOptions],
+  )
+  const warehouseCodeSelectOptions = useMemo(
+    () => warehouseOptions.map((warehouse) => ({
+      label: warehouse.warehouse_description
+        ? `${warehouse.warehouse_code} - ${warehouse.warehouse_description}`
+        : warehouse.warehouse_code,
+      value: warehouse.warehouse_code,
+    })),
+    [warehouseOptions],
+  )
+  const warehouseDescriptionSelectOptions = useMemo(
+    () => warehouseOptions.map((warehouse) => ({
+      label: warehouse.warehouse_code
+        ? `${warehouse.warehouse_description} - ${warehouse.warehouse_code}`
+        : warehouse.warehouse_description,
+      value: warehouse.warehouse_description,
+    })),
+    [warehouseOptions],
+  )
+  const purchaseUnitSelectOptions = useMemo(
+    () => [...new Set(itemOptions.map((item) => String(item.purchase_unit ?? '').trim()).filter(Boolean))]
+      .sort((left, right) => left.localeCompare(right))
+      .map((value) => ({ label: value, value })),
+    [itemOptions],
   )
   const userSelectOptions = useMemo(
     () => userOptions.map((user) => ({
@@ -1035,6 +1253,294 @@ export default function GenericMasterPage() {
       message.error('Could not load project options')
     } finally {
       setProjectOptionsLoading(false)
+    }
+  }
+
+  async function loadLocationOptions(projectCode?: string) {
+    const normalizedProjectCode = String(projectCode ?? '').trim()
+
+    if (!normalizedProjectCode) {
+      setLocationOptions([])
+      return
+    }
+
+    setLocationOptionsLoading(true)
+
+    try {
+      const { data } = await api.get<{ data: MasterRecord[] }>('/api/locations/options', {
+        params: { projectCode: normalizedProjectCode },
+      })
+      const options = data.data
+        .map((location) => ({
+          project_code: String(location.project_code ?? '').trim(),
+          project_name: String(location.project_name ?? '').trim(),
+          location_code: String(location.location_code ?? '').trim(),
+          description: String(location.description ?? '').trim(),
+        }))
+        .filter((location) => location.location_code || location.description)
+
+      setLocationOptions(options)
+    } catch (requestError) {
+      console.error(requestError)
+      message.error('Could not load location options')
+    } finally {
+      setLocationOptionsLoading(false)
+    }
+  }
+
+  async function loadBusinessPartnerOptions() {
+    setBusinessPartnerOptionsLoading(true)
+
+    try {
+      const { data } = await api.get<{ data: MasterRecord[] }>('/api/business-partners/options')
+      const options = data.data
+        .map((partner) => ({
+          business_partner_code: String(partner.business_partner_code ?? '').trim(),
+          business_partner_name: String(partner.business_partner_name ?? '').trim(),
+        }))
+        .filter((partner) => partner.business_partner_code || partner.business_partner_name)
+
+      setBusinessPartnerOptions(options)
+    } catch (requestError) {
+      console.error(requestError)
+      message.error('Could not load business partner options')
+    } finally {
+      setBusinessPartnerOptionsLoading(false)
+    }
+  }
+
+  async function loadItemOptions() {
+    setItemOptionsLoading(true)
+
+    try {
+      const firstPage = await api.get<MasterListResponse>('/api/master-data/item-master', {
+        params: { page: 1, limit: 500 },
+      })
+      const allRows = [...firstPage.data.data]
+      const totalPages = firstPage.data.metadata?.totalPages ?? 1
+
+      for (let page = 2; page <= totalPages; page += 1) {
+        const { data } = await api.get<MasterListResponse>('/api/master-data/item-master', {
+          params: { page, limit: 500 },
+        })
+        allRows.push(...data.data)
+      }
+
+      const options = allRows
+        .map((item) => ({
+          project_site: String(item.project_site ?? '').trim(),
+          site_description: String(item.site_description ?? '').trim(),
+          item_code: String(item.item_code ?? '').trim(),
+          item_description: String(item.item_description ?? '').trim(),
+          purchase_unit: String(item.purchase_unit ?? '').trim(),
+          item_type: String(item.item_type ?? '').trim(),
+        }))
+        .filter((item) => item.item_code || item.item_description)
+
+      setItemOptions(options)
+    } catch (requestError) {
+      console.error(requestError)
+      message.error('Could not load item options')
+    } finally {
+      setItemOptionsLoading(false)
+    }
+  }
+
+  async function loadServiceStatusOptions() {
+    setServiceStatusOptionsLoading(true)
+
+    try {
+      const firstPage = await api.get<MasterListResponse>('/api/master-data/service-order-master', {
+        params: { page: 1, limit: 500 },
+      })
+      const allRows = [...firstPage.data.data]
+      const totalPages = firstPage.data.metadata?.totalPages ?? 1
+
+      for (let page = 2; page <= totalPages; page += 1) {
+        const { data } = await api.get<MasterListResponse>('/api/master-data/service-order-master', {
+          params: { page, limit: 500 },
+        })
+        allRows.push(...data.data)
+      }
+
+      const values = [...new Set(
+        allRows
+          .map((record) => String(record.status ?? '').trim())
+          .filter(Boolean),
+      )].sort((left, right) => left.localeCompare(right))
+      const serialByItem = Object.fromEntries(
+        allRows
+          .map((record) => [
+            String(record.item_code ?? '').trim(),
+            String(record.serial_number ?? '').trim(),
+          ])
+          .filter(([itemCode, serialNumber]) => itemCode && serialNumber),
+      )
+
+      setServiceStatusOptions(values.map((value) => ({ label: value, value })))
+      setServiceSerialByItemCode(serialByItem)
+    } catch (requestError) {
+      console.error(requestError)
+      message.error('Could not load service status options')
+    } finally {
+      setServiceStatusOptionsLoading(false)
+    }
+  }
+
+  async function loadActivityOptionValues() {
+    setActivityOptionValuesLoading(true)
+
+    try {
+      const firstPage = await api.get<MasterListResponse>('/api/master-data/activity-master', {
+        params: { page: 1, limit: 500 },
+      })
+      const allRows = [...firstPage.data.data]
+      const totalPages = firstPage.data.metadata?.totalPages ?? 1
+
+      for (let page = 2; page <= totalPages; page += 1) {
+        const { data } = await api.get<MasterListResponse>('/api/master-data/activity-master', {
+          params: { page, limit: 500 },
+        })
+        allRows.push(...data.data)
+      }
+
+      const toOptions = (key: string) => [...new Set(
+        allRows
+          .map((record) => String(record[key] ?? '').trim())
+          .filter(Boolean),
+      )]
+        .sort((left, right) => left.localeCompare(right))
+        .map((value) => ({ label: value, value }))
+
+      setActivityAuthStatusOptions(toOptions('work_auth_status'))
+      setActivityResourceRequiredOptions(toOptions('resource_required'))
+    } catch (requestError) {
+      console.error(requestError)
+      message.error('Could not load activity dropdown options')
+    } finally {
+      setActivityOptionValuesLoading(false)
+    }
+  }
+
+  async function loadRentalStatusOptions() {
+    setRentalStatusOptionsLoading(true)
+
+    try {
+      const firstPage = await api.get<MasterListResponse>('/api/master-data/rental-order-master', {
+        params: { page: 1, limit: 500 },
+      })
+      const allRows = [...firstPage.data.data]
+      const totalPages = firstPage.data.metadata?.totalPages ?? 1
+
+      for (let page = 2; page <= totalPages; page += 1) {
+        const { data } = await api.get<MasterListResponse>('/api/master-data/rental-order-master', {
+          params: { page, limit: 500 },
+        })
+        allRows.push(...data.data)
+      }
+
+      const values = [...new Set(
+        allRows
+          .map((record) => String(record.status ?? '').trim())
+          .filter(Boolean),
+      )].sort((left, right) => left.localeCompare(right))
+
+      setRentalStatusOptions(values.map((value) => ({ label: value, value })))
+    } catch (requestError) {
+      console.error(requestError)
+      message.error('Could not load rental status options')
+    } finally {
+      setRentalStatusOptionsLoading(false)
+    }
+  }
+
+  async function loadPurchaseOfficeOptions() {
+    setPurchaseOfficeOptionsLoading(true)
+
+    try {
+      const { data } = await api.get<MasterListResponse>('/api/master-data/purchase-office-code-master', {
+        params: { page: 1, limit: 500 },
+      })
+      const options = data.data
+        .map((office) => ({
+          purchase_office: String(office.purchase_office ?? '').trim(),
+          purchase_office_description: String(office.purchase_office_description ?? '').trim(),
+        }))
+        .filter((office) => office.purchase_office || office.purchase_office_description)
+
+      setPurchaseOfficeOptions(options)
+    } catch (requestError) {
+      console.error(requestError)
+      message.error('Could not load purchase office options')
+    } finally {
+      setPurchaseOfficeOptionsLoading(false)
+    }
+  }
+
+  async function loadPurchaseOrderStatusOptions() {
+    setPurchaseOrderStatusOptionsLoading(true)
+
+    try {
+      const firstPage = await api.get<MasterListResponse>('/api/master-data/purchase-office-master', {
+        params: { page: 1, limit: 500 },
+      })
+      const allRows = [...firstPage.data.data]
+      const totalPages = firstPage.data.metadata?.totalPages ?? 1
+
+      for (let page = 2; page <= totalPages; page += 1) {
+        const { data } = await api.get<MasterListResponse>('/api/master-data/purchase-office-master', {
+          params: { page, limit: 500 },
+        })
+        allRows.push(...data.data)
+      }
+
+      const values = [...new Set(
+        allRows
+          .map((record) => String(record.status ?? '').trim())
+          .filter(Boolean),
+      )].sort((left, right) => left.localeCompare(right))
+
+      setPurchaseOrderStatusOptions(values.map((value) => ({ label: value, value })))
+    } catch (requestError) {
+      console.error(requestError)
+      message.error('Could not load purchase order status options')
+    } finally {
+      setPurchaseOrderStatusOptionsLoading(false)
+    }
+  }
+
+  async function loadWarehouseOptions() {
+    setWarehouseOptionsLoading(true)
+
+    try {
+      const firstPage = await api.get<MasterListResponse>('/api/master-data/warehouse-master', {
+        params: { page: 1, limit: 500 },
+      })
+      const allRows = [...firstPage.data.data]
+      const totalPages = firstPage.data.metadata?.totalPages ?? 1
+
+      for (let page = 2; page <= totalPages; page += 1) {
+        const { data } = await api.get<MasterListResponse>('/api/master-data/warehouse-master', {
+          params: { page, limit: 500 },
+        })
+        allRows.push(...data.data)
+      }
+
+      const options = allRows
+        .map((warehouse) => ({
+          warehouse_code: String(warehouse.warehouse_code ?? '').trim(),
+          warehouse_description: String(warehouse.warehouse_description ?? '').trim(),
+          project_site: String(warehouse.project_site ?? '').trim(),
+          site_description: String(warehouse.site_description ?? '').trim(),
+        }))
+        .filter((warehouse) => warehouse.warehouse_code || warehouse.warehouse_description)
+
+      setWarehouseOptions(options)
+    } catch (requestError) {
+      console.error(requestError)
+      message.error('Could not load warehouse options')
+    } finally {
+      setWarehouseOptionsLoading(false)
     }
   }
 
@@ -1103,8 +1609,22 @@ export default function GenericMasterPage() {
         targetForm.setFieldValue(codeFieldKey, undefined)
       }
 
+      if (masterKey === 'business-partner-master') {
+        targetForm.setFieldValue('location_code', undefined)
+        targetForm.setFieldValue('location_description', undefined)
+        setLocationOptions([])
+      }
+
+      if (masterKey === 'engineer-activity-master') {
+        targetForm.setFieldValue('location_code', undefined)
+        targetForm.setFieldValue('location_description', undefined)
+        setLocationOptions([])
+      }
+
       return
     }
+
+    let nextProjectCode = isProjectCodeField(field) ? value : undefined
 
     if (isProjectCodeField(field) && descriptionFieldKey) {
       const selectedProject = projectOptions.find((project) => project.code === value)
@@ -1119,6 +1639,362 @@ export default function GenericMasterPage() {
 
       if (selectedProject?.code) {
         targetForm.setFieldValue(codeFieldKey, selectedProject.code)
+        nextProjectCode = selectedProject.code
+      }
+    }
+
+    if (masterKey === 'business-partner-master') {
+      targetForm.setFieldValue('location_code', undefined)
+      targetForm.setFieldValue('location_description', undefined)
+      void loadLocationOptions(nextProjectCode ?? String(targetForm.getFieldValue('project_code') ?? '').trim())
+    }
+
+    if (masterKey === 'engineer-activity-master') {
+      targetForm.setFieldValue('location_code', undefined)
+      targetForm.setFieldValue('location_description', undefined)
+      void loadLocationOptions(nextProjectCode ?? String(targetForm.getFieldValue('project_code') ?? '').trim())
+    }
+  }
+
+  function handleLocationFieldChange(targetForm: ReturnType<typeof Form.useForm>[0], field: MasterField, value?: string) {
+    targetForm.setFieldValue(field.key, value)
+
+    if (!value) {
+      if (field.key === 'location_code') {
+        targetForm.setFieldValue('location_description', undefined)
+      }
+
+      if (field.key === 'location_description') {
+        targetForm.setFieldValue('location_code', undefined)
+      }
+
+      return
+    }
+
+    if (field.key === 'location_code') {
+      const selectedLocation = locationOptions.find((location) => location.location_code === value)
+
+      if (selectedLocation?.description) {
+        targetForm.setFieldValue('location_description', selectedLocation.description)
+      }
+    }
+
+    if (field.key === 'location_description') {
+      const selectedLocation = locationOptions.find((location) => location.description === value)
+
+      if (selectedLocation?.location_code) {
+        targetForm.setFieldValue('location_code', selectedLocation.location_code)
+      }
+    }
+  }
+
+  function ensureBusinessPartnerLocationOptions(targetForm: ReturnType<typeof Form.useForm>[0]) {
+    const projectCode = String(targetForm.getFieldValue('project_code') ?? '').trim()
+
+    if (projectCode) {
+      void loadLocationOptions(projectCode)
+    }
+  }
+
+  function handleEngineerLocationFieldChange(targetForm: ReturnType<typeof Form.useForm>[0], field: MasterField, value?: string) {
+    handleLocationFieldChange(targetForm, field, value)
+  }
+
+  function ensureEngineerLocationOptions(targetForm: ReturnType<typeof Form.useForm>[0]) {
+    const projectCode = String(targetForm.getFieldValue('project_code') ?? '').trim()
+
+    if (projectCode) {
+      void loadLocationOptions(projectCode)
+    }
+  }
+
+  function handleBusinessPartnerFieldChange(targetForm: ReturnType<typeof Form.useForm>[0], field: MasterField, value?: string) {
+    targetForm.setFieldValue(field.key, value)
+
+    if (!value) {
+      if (field.key === 'business_partner_code') {
+        targetForm.setFieldValue('business_partner_name', undefined)
+      }
+
+      if (field.key === 'business_partner_name') {
+        targetForm.setFieldValue('business_partner_code', undefined)
+      }
+
+      return
+    }
+
+    if (field.key === 'business_partner_code') {
+      const selectedPartner = businessPartnerOptions.find((partner) => partner.business_partner_code === value)
+
+      if (selectedPartner?.business_partner_name) {
+        targetForm.setFieldValue('business_partner_name', selectedPartner.business_partner_name)
+      }
+    }
+
+    if (field.key === 'business_partner_name') {
+      const selectedPartner = businessPartnerOptions.find((partner) => partner.business_partner_name === value)
+
+      if (selectedPartner?.business_partner_code) {
+        targetForm.setFieldValue('business_partner_code', selectedPartner.business_partner_code)
+      }
+    }
+  }
+
+  function handlePurchaseOrderBpFieldChange(targetForm: ReturnType<typeof Form.useForm>[0], field: MasterField, value?: string) {
+    targetForm.setFieldValue(field.key, value)
+
+    if (!value) {
+      if (field.key === 'buy_from_business_partner') {
+        targetForm.setFieldValue('bp_description', undefined)
+      }
+
+      if (field.key === 'bp_description') {
+        targetForm.setFieldValue('buy_from_business_partner', undefined)
+      }
+
+      return
+    }
+
+    if (field.key === 'buy_from_business_partner') {
+      const selectedPartner = businessPartnerOptions.find((partner) => partner.business_partner_code === value)
+
+      if (selectedPartner?.business_partner_name) {
+        targetForm.setFieldValue('bp_description', selectedPartner.business_partner_name)
+      }
+    }
+
+    if (field.key === 'bp_description') {
+      const selectedPartner = businessPartnerOptions.find((partner) => partner.business_partner_name === value)
+
+      if (selectedPartner?.business_partner_code) {
+        targetForm.setFieldValue('buy_from_business_partner', selectedPartner.business_partner_code)
+      }
+    }
+  }
+
+  function handlePurchaseOfficeFieldChange(targetForm: ReturnType<typeof Form.useForm>[0], field: MasterField, value?: string) {
+    targetForm.setFieldValue(field.key, value)
+
+    if (!value) {
+      if (field.key === 'purchase_office') {
+        targetForm.setFieldValue('purchase_office_description', undefined)
+      }
+
+      if (field.key === 'purchase_office_description') {
+        targetForm.setFieldValue('purchase_office', undefined)
+      }
+
+      return
+    }
+
+    if (field.key === 'purchase_office') {
+      const selectedOffice = purchaseOfficeOptions.find((office) => office.purchase_office === value)
+
+      if (selectedOffice?.purchase_office_description) {
+        targetForm.setFieldValue('purchase_office_description', selectedOffice.purchase_office_description)
+      }
+    }
+
+    if (field.key === 'purchase_office_description') {
+      const selectedOffice = purchaseOfficeOptions.find((office) => office.purchase_office_description === value)
+
+      if (selectedOffice?.purchase_office) {
+        targetForm.setFieldValue('purchase_office', selectedOffice.purchase_office)
+      }
+    }
+  }
+
+  function handleItemMasterWarehouseFieldChange(targetForm: ReturnType<typeof Form.useForm>[0], field: MasterField, value?: string) {
+    targetForm.setFieldValue(field.key, value)
+
+    if (!value) {
+      if (field.key === 'warehouse_code') {
+        targetForm.setFieldValue('warehouse_description', undefined)
+      }
+
+      if (field.key === 'warehouse_description') {
+        targetForm.setFieldValue('warehouse_code', undefined)
+      }
+
+      return
+    }
+
+    const selectedWarehouse = field.key === 'warehouse_code'
+      ? warehouseOptions.find((warehouse) => warehouse.warehouse_code === value)
+      : warehouseOptions.find((warehouse) => warehouse.warehouse_description === value)
+
+    if (!selectedWarehouse) {
+      return
+    }
+
+    targetForm.setFieldValue('warehouse_code', selectedWarehouse.warehouse_code)
+    targetForm.setFieldValue('warehouse_description', selectedWarehouse.warehouse_description)
+
+    if (selectedWarehouse.project_site) {
+      targetForm.setFieldValue('project_site', selectedWarehouse.project_site)
+    }
+
+    if (selectedWarehouse.site_description) {
+      targetForm.setFieldValue('site_description', selectedWarehouse.site_description)
+    }
+  }
+
+  function handleWarehouseLocationWarehouseFieldChange(targetForm: ReturnType<typeof Form.useForm>[0], field: MasterField, value?: string) {
+    targetForm.setFieldValue(field.key, value)
+
+    if (!value) {
+      if (field.key === 'warehouse_code') {
+        targetForm.setFieldValue('warehouse_name', undefined)
+      }
+
+      if (field.key === 'warehouse_name') {
+        targetForm.setFieldValue('warehouse_code', undefined)
+      }
+
+      return
+    }
+
+    const selectedWarehouse = field.key === 'warehouse_code'
+      ? warehouseOptions.find((warehouse) => warehouse.warehouse_code === value)
+      : warehouseOptions.find((warehouse) => warehouse.warehouse_description === value)
+
+    if (!selectedWarehouse) {
+      return
+    }
+
+    targetForm.setFieldValue('warehouse_code', selectedWarehouse.warehouse_code)
+    targetForm.setFieldValue('warehouse_name', selectedWarehouse.warehouse_description)
+
+    if (selectedWarehouse.project_site) {
+      targetForm.setFieldValue('project_code', selectedWarehouse.project_site)
+      const selectedProject = projectOptions.find((project) => project.code === selectedWarehouse.project_site)
+      targetForm.setFieldValue('project_description', selectedProject?.description ?? selectedWarehouse.site_description)
+    }
+  }
+
+  function handleItemMasterItemFieldChange(targetForm: ReturnType<typeof Form.useForm>[0], field: MasterField, value?: string) {
+    targetForm.setFieldValue(field.key, value)
+
+    if (!value) {
+      if (field.key === 'item_code') {
+        targetForm.setFieldValue('item_description', undefined)
+        targetForm.setFieldValue('serial_number', undefined)
+      }
+
+      if (field.key === 'item_description') {
+        targetForm.setFieldValue('item_code', undefined)
+        targetForm.setFieldValue('serial_number', undefined)
+      }
+
+      return
+    }
+
+    const selectedItem = field.key === 'item_code'
+      ? itemOptions.find((item) => item.item_code === value)
+      : itemOptions.find((item) => item.item_description === value)
+
+    if (!selectedItem) {
+      return
+    }
+
+    targetForm.setFieldValue('item_code', selectedItem.item_code)
+    targetForm.setFieldValue('item_description', selectedItem.item_description)
+
+    if (selectedItem.purchase_unit) {
+      targetForm.setFieldValue('purchase_unit', selectedItem.purchase_unit)
+    }
+
+    if (selectedItem.item_type) {
+      targetForm.setFieldValue('item_type', selectedItem.item_type)
+    }
+  }
+
+  function handleServiceItemFieldChange(targetForm: ReturnType<typeof Form.useForm>[0], field: MasterField, value?: string) {
+    targetForm.setFieldValue(field.key, value)
+
+    if (!value) {
+      if (field.key === 'item_code') {
+        targetForm.setFieldValue('item_description', undefined)
+      }
+
+      if (field.key === 'item_description') {
+        targetForm.setFieldValue('item_code', undefined)
+      }
+
+      return
+    }
+
+    if (field.key === 'item_code') {
+      const selectedItem = itemOptions.find((item) => item.item_code === value)
+
+      if (selectedItem?.item_description) {
+        targetForm.setFieldValue('item_description', selectedItem.item_description)
+      }
+
+      if (selectedItem?.project_site) {
+        targetForm.setFieldValue('project_site', selectedItem.project_site)
+        const selectedProject = projectOptions.find((project) => project.code === selectedItem.project_site)
+        targetForm.setFieldValue('project_description', selectedProject?.description ?? undefined)
+      }
+
+      const serialNumber = selectedItem?.item_code ? serviceSerialByItemCode[selectedItem.item_code] : ''
+      targetForm.setFieldValue('serial_number', serialNumber || undefined)
+    }
+
+    if (field.key === 'item_description') {
+      const selectedItem = itemOptions.find((item) => item.item_description === value)
+
+      if (selectedItem?.item_code) {
+        targetForm.setFieldValue('item_code', selectedItem.item_code)
+      }
+
+      if (selectedItem?.project_site) {
+        targetForm.setFieldValue('project_site', selectedItem.project_site)
+        const selectedProject = projectOptions.find((project) => project.code === selectedItem.project_site)
+        targetForm.setFieldValue('project_description', selectedProject?.description ?? undefined)
+      }
+
+      const serialNumber = selectedItem?.item_code ? serviceSerialByItemCode[selectedItem.item_code] : ''
+      targetForm.setFieldValue('serial_number', serialNumber || undefined)
+    }
+  }
+
+  function handleRentalItemFieldChange(targetForm: ReturnType<typeof Form.useForm>[0], field: MasterField, value?: string) {
+    targetForm.setFieldValue(field.key, value)
+
+    if (!value) {
+      if (field.key === 'item_code') {
+        targetForm.setFieldValue('item_description', undefined)
+      }
+
+      if (field.key === 'item_description') {
+        targetForm.setFieldValue('item_code', undefined)
+      }
+
+      return
+    }
+
+    if (field.key === 'item_code') {
+      const selectedItem = itemOptions.find((item) => item.item_code === value)
+
+      if (selectedItem?.item_description) {
+        targetForm.setFieldValue('item_description', selectedItem.item_description)
+      }
+
+      if (selectedItem?.item_type) {
+        targetForm.setFieldValue('item_type_in_transaction', selectedItem.item_type)
+      }
+    }
+
+    if (field.key === 'item_description') {
+      const selectedItem = itemOptions.find((item) => item.item_description === value)
+
+      if (selectedItem?.item_code) {
+        targetForm.setFieldValue('item_code', selectedItem.item_code)
+      }
+
+      if (selectedItem?.item_type) {
+        targetForm.setFieldValue('item_type_in_transaction', selectedItem.item_type)
       }
     }
   }
@@ -1197,6 +2073,419 @@ export default function GenericMasterPage() {
       )
     }
 
+    if (masterKey === 'business-partner-master' && field.key === 'location_code') {
+      return (
+        <Select
+          allowClear
+          loading={locationOptionsLoading}
+          onChange={(value) => handleLocationFieldChange(targetForm, field, value)}
+          onDropdownVisibleChange={(open) => {
+            if (open) {
+              ensureBusinessPartnerLocationOptions(targetForm)
+            }
+          }}
+          optionFilterProp="label"
+          options={locationCodeSelectOptions}
+          placeholder="Select Location Code"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'business-partner-master' && field.key === 'location_description') {
+      return (
+        <Select
+          allowClear
+          loading={locationOptionsLoading}
+          onChange={(value) => handleLocationFieldChange(targetForm, field, value)}
+          onDropdownVisibleChange={(open) => {
+            if (open) {
+              ensureBusinessPartnerLocationOptions(targetForm)
+            }
+          }}
+          optionFilterProp="label"
+          options={locationDescriptionSelectOptions}
+          placeholder="Select Location Description"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'business-partner-master' && field.key === 'business_partner_code') {
+      return (
+        <Select
+          allowClear
+          loading={businessPartnerOptionsLoading}
+          onChange={(value) => handleBusinessPartnerFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={businessPartnerCodeSelectOptions}
+          placeholder="Select Business Partner Code"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'business-partner-master' && field.key === 'business_partner_name') {
+      return (
+        <Select
+          allowClear
+          loading={businessPartnerOptionsLoading}
+          onChange={(value) => handleBusinessPartnerFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={businessPartnerNameSelectOptions}
+          placeholder="Select Business Partner Name"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'engineer-activity-master' && field.key === 'location_code') {
+      return (
+        <Select
+          allowClear
+          loading={locationOptionsLoading}
+          onChange={(value) => handleEngineerLocationFieldChange(targetForm, field, value)}
+          onDropdownVisibleChange={(open) => {
+            if (open) {
+              ensureEngineerLocationOptions(targetForm)
+            }
+          }}
+          optionFilterProp="label"
+          options={locationCodeSelectOptions}
+          placeholder="Select Location Code"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'engineer-activity-master' && field.key === 'location_description') {
+      return (
+        <Select
+          allowClear
+          loading={locationOptionsLoading}
+          onChange={(value) => handleEngineerLocationFieldChange(targetForm, field, value)}
+          onDropdownVisibleChange={(open) => {
+            if (open) {
+              ensureEngineerLocationOptions(targetForm)
+            }
+          }}
+          optionFilterProp="label"
+          options={locationDescriptionSelectOptions}
+          placeholder="Select Location Description"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'engineer-activity-master' && field.key === 'employee_id') {
+      return (
+        <Select
+          allowClear
+          loading={userOptionsLoading}
+          onChange={(value) => handleUserFieldChange(targetForm, value)}
+          optionFilterProp="label"
+          options={userSelectOptions}
+          placeholder="Select Employee ID"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'engineer-activity-master' && field.key === 'employee_name') {
+      return (
+        <Select
+          allowClear
+          loading={userOptionsLoading}
+          onChange={(value) => {
+            targetForm.setFieldValue('employee_name', value)
+            const selectedUser = userOptions.find((user) => user.employee_name === value)
+            targetForm.setFieldValue('employee_id', selectedUser?.employee_id)
+          }}
+          optionFilterProp="label"
+          options={userOptions.map((user) => ({
+            label: user.employee_id ? `${user.employee_name} - ${user.employee_id}` : user.employee_name,
+            value: user.employee_name,
+          }))}
+          placeholder="Select Employee Name"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'service-order-master' && field.key === 'status') {
+      return (
+        <Select
+          allowClear
+          loading={serviceStatusOptionsLoading}
+          optionFilterProp="label"
+          options={serviceStatusOptions}
+          placeholder="Select Status"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'item-master' && field.key === 'warehouse_code') {
+      return (
+        <Select
+          allowClear
+          loading={warehouseOptionsLoading}
+          onChange={(value) => handleItemMasterWarehouseFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={warehouseCodeSelectOptions}
+          placeholder="Select Warehouse Code"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'item-master' && field.key === 'warehouse_description') {
+      return (
+        <Select
+          allowClear
+          loading={warehouseOptionsLoading}
+          onChange={(value) => handleItemMasterWarehouseFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={warehouseDescriptionSelectOptions}
+          placeholder="Select Warehouse Description"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'warehouse-bin-master' && field.key === 'warehouse_code') {
+      return (
+        <Select
+          allowClear
+          loading={warehouseOptionsLoading}
+          onChange={(value) => handleWarehouseLocationWarehouseFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={warehouseCodeSelectOptions}
+          placeholder="Select Warehouse Code"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'warehouse-bin-master' && field.key === 'warehouse_name') {
+      return (
+        <Select
+          allowClear
+          loading={warehouseOptionsLoading}
+          onChange={(value) => handleWarehouseLocationWarehouseFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={warehouseDescriptionSelectOptions}
+          placeholder="Select Warehouse Description"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'item-master' && field.key === 'item_code') {
+      return (
+        <Select
+          allowClear
+          loading={itemOptionsLoading}
+          onChange={(value) => handleItemMasterItemFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={itemCodeSelectOptions}
+          placeholder="Select Item Code"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'item-master' && field.key === 'item_description') {
+      return (
+        <Select
+          allowClear
+          loading={itemOptionsLoading}
+          onChange={(value) => handleItemMasterItemFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={itemDescriptionSelectOptions}
+          placeholder="Select Item Description"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'item-master' && field.key === 'purchase_unit') {
+      return (
+        <Select
+          allowClear
+          loading={itemOptionsLoading}
+          optionFilterProp="label"
+          options={purchaseUnitSelectOptions}
+          placeholder="Select UOM"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'service-order-master' && field.key === 'item_code') {
+      return (
+        <Select
+          allowClear
+          loading={itemOptionsLoading}
+          onChange={(value) => handleServiceItemFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={itemCodeSelectOptions}
+          placeholder="Select Item Code"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'activity-master' && field.key === 'work_auth_status') {
+      return (
+        <Select
+          allowClear
+          loading={activityOptionValuesLoading}
+          optionFilterProp="label"
+          options={activityAuthStatusOptions}
+          placeholder="Select Auth Status"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'activity-master' && field.key === 'resource_required') {
+      return (
+        <Select
+          allowClear
+          loading={activityOptionValuesLoading}
+          optionFilterProp="label"
+          options={activityResourceRequiredOptions}
+          placeholder="Select Resource Required"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'service-order-master' && field.key === 'item_description') {
+      return (
+        <Select
+          allowClear
+          loading={itemOptionsLoading}
+          onChange={(value) => handleServiceItemFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={itemDescriptionSelectOptions}
+          placeholder="Select Item Description"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'rental-order-master' && field.key === 'status') {
+      return (
+        <Select
+          allowClear
+          loading={rentalStatusOptionsLoading}
+          optionFilterProp="label"
+          options={rentalStatusOptions}
+          placeholder="Select Status"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'rental-order-master' && field.key === 'item_code') {
+      return (
+        <Select
+          allowClear
+          loading={itemOptionsLoading}
+          onChange={(value) => handleRentalItemFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={itemCodeSelectOptions}
+          placeholder="Select Item Code"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'rental-order-master' && field.key === 'item_description') {
+      return (
+        <Select
+          allowClear
+          loading={itemOptionsLoading}
+          onChange={(value) => handleRentalItemFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={itemDescriptionSelectOptions}
+          placeholder="Select Item Description"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'purchase-office-master' && field.key === 'buy_from_business_partner') {
+      return (
+        <Select
+          allowClear
+          loading={businessPartnerOptionsLoading}
+          onChange={(value) => handlePurchaseOrderBpFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={businessPartnerCodeSelectOptions}
+          placeholder="Select BP Code"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'purchase-office-master' && field.key === 'bp_description') {
+      return (
+        <Select
+          allowClear
+          loading={businessPartnerOptionsLoading}
+          onChange={(value) => handlePurchaseOrderBpFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={businessPartnerNameSelectOptions}
+          placeholder="Select BP Description"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'purchase-office-master' && field.key === 'status') {
+      return (
+        <Select
+          allowClear
+          loading={purchaseOrderStatusOptionsLoading}
+          optionFilterProp="label"
+          options={purchaseOrderStatusOptions}
+          placeholder="Select Status"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'purchase-office-master' && field.key === 'purchase_office') {
+      return (
+        <Select
+          allowClear
+          loading={purchaseOfficeOptionsLoading}
+          onChange={(value) => handlePurchaseOfficeFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={purchaseOfficeCodeSelectOptions}
+          placeholder="Select Purchase Office"
+          showSearch
+        />
+      )
+    }
+
+    if (masterKey === 'purchase-office-master' && field.key === 'purchase_office_description') {
+      return (
+        <Select
+          allowClear
+          loading={purchaseOfficeOptionsLoading}
+          onChange={(value) => handlePurchaseOfficeFieldChange(targetForm, field, value)}
+          optionFilterProp="label"
+          options={purchaseOfficeDescriptionSelectOptions}
+          placeholder="Select Purchase Office Description"
+          showSearch
+        />
+      )
+    }
+
     if (field.type === 'textarea') {
       return <Input.TextArea rows={3} />
     }
@@ -1261,6 +2550,24 @@ export default function GenericMasterPage() {
     })
   }
 
+  function normalizedFilters(filters = activeFilters) {
+    return filters
+      .map((filter) => ({
+        ...filter,
+        field: filter.field.trim(),
+        value: filter.value.trim(),
+      }))
+      .filter((filter) => filter.field && filter.value)
+  }
+
+  function filterRequestParams(page?: number) {
+    const filters = normalizedFilters()
+
+    return filters.length > 0
+      ? { filters, page }
+      : { page }
+  }
+
   async function loadRecords(params?: LoadParams) {
     if (!config) {
       return
@@ -1270,14 +2577,20 @@ export default function GenericMasterPage() {
     setError(null)
 
     try {
+      const filters = normalizedFilters(params?.filters)
+      const filterParams = filters.length > 0
+        ? { filters: JSON.stringify(filters.map(({ field, value }) => ({ field, value }))) }
+        : params?.field && params?.value
+          ? { field: params.field, value: params.value }
+          : {}
       const requestParams = isPaginated
         ? {
           page: params?.page ?? currentPage,
           limit: PAGE_SIZE,
-          ...(params?.field && params?.value ? { field: params.field, value: params.value } : {}),
+          ...filterParams,
         }
-        : params?.field && params?.value
-          ? { field: params.field, value: params.value }
+        : Object.keys(filterParams).length > 0
+          ? filterParams
           : undefined
 
       const { data } = await api.get<MasterListResponse>(`/api/master-data/${masterKey}`, {
@@ -1303,8 +2616,11 @@ export default function GenericMasterPage() {
   }
 
   useEffect(() => {
-    setSearchField('')
-    setSearchQuery('')
+    setFilterModalOpen(false)
+    setDraftFilters([])
+    setActiveFilters([])
+    setFilterValueOptions({})
+    setFilterValueOptionsLoading({})
     setIsFilterActive(false)
     setCurrentPage(1)
     setImportFile(null)
@@ -1314,9 +2630,40 @@ export default function GenericMasterPage() {
     setSyncResults(null)
     setShowResultsModal(false)
     clearSelectionBuffer()
-    loadRecords({ page: 1 })
+    loadRecords({ filters: [], page: 1 })
     if (config?.fields.some((field) => isProjectCodeField(field) || isProjectDescriptionField(field))) {
       loadProjectOptions()
+    }
+    if (masterKey === 'business-partner-master') {
+      loadBusinessPartnerOptions()
+      setLocationOptions([])
+    }
+    if (masterKey === 'service-order-master') {
+      loadItemOptions()
+      loadServiceStatusOptions()
+    }
+    if (masterKey === 'rental-order-master') {
+      loadItemOptions()
+      loadRentalStatusOptions()
+    }
+    if (masterKey === 'purchase-office-master') {
+      loadBusinessPartnerOptions()
+      loadPurchaseOfficeOptions()
+      loadPurchaseOrderStatusOptions()
+    }
+    if (masterKey === 'item-master') {
+      loadWarehouseOptions()
+      loadItemOptions()
+    }
+    if (masterKey === 'warehouse-bin-master') {
+      loadWarehouseOptions()
+    }
+    if (masterKey === 'activity-master') {
+      loadActivityOptionValues()
+    }
+    if (masterKey === 'engineer-activity-master') {
+      loadUserOptions()
+      setLocationOptions([])
     }
     if (masterKey === 'responsibility-master') {
       loadUserOptions()
@@ -1329,32 +2676,118 @@ export default function GenericMasterPage() {
       return
     }
 
-    loadRecords(isFilterActive && searchField && searchQuery.trim()
-      ? { field: searchField, value: searchQuery.trim(), page: currentPage }
-      : { page: currentPage })
+    loadRecords(isFilterActive ? filterRequestParams(currentPage) : { filters: [], page: currentPage })
   }, [currentPage])
 
-  async function handleSearch() {
-    const trimmedQuery = searchQuery.trim()
+  function handleOpenFilterModal() {
+    const filters = normalizedFilters().map((filter) => ({ ...filter }))
+    setDraftFilters(filters)
+    filters.forEach((filter) => {
+      void loadFilterValueOptions(filter.field)
+    })
+    setFilterModalOpen(true)
+  }
 
-    if (!searchField || !trimmedQuery) {
-      message.warning('Select a filter field and enter a search value.')
+  async function loadFilterValueOptions(field: string) {
+    if (!field || filterValueOptions[field] || filterValueOptionsLoading[field]) {
       return
     }
 
+    setFilterValueOptionsLoading((currentLoading) => ({ ...currentLoading, [field]: true }))
+
+    try {
+      const { data } = await api.get<FilterValueOptionsResponse>(`/api/master-data/${masterKey}/filter-options`, {
+        params: { field },
+      })
+      setFilterValueOptions((currentOptions) => ({
+        ...currentOptions,
+        [field]: data.data.map((option) => {
+          if (typeof option === 'string') {
+            return { label: option, value: option }
+          }
+
+          return { label: option.label, value: option.value }
+        }),
+      }))
+    } catch (requestError) {
+      console.error(requestError)
+      message.error('Could not load filter values.')
+    } finally {
+      setFilterValueOptionsLoading((currentLoading) => ({ ...currentLoading, [field]: false }))
+    }
+  }
+
+  function availableFilterOptions(currentFilterId?: string) {
+    const selectedFields = new Set(
+      draftFilters
+        .filter((filter) => filter.id !== currentFilterId)
+        .map((filter) => filter.field)
+        .filter(Boolean),
+    )
+
+    return (config.searchFields ?? [])
+      .filter((field) => !selectedFields.has(field.value))
+      .map((field) => ({
+        label: field.label,
+        value: field.value,
+      }))
+  }
+
+  function handleAppendDraftFilter(field?: string) {
+    if (!field) {
+      return
+    }
+
+    void loadFilterValueOptions(field)
+    setDraftFilters((currentFilters) => [
+      ...currentFilters,
+      { id: `${field}-${Date.now()}-${currentFilters.length}`, field, value: '' },
+    ])
+  }
+
+  function updateDraftFilter(id: string, patch: Partial<MasterFilter>) {
+    if (patch.field) {
+      void loadFilterValueOptions(patch.field)
+    }
+
+    setDraftFilters((currentFilters) =>
+      currentFilters.map((filter) => filter.id === id ? { ...filter, ...patch } : filter),
+    )
+  }
+
+  function removeDraftFilter(id: string) {
+    setDraftFilters((currentFilters) => currentFilters.filter((filter) => filter.id !== id))
+  }
+
+  async function handleApplyFilters() {
+    const filters = normalizedFilters(draftFilters)
+
+    if (draftFilters.some((filter) => filter.field && !filter.value.trim())) {
+      message.warning('Enter a value for each selected filter field.')
+      return
+    }
+
+    if (filters.length === 0) {
+      message.warning('Select at least one filter field and enter a value.')
+      return
+    }
+
+    setActiveFilters(filters)
     setIsFilterActive(true)
     setCurrentPage(1)
+    setFilterModalOpen(false)
     clearSelectionBuffer()
-    await loadRecords({ field: searchField, value: trimmedQuery, page: 1 })
+    await loadRecords({ filters, page: 1 })
   }
 
   async function handleClearSearch() {
-    setSearchField('')
-    setSearchQuery('')
+    setDraftFilters([])
+    setActiveFilters([])
     setIsFilterActive(false)
     setCurrentPage(1)
+    setFilterModalOpen(false)
     clearSelectionBuffer()
-    await loadRecords({ page: 1 })
+    await loadRecords({ filters: [], page: 1 })
   }
 
   async function handleImportExecution(event: React.ChangeEvent<HTMLInputElement>) {
@@ -1461,9 +2894,7 @@ export default function GenericMasterPage() {
         fileInputRef.current.value = ''
       }
       setCurrentPage(1)
-      await loadRecords(isFilterActive && searchField && searchQuery.trim()
-        ? { field: searchField, value: searchQuery.trim(), page: 1 }
-        : { page: 1 })
+      await loadRecords(isFilterActive ? filterRequestParams(1) : { filters: [], page: 1 })
     } catch (requestError: any) {
       console.error(requestError)
       message.error(requestError.response?.data?.message ?? 'Failed to import Project Master file')
@@ -1479,8 +2910,8 @@ export default function GenericMasterPage() {
       const selectedKeys = Array.from(selectedRowKeys)
       const exportParams = selectedKeys.length > 0
         ? { selectedKeys: selectedKeys.join(',') }
-        : isFilterActive && searchField && searchQuery.trim()
-          ? { field: searchField, value: searchQuery.trim() }
+        : isFilterActive
+          ? { filters: JSON.stringify(normalizedFilters().map(({ field, value }) => ({ field, value }))) }
           : undefined
       const { data } = await api.get<Blob>(`/api/master-data/${masterKey}/export`, {
         params: exportParams,
@@ -1516,9 +2947,7 @@ export default function GenericMasterPage() {
       form.resetFields()
       setModalOpen(false)
       setCurrentPage(1)
-      await loadRecords(isFilterActive && searchField && searchQuery.trim()
-        ? { field: searchField, value: searchQuery.trim(), page: 1 }
-        : { page: 1 })
+      await loadRecords(isFilterActive ? filterRequestParams(1) : { filters: [], page: 1 })
       message.success(`${config.title} record created successfully`)
     } catch (requestError: any) {
       console.error(requestError)
@@ -1544,6 +2973,14 @@ export default function GenericMasterPage() {
         ]),
       ),
     )
+    if (masterKey === 'business-partner-master') {
+      void loadLocationOptions(String(record.project_code ?? '').trim())
+      void loadBusinessPartnerOptions()
+    }
+    if (masterKey === 'engineer-activity-master') {
+      void loadLocationOptions(String(record.project_code ?? '').trim())
+      void loadUserOptions()
+    }
     setIsEditModalOpen(true)
   }
 
@@ -1567,9 +3004,7 @@ export default function GenericMasterPage() {
       setIsEditModalOpen(false)
       setSelectedLocationId(null)
       editForm.resetFields()
-      await loadRecords(isFilterActive && searchField && searchQuery.trim()
-        ? { field: searchField, value: searchQuery.trim(), page: currentPage }
-        : { page: currentPage })
+      await loadRecords(isFilterActive ? filterRequestParams(currentPage) : { filters: [], page: currentPage })
       message.success(`${config.title} record updated successfully`)
     } catch (requestError: any) {
       console.error(requestError)
@@ -1599,44 +3034,6 @@ export default function GenericMasterPage() {
           <p className="mt-1 text-sm text-slate-500">{config.subtitle}</p>
         </div>
 
-        {config.searchFields && (
-          <div className="mt-4 flex flex-wrap items-center gap-[15px]">
-            <Select
-              allowClear
-              className="min-w-[220px]"
-              onChange={(value) => {
-                setSearchField(value ?? '')
-                setSearchQuery('')
-              }}
-              options={config.searchFields.map((field) => ({
-                label: field.label,
-                value: field.value,
-              }))}
-              placeholder="Select Field"
-              value={searchField || undefined}
-            />
-            <Input
-              className="max-w-[360px]"
-              disabled={!searchField}
-              onChange={(event) => setSearchQuery(event.target.value)}
-              onPressEnter={handleSearch}
-              placeholder={
-                config.searchFields.find((field) => field.value === searchField)?.placeholder ??
-                'Select a field first...'
-              }
-              value={searchQuery}
-            />
-          <Button onClick={handleSearch} type="primary">
-              Search
-            </Button>
-            {isFilterActive && (
-              <Button onClick={handleClearSearch} type="text">
-                Clear
-              </Button>
-            )}
-          </div>
-        )}
-
         <div className="mt-4 flex items-center justify-between gap-3">
           <span className="rounded-md bg-slate-100 px-3 py-1 text-sm font-semibold text-slate-600">
             {recordCount} {config.countLabel}
@@ -1647,6 +3044,28 @@ export default function GenericMasterPage() {
             </span>
           )}
           <div className="flex flex-wrap items-center justify-end gap-2">
+            {config.searchFields && (
+              <>
+                <Button
+                  className="relative"
+                  icon={<Filter size={16} />}
+                  onClick={handleOpenFilterModal}
+                  title="Filter records"
+                >
+                  Filter
+                  {activeFilters.length > 0 && (
+                    <span className="absolute -right-1 -top-1 grid h-5 min-w-5 place-items-center rounded-full bg-red-500 px-1 text-[10px] font-bold leading-none text-white">
+                      {activeFilters.length}
+                    </span>
+                  )}
+                </Button>
+                {isFilterActive && (
+                  <Button onClick={handleClearSearch} type="text">
+                    Clear
+                  </Button>
+                )}
+              </>
+            )}
             {supportsImportExport && (
               <>
                 <input
@@ -1853,6 +3272,78 @@ export default function GenericMasterPage() {
             </div>
           )}
         </>
+      )}
+
+      {config.searchFields && (
+        <Modal
+          okText="Apply Filters"
+          onCancel={() => setFilterModalOpen(false)}
+          onOk={handleApplyFilters}
+          open={filterModalOpen}
+          title="Filter Records"
+          width={680}
+        >
+          <div className="space-y-3">
+            {availableFilterOptions().length > 0 && (
+              <Select
+                className="w-full"
+                onChange={handleAppendDraftFilter}
+                options={availableFilterOptions()}
+                placeholder="Select Field"
+                value={undefined}
+              />
+            )}
+
+            {draftFilters.map((filter) => {
+              const selectedField = config.searchFields?.find((field) => field.value === filter.field)
+
+              return (
+                <div className="grid grid-cols-[minmax(170px,0.9fr)_minmax(220px,1.25fr)_36px] items-center gap-3" key={filter.id}>
+                  <Select
+                    onChange={(value) => updateDraftFilter(filter.id, { field: value, value: '' })}
+                    options={availableFilterOptions(filter.id)}
+                    placeholder="Select Field"
+                    value={filter.field || undefined}
+                  />
+                  <Select
+                    allowClear
+                    loading={filterValueOptionsLoading[filter.field]}
+                    onChange={(value) => updateDraftFilter(filter.id, { value: value ?? '' })}
+                    onDropdownVisibleChange={(open) => {
+                      if (open) {
+                        void loadFilterValueOptions(filter.field)
+                      }
+                    }}
+                    options={filterValueOptions[filter.field] ?? []}
+                    placeholder={selectedField?.placeholder ?? 'Enter filter value'}
+                    showSearch
+                    value={filter.value || undefined}
+                  />
+                  <button
+                    className="grid h-9 w-9 place-items-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-600"
+                    onClick={() => removeDraftFilter(filter.id)}
+                    title="Remove filter"
+                    type="button"
+                  >
+                    <X size={16} />
+                  </button>
+                </div>
+              )
+            })}
+
+            {draftFilters.length === 0 && (
+              <div className="rounded-md border border-dashed border-slate-200 bg-slate-50 px-4 py-5 text-sm text-slate-500">
+                Select a field to start filtering records.
+              </div>
+            )}
+
+            {isFilterActive && (
+              <Button onClick={handleClearSearch} type="text">
+                Clear all filters
+              </Button>
+            )}
+          </div>
+        </Modal>
       )}
 
       {supportsImportExport && importMetadata && (
