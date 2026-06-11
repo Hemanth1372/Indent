@@ -397,8 +397,9 @@ function normalizeIndentPayload(body) {
         issued_qty: item.issuedQty ?? 0,
         uom: item.uom,
         work_type: item.workType ?? null,
-        activity_code: item.activityId ?? null,
-        location_code: item.locationId ?? body.delivery_location ?? null,
+        activity_code: pickFirstValue(item.activity_code, item.activityId, item.activityCode),
+        location_code: pickFirstValue(item.location_code, item.locationId, item.locationCode, body.delivery_location),
+        to_entity_id: pickFirstValue(item.to_entity_id, item.toEntityId, item.toBusinessPartner, item.businessPartnerCode),
         remarks: item.remarks ?? null,
         attachment_url: item.attachmentUrl ?? null,
       })),
@@ -430,6 +431,7 @@ function normalizeIndentPayload(body) {
         work_type: body.work_type ?? null,
         activity_code: body.activity_code ?? null,
         location_code: body.delivery_location,
+        to_entity_id: body.to_entity_id ?? null,
         remarks: body.remarks ?? null,
         attachment_url: null,
       }],
@@ -463,8 +465,9 @@ function normalizeIndentPayload(body) {
       issued_qty: item.issuedQty ?? 0,
       uom: item.uom,
       work_type: item.workType ?? null,
-      activity_code: item.activityId ?? null,
-      location_code: item.locationId ?? null,
+      activity_code: pickFirstValue(item.activity_code, item.activityId, item.activityCode),
+      location_code: pickFirstValue(item.location_code, item.locationId, item.locationCode),
+      to_entity_id: pickFirstValue(item.to_entity_id, item.toEntityId, item.toBusinessPartner, item.businessPartnerCode),
       remarks: item.remarks ?? null,
       attachment_url: item.attachmentUrl ?? null,
     })),
@@ -473,16 +476,16 @@ function normalizeIndentPayload(body) {
 
 function assertUniqueIndentItems(indentValues) {
   const seenItems = new Map()
-  const businessPartner = normalizeDuplicateKey(indentValues.to_entity_id)
 
   for (const item of indentValues.items) {
     const itemCode = normalizeDuplicateKey(item.item_code)
     const locationCode = normalizeDuplicateKey(item.location_code)
     const activityCode = normalizeDuplicateKey(item.activity_code)
+    const businessPartner = normalizeDuplicateKey(item.to_entity_id ?? indentValues.to_entity_id)
     const duplicateKey = [itemCode, locationCode, activityCode, businessPartner].join('|')
 
     if (seenItems.has(duplicateKey)) {
-      const error = new Error(`Material ${item.item_code} is already there for the same location, activity, and business partner.`)
+      const error = new Error(`Item already present: ${item.item_code} is already added for the same location, activity, and business partner.`)
       error.statusCode = 400
       throw error
     }
@@ -492,7 +495,29 @@ function assertUniqueIndentItems(indentValues) {
 }
 
 function normalizeDuplicateKey(value) {
-  return String(value ?? '').trim().toLowerCase()
+  const normalizedValue = String(value ?? '').trim()
+
+  if (!normalizedValue || normalizedValue === '-') {
+    return ''
+  }
+
+  return normalizedValue.toLowerCase()
+}
+
+function pickFirstValue(...values) {
+  for (const value of values) {
+    if (value === undefined || value === null) {
+      continue
+    }
+
+    const normalizedValue = String(value).trim()
+
+    if (normalizedValue && normalizedValue !== '-') {
+      return normalizedValue
+    }
+  }
+
+  return null
 }
 
 function inferDestinationType(body) {

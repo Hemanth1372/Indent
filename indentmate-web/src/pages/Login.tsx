@@ -175,8 +175,9 @@ export default function Login() {
             </label>
           )}
 
-          {error && <p className="login-error">{error}</p>}
-          {success && <p className="login-success">{success}</p>}
+          <p className={`login-message ${error ? 'login-error' : success ? 'login-success' : ''}`} aria-live="polite">
+            {error || success || '\u00A0'}
+          </p>
 
           <button className="login-submit" disabled={loading} type="submit">
             {resetMode ? <KeyRound size={18} /> : <LogIn size={18} />}

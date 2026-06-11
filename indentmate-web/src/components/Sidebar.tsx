@@ -9,6 +9,7 @@ import {
 } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
+import headerLogo from '../assets/header-logo.png'
 import { useAuth } from '../context/AuthContext'
 
 const mastersGroups = [
@@ -163,14 +164,15 @@ export default function Sidebar({ open }: SidebarProps) {
       }`}
     >
       <div className="px-8 pb-7 pt-16">
-        <div className="rounded-2xl border border-white/10 bg-white/[0.06] p-4 shadow-[0_16px_38px_rgba(0,0,0,0.18)]">
-          <div className="flex items-center gap-3">
-            <div className="grid h-12 w-12 shrink-0 place-items-center rounded-xl bg-[#35c4a1] text-base font-black tracking-[-0.08em] text-[#12304a] shadow-lg shadow-emerald-950/25">
-              NCC
-            </div>
+        <div className="rounded-2xl border border-white/10 bg-white/[0.06] px-5 py-5 shadow-[0_16px_38px_rgba(0,0,0,0.18)]">
+          <div className="grid justify-items-center gap-3 text-center">
+            <img
+              alt="NCC Limited"
+              className="h-auto w-40 rounded-md bg-white px-3 py-2 shadow-lg shadow-slate-950/20"
+              src={headerLogo}
+            />
             <div>
-              <h1 className="text-xl font-black tracking-tight text-white">NCC Indent</h1>
-              <p className="mt-1 text-xs font-semibold uppercase tracking-[0.18em] text-[#8ee2ce]">Control Desk</p>
+              <h1 className="text-2xl font-black leading-none tracking-tight text-white">Indent</h1>
             </div>
           </div>
         </div>

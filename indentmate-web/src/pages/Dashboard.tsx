@@ -8,6 +8,7 @@ type DashboardStats = {
   approved: number
   pending: number
   issued: number
+  rejected: number
 }
 
 export default function Dashboard() {
@@ -17,6 +18,7 @@ export default function Dashboard() {
     approved: 0,
     pending: 0,
     issued: 0,
+    rejected: 0,
   })
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -56,6 +58,7 @@ export default function Dashboard() {
     { value: dashboardStats.approved, label: 'Approved', fill: '#16a34a' },
     { value: dashboardStats.pending, label: 'Pending', fill: '#d97706' },
     { value: dashboardStats.issued, label: 'Issued', fill: '#0891b2' },
+    { value: dashboardStats.rejected, label: 'Rejected', fill: '#dc2626' },
   ]
   const displayName = user?.name?.trim() || user?.login_name?.trim() || 'User'
 

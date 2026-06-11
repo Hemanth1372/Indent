@@ -766,16 +766,8 @@ export async function listMasterFilterOptions(req, res, next) {
       return res.status(400).json({ message: 'Invalid filter field' })
     }
 
-    const descriptionExpression = descriptionExpressionForFilter(definition, field)
-    const result = await query(
-      `
-        SELECT DISTINCT ${field}::TEXT AS value${descriptionExpression ? `, ${descriptionExpression}::TEXT AS description` : ''}
-        FROM ${definition.table}
-        WHERE ${field} IS NOT NULL AND TRIM(${field}::TEXT) <> ''
-        ORDER BY value ASC
-        LIMIT 500
-      `,
-    )
+    const filterOptionsQuery = buildFilterOptionsQuery(definition, field)
+    const result = await query(filterOptionsQuery)
 
     return res.json({
       data: result.rows.map((row) => ({
@@ -786,6 +778,36 @@ export async function listMasterFilterOptions(req, res, next) {
   } catch (error) {
     return next(error)
   }
+}
+
+function buildFilterOptionsQuery(definition, field) {
+  const projectFieldMap = {
+    project_code: 'project_code',
+    project_id: 'project_code',
+    project_site: 'project_code',
+  }
+
+  if (projectFieldMap[field]) {
+    return `
+      SELECT DISTINCT
+        project_code::TEXT AS value,
+        project_description::TEXT AS description
+      FROM project_master
+      WHERE project_code IS NOT NULL AND TRIM(project_code::TEXT) <> ''
+      ORDER BY value ASC
+      LIMIT 1000
+    `
+  }
+
+  const descriptionExpression = descriptionExpressionForFilter(definition, field)
+
+  return `
+    SELECT DISTINCT ${field}::TEXT AS value${descriptionExpression ? `, ${descriptionExpression}::TEXT AS description` : ''}
+    FROM ${definition.table}
+    WHERE ${field} IS NOT NULL AND TRIM(${field}::TEXT) <> ''
+    ORDER BY value ASC
+    LIMIT 1000
+  `
 }
 
 export async function createMasterData(req, res, next) {
