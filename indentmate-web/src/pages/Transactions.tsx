@@ -50,46 +50,125 @@ const statusBadgeClasses: Record<string, string> = {
   Rejected: 'bg-red-50 text-red-700 ring-red-600/20',
 }
 
-export default function Transactions() {
+type TransactionsProps = {
+  detailPath?: (id: string) => string
+  endpoint?: string
+  eyebrow?: string
+  title?: string
+}
+
+export default function Transactions({
+  detailPath = (id) => `/transactions/${id}`,
+  endpoint = '/api/indents',
+  eyebrow = 'Material Ledger',
+  title = 'Transactions',
+}: TransactionsProps) {
   const navigate = useNavigate()
   const [transactions, setTransactions] = useState<IndentTransaction[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
+  const [dateFrom, setDateFrom] = useState('')
+  const [dateTo, setDateTo] = useState('')
 
   async function fetchTransactions() {
     setIsLoading(true)
 
     try {
-      const response = await api.get<IndentsResponse>('/api/indents')
+      const params = new URLSearchParams()
+
+      if (dateFrom) {
+        params.set('date_from', dateFrom)
+      }
+
+      if (dateTo) {
+        params.set('date_to', dateTo)
+      }
+
+      const queryString = params.toString()
+      const response = await api.get<IndentsResponse>(`${endpoint}${queryString ? `?${queryString}` : ''}`)
       setTransactions(response.data.data)
       setErrorMessage('')
-    } catch {
-      setErrorMessage('Unable to load transactions.')
+    } catch (error) {
+      const message = error && typeof error === 'object' && 'response' in error
+        ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+        : ''
+      setErrorMessage(message || 'Unable to load transactions.')
     } finally {
       setIsLoading(false)
     }
+  }
+
+  function clearDateFilters() {
+    setDateFrom('')
+    setDateTo('')
   }
 
   useEffect(() => {
     fetchTransactions()
   }, [])
 
+  useEffect(() => {
+    if (!dateFrom && !dateTo) {
+      fetchTransactions()
+    }
+  }, [dateFrom, dateTo])
+
   return (
     <section className="w-full">
-      <div className="flex flex-col gap-3 border-b border-slate-200 pb-4 sm:flex-row sm:items-end sm:justify-between">
+      <div className="flex flex-col gap-4 border-b border-slate-200 pb-4 xl:flex-row xl:items-end xl:justify-between">
         <div>
-          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Material Ledger</p>
-          <h2 className="mt-1 text-2xl font-bold text-slate-900">Transactions</h2>
+          <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">{eyebrow}</p>
+          <h2 className="mt-1 text-2xl font-bold text-slate-900">{title}</h2>
         </div>
-        <button
-          className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
-          disabled={isLoading}
-          onClick={fetchTransactions}
-          type="button"
-        >
-          <RefreshCw size={16} />
-          Refresh
-        </button>
+        <div className="flex flex-col gap-3 lg:flex-row lg:items-end">
+          <label className="flex flex-col gap-1 text-xs font-bold uppercase tracking-wide text-slate-500">
+            From
+            <input
+              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold normal-case tracking-normal text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              max={dateTo || undefined}
+              onChange={(event) => setDateFrom(event.target.value)}
+              type="date"
+              value={dateFrom}
+            />
+          </label>
+          <label className="flex flex-col gap-1 text-xs font-bold uppercase tracking-wide text-slate-500">
+            To
+            <input
+              className="h-10 rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold normal-case tracking-normal text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
+              min={dateFrom || undefined}
+              onChange={(event) => setDateTo(event.target.value)}
+              type="date"
+              value={dateTo}
+            />
+          </label>
+          <div className="flex gap-2">
+            <button
+              className="inline-flex h-10 items-center justify-center rounded-md bg-blue-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isLoading}
+              onClick={fetchTransactions}
+              type="button"
+            >
+              Apply
+            </button>
+            <button
+              className="inline-flex h-10 items-center justify-center rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isLoading || (!dateFrom && !dateTo)}
+              onClick={clearDateFilters}
+              type="button"
+            >
+              Clear
+            </button>
+            <button
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isLoading}
+              onClick={fetchTransactions}
+              type="button"
+            >
+              <RefreshCw size={16} />
+              Refresh
+            </button>
+          </div>
+        </div>
       </div>
 
       {errorMessage ? (
@@ -135,7 +214,7 @@ export default function Transactions() {
                     <td className="px-4 py-4 text-center">
                       <button
                         className="inline-flex h-9 w-9 items-center justify-center rounded-full border border-blue-200 bg-blue-50 text-blue-700 transition hover:bg-blue-100"
-                        onClick={() => navigate(`/transactions/${transaction.id}`)}
+                        onClick={() => navigate(detailPath(transaction.id))}
                         title={`Open ${transaction.indent_no}`}
                         type="button"
                       >

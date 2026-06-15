@@ -13,10 +13,10 @@ export function verifySuperAdmin(req, res, next) {
     const payload = jwt.verify(token, env.jwtSecret)
     const role = String(payload.role ?? payload.primary_role ?? '').trim().toUpperCase()
 
-    if (role !== 'SUPER ADMIN') {
+    if (!isPortalAdminRole(role)) {
       return res.status(403).json({
         errorCode: 'WEB_ACCESS_DENIED',
-        message: 'Unauthorized Access: Web Admin Portal access is strictly restricted to Super Admin accounts.',
+        message: 'Unauthorized Access: Web Admin Portal access is restricted to administrator accounts.',
       })
     }
 
@@ -30,12 +30,16 @@ export function verifySuperAdmin(req, res, next) {
 export function checkSuperAdmin(req, res, next) {
   const role = String(req.user?.role ?? req.user?.primary_role ?? '').trim().toUpperCase()
 
-  if (role === 'SUPER ADMIN') {
+  if (isPortalAdminRole(role)) {
     return next()
   }
 
   return res.status(403).json({
     errorCode: 'WEB_PORTAL_UNAUTHORIZED',
-    message: 'Unauthorized Access: Web Admin Portal environments are strictly restricted to Super Admin sessions.',
+    message: 'Unauthorized Access: Web Admin Portal environments are restricted to administrator sessions.',
   })
+}
+
+function isPortalAdminRole(role) {
+  return ['SUPER ADMIN', 'ADMINISTRATOR', 'ADMIN'].includes(String(role ?? '').trim().toUpperCase())
 }

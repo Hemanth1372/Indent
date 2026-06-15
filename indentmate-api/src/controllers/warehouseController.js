@@ -18,7 +18,10 @@ export async function listWarehouseOptions(req, res, next) {
           is_virtual_warehouse
         FROM warehouse_master
         WHERE project_site = ANY($1)
-          AND LOWER(COALESCE(is_material_warehouse, '')) = 'yes'
+          AND (
+            LOWER(COALESCE(is_material_warehouse, '')) = 'yes'
+            OR LOWER(COALESCE(is_virtual_warehouse, '')) = 'yes'
+          )
         ORDER BY warehouse_code ASC
       `,
       [projectCodes],

@@ -7,7 +7,7 @@ export const api = axios.create({
 })
 
 api.interceptors.request.use((config) => {
-  const token = localStorage.getItem(AUTH_TOKEN_KEY)
+  const token = sessionStorage.getItem(AUTH_TOKEN_KEY)
 
   if (token) {
     config.headers.Authorization = `Bearer ${token}`
@@ -20,8 +20,8 @@ api.interceptors.response.use(
   (response) => response,
   (error) => {
     if (error.response?.status === 401) {
-      localStorage.removeItem('ncc_token')
-      localStorage.removeItem('ncc_user')
+      sessionStorage.removeItem('ncc_token')
+      sessionStorage.removeItem('ncc_user')
       window.location.assign('/login')
     }
 

@@ -9,6 +9,8 @@ type AuthUser = {
   name: string
   role?: string
   primary_role?: string
+  responsibility?: string
+  access_scope?: string
   isActive?: boolean
   assigned_projects?: Array<{
     project_id: string
@@ -54,7 +56,7 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
 
 function readStoredUser() {
-  const storedUser = localStorage.getItem(AUTH_USER_KEY)
+  const storedUser = sessionStorage.getItem(AUTH_USER_KEY)
 
   if (!storedUser) {
     return null
@@ -63,13 +65,13 @@ function readStoredUser() {
   try {
     return JSON.parse(storedUser) as AuthUser
   } catch {
-    localStorage.removeItem(AUTH_USER_KEY)
+    sessionStorage.removeItem(AUTH_USER_KEY)
     return null
   }
 }
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => localStorage.getItem(AUTH_TOKEN_KEY))
+  const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(AUTH_TOKEN_KEY))
   const [user, setUser] = useState<AuthUser | null>(() => readStoredUser())
 
   const value = useMemo<AuthContextValue>(
@@ -96,8 +98,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           }
 
-          localStorage.setItem(AUTH_TOKEN_KEY, data.token)
-          localStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user))
+          sessionStorage.setItem(AUTH_TOKEN_KEY, data.token)
+          sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user))
           setToken(data.token)
           setUser(data.user)
 
@@ -111,8 +113,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
       logout: () => {
-        localStorage.removeItem(AUTH_TOKEN_KEY)
-        localStorage.removeItem(AUTH_USER_KEY)
+        sessionStorage.removeItem(AUTH_TOKEN_KEY)
+        sessionStorage.removeItem(AUTH_USER_KEY)
         setToken(null)
         setUser(null)
       },

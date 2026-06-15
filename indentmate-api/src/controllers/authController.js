@@ -4,7 +4,7 @@ import { env } from '../config/env.js'
 import { query } from '../db/pool.js'
 
 const USER_BY_LOGIN_NAME_SQL = `
-  SELECT user_id, login_name, employee_name, primary_role, password_hash, current_pin, is_active
+  SELECT user_id, login_name, employee_name, COALESCE(email_id, '') AS email_id, primary_role, password_hash, current_pin, is_active
   FROM users
   WHERE login_name = $1
     AND COALESCE(is_deleted, FALSE) = FALSE
@@ -15,6 +15,7 @@ const USER_CONTEXT_SQL = `
   SELECT
     u.user_id,
     u.employee_name,
+    COALESCE(u.email_id, '') AS email_id,
     u.login_name,
     u.primary_role,
     COALESCE(
@@ -31,10 +32,10 @@ const USER_CONTEXT_SQL = `
       '[]'::json
     ) AS assigned_projects
   FROM users u
-  LEFT JOIN responsibility_master rm ON rm.employee_id = u.login_name
+  LEFT JOIN user_project_assignment_master rm ON rm.employee_id = u.login_name
   LEFT JOIN project_master pm ON pm.project_code = rm.project_id
   WHERE u.user_id = $1
-  GROUP BY u.user_id, u.employee_name, u.login_name, u.primary_role
+  GROUP BY u.user_id, u.employee_name, u.email_id, u.login_name, u.primary_role
 `
 
 const USER_MASTER_BY_EMPLOYEE_SQL = `
@@ -46,7 +47,7 @@ const USER_MASTER_BY_EMPLOYEE_SQL = `
     manual_status,
     valid_from,
     valid_to
-  FROM responsibility_master
+  FROM user_project_assignment_master
   WHERE employee_id = $1
   ORDER BY project_id ASC, responsibility ASC
 `
@@ -69,6 +70,19 @@ export async function webLogin(req, res, next) {
       return res.status(401).json({ message: 'Invalid employee ID or password' })
     }
 
+    if (!loginUser.is_active) {
+      return res.status(403).json({
+        errorCode: 'ACCOUNT_INACTIVE',
+        message: 'User is deactivated, or no longer in use.',
+      })
+    }
+
+    const passwordMatches = await verifyUserPin(password, loginUser)
+
+    if (!passwordMatches) {
+      return res.status(401).json({ message: 'Invalid employee ID or password' })
+    }
+
     const result = await query(
       `
         SELECT
@@ -81,7 +95,7 @@ export async function webLogin(req, res, next) {
           manual_status,
           valid_from,
           valid_to
-        FROM responsibility_master
+        FROM user_project_assignment_master
         WHERE employee_id = $1
         ORDER BY project_id ASC, responsibility ASC
       `,
@@ -89,50 +103,38 @@ export async function webLogin(req, res, next) {
     )
     const assignments = result.rows
 
-    if (!assignments.length) {
-      return res.status(401).json({ message: 'Invalid employee ID or password' })
-    }
-
-    const passwordMatches = await verifyUserPin(password, loginUser)
-
-    if (!passwordMatches) {
-      return res.status(401).json({ message: 'Invalid employee ID or password' })
-    }
-
     const activeAssignments = assignments.filter((assignment) => computeUserMasterStatus(assignment) === 'Active')
+    const adminAssignment = activeAssignments.find((assignment) => isPortalAdminRole(assignment.responsibility))
+    const fieldAssignment = activeAssignments.find((assignment) => normalizeFieldRole(assignment.responsibility) !== null)
+    const primaryFieldRole = normalizeFieldRole(loginUser.primary_role)
+    const canUseWebPortal = isPortalAdminRole(loginUser.primary_role) || Boolean(adminAssignment) || Boolean(fieldAssignment) || Boolean(primaryFieldRole)
 
-    if (!activeAssignments.length) {
-      return res.status(403).json({
-        errorCode: 'ACCOUNT_INACTIVE',
-        message: 'User is deactivated, or no longer in use.',
-      })
-    }
-
-    const superAdminAssignment = activeAssignments.find((assignment) =>
-      String(assignment.responsibility ?? '').trim() === 'Super Admin'
-    )
-
-    if (!superAdminAssignment) {
+    if (!canUseWebPortal) {
       return res.status(403).json({
         errorCode: 'WEB_ACCESS_DENIED',
-        message: 'Unauthorized Access: Web Admin Portal access is strictly restricted to Super Admin accounts.',
+        message: 'Unauthorized Access: Web access is restricted to administrator and field personnel accounts.',
       })
     }
 
+    const contextResult = await query(USER_CONTEXT_SQL, [loginUser.user_id])
+    const context = contextResult.rows[0]
+    const fieldRole = normalizeFieldRole(fieldAssignment?.responsibility) || primaryFieldRole
+    const role = fieldRole || adminAssignment?.responsibility || loginUser.primary_role || 'SIE'
     const payload = {
-      user_id: String(superAdminAssignment.id),
-      userId: String(superAdminAssignment.id),
-      employeeId: superAdminAssignment.employee_id,
-      employee_id: superAdminAssignment.employee_id,
-      login_name: superAdminAssignment.employee_id,
-      employeeName: superAdminAssignment.employee_name,
-      name: superAdminAssignment.employee_name,
-      role: 'Super Admin',
-      primary_role: 'Super Admin',
-      responsibility: superAdminAssignment.responsibility,
+      user_id: String(loginUser.user_id),
+      userId: String(loginUser.user_id),
+      employeeId: loginUser.login_name,
+      employee_id: loginUser.login_name,
+      login_name: loginUser.login_name,
+      employeeName: loginUser.employee_name,
+      name: loginUser.employee_name,
+      role,
+      primary_role: role,
+      responsibility: fieldAssignment?.responsibility || adminAssignment?.responsibility || role,
+      access_scope: fieldRole ? 'field' : 'admin',
       isActive: true,
-      assigned_projects: [],
-      assignedProjects: [],
+      assigned_projects: context?.assigned_projects ?? [],
+      assignedProjects: context?.assigned_projects ?? [],
     }
 
     const token = jwt.sign(payload, env.jwtSecret, {
@@ -154,11 +156,18 @@ export async function resetAdminPassword(req, res, next) {
     const password = req.validated.body.password
     const adminResult = await query(
       `
-        SELECT id
-        FROM responsibility_master
-        WHERE employee_id = $1
-          AND LOWER(TRIM(responsibility)) = 'super admin'
-          AND COALESCE(manual_status, 'Active') <> 'Inactive'
+        SELECT u.user_id
+        FROM users u
+        LEFT JOIN user_project_assignment_master assignment
+          ON assignment.employee_id = u.login_name
+         AND COALESCE(assignment.manual_status, 'Active') <> 'Inactive'
+        WHERE u.login_name = $1
+          AND COALESCE(u.is_deleted, FALSE) = FALSE
+          AND COALESCE(u.is_active, TRUE) = TRUE
+          AND (
+            UPPER(TRIM(COALESCE(u.primary_role, ''))) IN ('SUPER ADMIN', 'ADMINISTRATOR', 'ADMIN')
+            OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) IN ('SUPER ADMIN', 'ADMINISTRATOR', 'ADMIN')
+          )
         LIMIT 1
       `,
       [employeeId],
@@ -166,7 +175,7 @@ export async function resetAdminPassword(req, res, next) {
 
     if (!adminResult.rows.length) {
       return res.status(404).json({
-        message: 'No active Super Admin account found for this Employee ID.',
+        message: 'No active administrator account found for this Employee ID.',
       })
     }
 
@@ -382,7 +391,17 @@ function formatDateOnly(value) {
 function normalizeFieldRole(role) {
   const normalizedRole = String(role ?? '').trim().toUpperCase()
 
-  if (normalizedRole === 'SIE' || normalizedRole.includes('(SIE)')) {
+  if (
+    normalizedRole === 'SIE' ||
+    normalizedRole === 'STE' ||
+    normalizedRole.includes('(SIE)') ||
+    normalizedRole.includes('(STE)') ||
+    normalizedRole.includes('SITE ENGINEER') ||
+    normalizedRole.includes('STE ENGINEER') ||
+    normalizedRole.includes('SITE INCHARGE ENGINEER') ||
+    normalizedRole.includes('SITE IN-CHARGE ENGINEER') ||
+    normalizedRole.includes('SITE IN CHARGE ENGINEER')
+  ) {
     return 'SIE'
   }
 

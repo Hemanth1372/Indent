@@ -6,6 +6,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
+using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace IndentMate.Mobile.ViewModels;
@@ -39,9 +40,10 @@ public partial class SetupViewModel : BaseViewModel
         _databaseService = new DatabaseService(Path.Combine(FileSystem.AppDataDirectory, "indentmate.db"));
         _httpClient = new HttpClient
         {
-            BaseAddress = new Uri("http://localhost:4000"),
-            Timeout = TimeSpan.FromSeconds(10)
+            BaseAddress = new Uri("https://indentmate.onrender.com"),
+            Timeout = TimeSpan.FromSeconds(60)
         };
+        _httpClient.DefaultRequestHeaders.ConnectionClose = true;
         SelectedLNEnvironmentOption = LNEnvironmentOptions.First(option => option.Code == LnEnvironment);
     }
 
@@ -108,6 +110,11 @@ public partial class SetupViewModel : BaseViewModel
 
             await Shell.Current.GoToAsync("//login");
         });
+
+        if (HasError)
+        {
+            ErrorMessage = StatusMessage;
+        }
     }
 
     private async Task<AdminUserResponse> SyncPinToAdminApiAsync(string engineerId, string pin)
@@ -115,12 +122,18 @@ public partial class SetupViewModel : BaseViewModel
         try
         {
             StatusMessage = "Syncing PIN to admin portal...";
-            var response = await _httpClient.PostAsJsonAsync("/api/users/sync-pin", new
+            var payload = JsonSerializer.Serialize(new
             {
                 login_name = engineerId,
                 employee_name = engineerId,
                 current_pin = pin
             });
+            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/users/sync-pin")
+            {
+                Content = new StringContent(payload, Encoding.UTF8, "application/json")
+            };
+            request.Headers.ConnectionClose = true;
+            var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead);
 
             if (response.StatusCode == HttpStatusCode.NotFound)
             {

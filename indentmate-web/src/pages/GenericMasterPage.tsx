@@ -5,6 +5,7 @@ import { useParams } from 'react-router-dom'
 import * as XLSX from 'xlsx'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
+import { NumberedPagination } from '../components/NumberedPagination'
 
 const PAGE_SIZE = 100
 const TABLE_HEADER_CELL_CLASS = 'bg-[#1b2e4b] px-3 py-[14px] text-[13px] font-semibold text-white tracking-[0.5px] normal-case border-b-2 border-[#0f1c30]'
@@ -81,8 +82,8 @@ const MASTER_IMPORT_METADATA: Record<string, MasterImportMetadata> = {
   'item-master': {
     excelLookupKey: 'ITEM CODE',
     columns: [
-      { label: 'Site Code', excelHeader: 'SITE', dbColumn: 'project_site' },
-      { label: 'Site Description', excelHeader: 'SITE Description', dbColumn: 'site_description' },
+      { label: 'Project Code', excelHeader: 'Project Code', aliases: ['SITE'], dbColumn: 'project_site' },
+      { label: 'Project Description', excelHeader: 'Project Description', aliases: ['SITE Description'], dbColumn: 'site_description' },
       { label: 'Warehouse Code', excelHeader: 'Warehouse', dbColumn: 'warehouse_code' },
       { label: 'Warehouse Description', excelHeader: 'Warehouse Description', dbColumn: 'warehouse_description' },
       { label: 'On Hand Qty', excelHeader: 'On Hand', dbColumn: 'on_hand_qty' },
@@ -212,6 +213,10 @@ function defaultFieldsMapping(metadata?: MasterImportMetadata) {
       ...(column.aliases ?? []).map((alias) => [alias, true]),
     ]),
   )
+}
+
+function exportFilename(masterTitle: string) {
+  return `${masterTitle.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '')}_Export.xlsx`
 }
 
 type FieldType = 'text' | 'textarea' | 'boolean' | 'checkboxText' | 'datetime' | 'date' | 'number'
@@ -1575,7 +1580,7 @@ export default function GenericMasterPage() {
       const options = (data.roles?.length
         ? data.roles
         : (data.responsibilities ?? []).map((responsibility) => ({ role_name: responsibility, responsibility })))
-        .map((role) => ({
+        .map((role) => ({ 
           role_name: String(role.role_name ?? role.responsibility ?? '').trim(),
           responsibility: String(role.responsibility ?? role.role_name ?? '').trim(),
         }))
@@ -2920,7 +2925,7 @@ export default function GenericMasterPage() {
       const downloadUrl = URL.createObjectURL(data)
       const link = document.createElement('a')
       link.href = downloadUrl
-      link.download = `${masterKey.replace(/-/g, '_')}_Export.xlsx`
+      link.download = exportFilename(config.title)
       document.body.appendChild(link)
       link.click()
       link.remove()
@@ -3252,23 +3257,12 @@ export default function GenericMasterPage() {
               <span>
                 Showing records {showingStart}-{showingEnd} of {recordCount}
               </span>
-              <div className="flex items-center gap-3">
-                <Button
-                  disabled={currentPage === 1 || loading}
-                  onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}
-                >
-                  Previous
-                </Button>
-                <span className="min-w-[110px] text-center font-semibold text-slate-700">
-                  Page {currentPage} of {totalPages}
-                </span>
-                <Button
-                  disabled={currentPage === totalPages || loading}
-                  onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}
-                >
-                  Next
-                </Button>
-              </div>
+              <NumberedPagination
+                currentPage={currentPage}
+                loading={loading}
+                onPageChange={setCurrentPage}
+                totalPages={totalPages}
+              />
             </div>
           )}
         </>

@@ -12,11 +12,16 @@ namespace IndentMate.Mobile.Services;
 public class ApiService
 {
     private readonly HttpClient _httpClient;
-    private const string BaseUrl = "http://localhost:4000";
+    private const string BaseUrl = "https://indentmate.onrender.com";
 
     public ApiService()
     {
-        _httpClient = new HttpClient { BaseAddress = new Uri(BaseUrl) };
+        _httpClient = new HttpClient
+        {
+            BaseAddress = new Uri(BaseUrl),
+            Timeout = TimeSpan.FromSeconds(60)
+        };
+        _httpClient.DefaultRequestHeaders.ConnectionClose = true;
         _httpClient.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/json"));
     }

@@ -1,6 +1,6 @@
 import { KeyRound, Lock, LogIn, User } from 'lucide-react'
 import { useState, type FormEvent } from 'react'
-import { useNavigate } from 'react-router-dom'
+import { useLocation, useNavigate } from 'react-router-dom'
 import headerLogo from '../assets/header-logo.png'
 import { useAuth } from '../context/AuthContext'
 
@@ -13,8 +13,12 @@ export default function Login() {
   const [loading, setLoading] = useState(false)
   const [resetMode, setResetMode] = useState(false)
   const navigate = useNavigate()
+  const location = useLocation()
   const { login } = useAuth()
   const apiBaseUrl = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
+  const redirectTo = typeof location.state === 'object' && location.state && 'from' in location.state
+    ? String(location.state.from || '/')
+    : '/'
 
   async function handleSubmit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault()
@@ -38,7 +42,7 @@ export default function Login() {
     setLoading(false)
 
     if (result.success) {
-      navigate('/')
+      navigate(redirectTo, { replace: true })
       return
     }
 
@@ -111,7 +115,7 @@ export default function Login() {
 
   return (
     <main className="login-page">
-      <section className="login-panel">
+      <section className={`login-panel ${resetMode ? 'login-panel-reset' : ''}`}>
         <div className="login-brand">
           <img alt="NCC Limited" className="ncc-logo" src={headerLogo} />
           <h1>Indent</h1>

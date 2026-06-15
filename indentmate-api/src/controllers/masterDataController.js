@@ -13,7 +13,7 @@ export const MASTER_DEFINITIONS = {
     searchableFields: ['role_name', 'description'],
   },
   'responsibility-master': {
-    table: 'responsibility_master',
+    table: 'user_project_assignment_master',
     select: 'id, employee_id, employee_name, project_id, project_description, responsibility, valid_from, valid_to, manual_status, created_at, updated_at',
     orderBy: 'employee_id ASC, project_id ASC, responsibility ASC',
     primaryKey: 'id',
@@ -165,7 +165,7 @@ export const MASTER_IMPORT_CONFIGS = {
     ],
   },
   'responsibility-master': {
-    tableName: 'responsibility_master',
+    tableName: 'user_project_assignment_master',
     lookupDbColumn: 'employee_id',
     keyDbColumns: ['employee_id', 'project_id', 'responsibility'],
     excelLookupKey: 'Employee ID',
@@ -230,6 +230,18 @@ export const MASTER_IMPORT_CONFIGS = {
       { label: 'Start Date', excelHeader: 'Scheduled Start Date', dbColumn: 'scheduled_start_date', type: 'date' },
       { label: 'Finish Date', excelHeader: 'Scheduled Finish Date', dbColumn: 'scheduled_finish_date', type: 'date' },
     ],
+    exportColumns: [
+      { excelHeader: 'Project Code', dbColumn: 'project_code' },
+      { excelHeader: 'Project Description', dbColumn: 'project_description' },
+      { excelHeader: 'Activity Code', dbColumn: 'activity_code' },
+      { excelHeader: 'Description', dbColumn: 'description' },
+      { excelHeader: 'Activity Type', dbColumn: 'activity_type' },
+      { excelHeader: 'Critical Capacity', dbColumn: 'critical_capacity_type' },
+      { excelHeader: 'Auth Status', dbColumn: 'work_auth_status' },
+      { excelHeader: 'Resource Required', dbColumn: 'resource_required' },
+      { excelHeader: 'Start Date', dbColumn: 'scheduled_start_date' },
+      { excelHeader: 'Finish Date', dbColumn: 'scheduled_finish_date' },
+    ],
   },
   'location-master': {
     tableName: 'location_master',
@@ -263,8 +275,8 @@ export const MASTER_IMPORT_CONFIGS = {
       item_type: '',
     },
     columns: [
-      { label: 'Site Code', excelHeader: 'SITE', dbColumn: 'project_site' },
-      { label: 'Site Description', excelHeader: 'SITE Description', dbColumn: 'site_description' },
+      { label: 'Project Code', excelHeader: 'Project Code', aliases: ['SITE'], dbColumn: 'project_site' },
+      { label: 'Project Description', excelHeader: 'Project Description', aliases: ['SITE Description'], dbColumn: 'site_description' },
       { label: 'Warehouse Code', excelHeader: 'Warehouse', dbColumn: 'warehouse_code' },
       { label: 'Warehouse Description', excelHeader: 'Warehouse Description', dbColumn: 'warehouse_description' },
       { label: 'On Hand Qty', excelHeader: 'On Hand', dbColumn: 'on_hand_qty' },
@@ -479,6 +491,25 @@ export const MASTER_IMPORT_CONFIGS = {
       { label: 'Purchase Office Description', excelHeader: 'Purchase Office Description', dbColumn: 'purchase_office_description' },
     ],
   },
+}
+
+const MASTER_EXPORT_TITLES = {
+  'role-master': 'Role Master',
+  'responsibility-master': 'User Project Assignment Master',
+  'project-master': 'Project Master',
+  'activity-master': 'Activity Master',
+  'location-master': 'Location Master',
+  'item-master': 'Item Master',
+  'service-order-master': 'Service Order Master',
+  'business-partner-master': 'Business Partner Activity Master',
+  'business-partner-code-master': 'Business Partner Master',
+  'warehouse-master': 'Warehouse Master',
+  'warehouse-bin-master': 'Warehouse Location Master',
+  'delivery-point-master': 'Delivery Master',
+  'engineer-activity-master': 'Engineer by Activity Master',
+  'rental-order-master': 'Rental Order Master',
+  'purchase-office-master': 'Purchase Order Master',
+  'purchase-office-code-master': 'Purchase Office Master',
 }
 
 export function getMasterDefinition(masterKey) {
@@ -1053,10 +1084,14 @@ export async function exportMasterData(req, res, next) {
       params = builtFilters.params
     }
 
+    const exportColumns = importConfig.exportColumns ?? importConfig.columns
     const result = await query(
       `
-        SELECT ${importConfig.columns.map((column) => column.dbColumn).join(', ')}
-        FROM ${importConfig.tableName}
+        SELECT ${exportColumns.map((column) => column.dbColumn).join(', ')}
+        FROM (
+          SELECT ${definition.select}
+          FROM ${definition.table}
+        ) export_source
         ${whereClause}
         ORDER BY ${importConfig.orderBy}
       `,
@@ -1064,8 +1099,9 @@ export async function exportMasterData(req, res, next) {
     )
 
     const workbook = new ExcelJS.Workbook()
-    const worksheet = workbook.addWorksheet(req.params.masterKey === 'responsibility-master' ? 'User Project Assignments' : definition.table)
-    worksheet.columns = importConfig.columns.map((column) => ({
+    const masterTitle = MASTER_EXPORT_TITLES[req.params.masterKey] ?? req.params.masterKey
+    const worksheet = workbook.addWorksheet(masterTitle.slice(0, 31))
+    worksheet.columns = exportColumns.map((column) => ({
       header: column.excelHeader,
       key: column.dbColumn,
       width: Math.max(18, Math.min(44, column.excelHeader.length + 8)),
@@ -1073,9 +1109,7 @@ export async function exportMasterData(req, res, next) {
     worksheet.getRow(1).font = { bold: true }
     worksheet.addRows(result.rows)
 
-    const filename = req.params.masterKey === 'responsibility-master'
-      ? 'User_Project_Assignment_Master_Export.xlsx'
-      : `${req.params.masterKey.replace(/-/g, '_')}_Export.xlsx`
+    const filename = `${masterTitle.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '')}_Export.xlsx`
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     res.setHeader('Content-Disposition', `attachment; filename=${filename}`)
     await workbook.xlsx.write(res)

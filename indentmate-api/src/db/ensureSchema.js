@@ -7,6 +7,7 @@ export async function ensureSchema() {
       user_id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
       login_name VARCHAR(50) UNIQUE NOT NULL,
       employee_name VARCHAR(100) NOT NULL,
+      email_id VARCHAR(255) NOT NULL DEFAULT '',
       primary_role VARCHAR(50),
       is_active BOOLEAN DEFAULT TRUE,
       is_deleted BOOLEAN DEFAULT FALSE,
@@ -22,6 +23,7 @@ export async function ensureSchema() {
   await query('DROP TABLE IF EXISTS delivery_point_master CASCADE')
   await query('ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS current_pin VARCHAR(6)')
   await query('ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE')
+  await query("ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS email_id VARCHAR(255) NOT NULL DEFAULT ''")
   await query('ALTER TABLE IF EXISTS users DROP COLUMN IF EXISTS employee_id_str')
 
   await query(`
@@ -120,7 +122,27 @@ export async function ensureSchema() {
   await query('CREATE INDEX IF NOT EXISTS idx_service_orders_project_site ON service_orders(project_site)')
 
   await query(`
-    CREATE TABLE IF NOT EXISTS responsibility_master (
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'responsibility_master'
+      ) AND NOT EXISTS (
+        SELECT 1
+        FROM information_schema.tables
+        WHERE table_schema = 'public'
+          AND table_name = 'user_project_assignment_master'
+      ) THEN
+        ALTER TABLE responsibility_master RENAME TO user_project_assignment_master;
+      END IF;
+    END
+    $$;
+  `)
+
+  await query(`
+    CREATE TABLE IF NOT EXISTS user_project_assignment_master (
       id SERIAL PRIMARY KEY,
       project_id VARCHAR(50) NOT NULL,
       project_description VARCHAR(255) NOT NULL,
@@ -134,10 +156,10 @@ export async function ensureSchema() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `)
-  await query('ALTER TABLE IF EXISTS responsibility_master DROP COLUMN IF EXISTS password_hash')
+  await query('ALTER TABLE IF EXISTS user_project_assignment_master DROP COLUMN IF EXISTS password_hash')
 
-  await query('CREATE INDEX IF NOT EXISTS idx_responsibility_master_project_id ON responsibility_master(project_id)')
-  await query('CREATE INDEX IF NOT EXISTS idx_responsibility_master_employee_id ON responsibility_master(employee_id)')
+  await query('CREATE INDEX IF NOT EXISTS idx_user_project_assignment_master_project_id ON user_project_assignment_master(project_id)')
+  await query('CREATE INDEX IF NOT EXISTS idx_user_project_assignment_master_employee_id ON user_project_assignment_master(employee_id)')
 
   await query(`
     CREATE TABLE IF NOT EXISTS role_master (
@@ -155,7 +177,7 @@ export async function ensureSchema() {
     SELECT DISTINCT
       COALESCE(NULLIF(SUBSTRING(responsibility FROM '\\(([^()]*)\\)\\s*$'), ''), TRIM(responsibility)) AS role_name,
       NULLIF(TRIM(REGEXP_REPLACE(responsibility, '\\s*\\([^()]*\\)\\s*$', '')), '') AS description
-    FROM responsibility_master
+    FROM user_project_assignment_master
     WHERE responsibility IS NOT NULL AND TRIM(responsibility) <> ''
     ON CONFLICT (role_name) DO NOTHING
   `)
@@ -510,6 +532,8 @@ export async function ensureSchema() {
       synced_at TIMESTAMP,
       approved_by VARCHAR(50),
       approved_at TIMESTAMP,
+      approver_email VARCHAR(255),
+      approver_name VARCHAR(150),
       remarks TEXT,
       attachments JSONB NOT NULL DEFAULT '[]'::jsonb,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
@@ -552,6 +576,32 @@ export async function ensureSchema() {
   await query('CREATE INDEX IF NOT EXISTS idx_indent_headers_created_at ON indent_headers(created_at)')
   await query('CREATE INDEX IF NOT EXISTS idx_indent_lines_header_id ON indent_lines(indent_header_id)')
   await query('CREATE INDEX IF NOT EXISTS idx_indent_lines_item_code ON indent_lines(item_code)')
+  await query(`
+    DELETE FROM indent_lines duplicate_line
+    USING indent_lines kept_line
+    WHERE duplicate_line.indent_header_id = kept_line.indent_header_id
+      AND duplicate_line.item_code = kept_line.item_code
+      AND COALESCE(duplicate_line.location_code, '') = COALESCE(kept_line.location_code, '')
+      AND COALESCE(duplicate_line.activity_code, '') = COALESCE(kept_line.activity_code, '')
+      AND (
+        duplicate_line.created_at > kept_line.created_at
+        OR (
+          duplicate_line.created_at = kept_line.created_at
+          AND duplicate_line.id::text > kept_line.id::text
+        )
+      )
+  `)
+  await query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_indent_lines_unique_item_context
+    ON indent_lines (
+      indent_header_id,
+      item_code,
+      COALESCE(location_code, ''),
+      COALESCE(activity_code, '')
+    )
+  `)
+  await query('ALTER TABLE IF EXISTS indent_headers ADD COLUMN IF NOT EXISTS approver_email VARCHAR(255)')
+  await query('ALTER TABLE IF EXISTS indent_headers ADD COLUMN IF NOT EXISTS approver_name VARCHAR(150)')
 
   await query(`
     INSERT INTO indent_headers (

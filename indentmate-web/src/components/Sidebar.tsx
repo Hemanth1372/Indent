@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import headerLogo from '../assets/header-logo.png'
 import { useAuth } from '../context/AuthContext'
+import { isAdminUser } from './SuperAdminRoute'
 
 const mastersGroups = [
   {
@@ -140,8 +141,9 @@ export default function Sidebar({ open }: SidebarProps) {
   const activeGroup = getActiveGroup(location.pathname)
   const [mastersOpen, setMastersOpen] = useState(Boolean(activeGroup))
   const [openGroup, setOpenGroup] = useState<string | null>(activeGroup)
-  const { logout } = useAuth()
+  const { logout, user } = useAuth()
   const navigate = useNavigate()
+  const isAdmin = isAdminUser(user)
 
   useEffect(() => {
     const nextActiveGroup = getActiveGroup(location.pathname)
@@ -196,33 +198,37 @@ export default function Sidebar({ open }: SidebarProps) {
       </div>
 
       <nav className="min-h-0 flex-1 overflow-y-auto pb-6">
-        <NavLink
-          className={({ isActive }) =>
-            `flex h-12 items-center gap-4 border-l-4 px-5 text-sm font-semibold ${
-              isActive
-                ? 'border-amber-400 bg-cyan-900/45 text-white'
-                : 'border-transparent text-slate-300 hover:bg-white/5 hover:text-white'
-            }`
-          }
-          to="/"
-        >
-          <LayoutDashboard className="text-amber-400" size={19} />
-          Dashboard
-        </NavLink>
+        {isAdmin && (
+          <NavLink
+            className={({ isActive }) =>
+              `flex h-12 items-center gap-4 border-l-4 px-5 text-sm font-semibold ${
+                isActive
+                  ? 'border-amber-400 bg-cyan-900/45 text-white'
+                  : 'border-transparent text-slate-300 hover:bg-white/5 hover:text-white'
+              }`
+            }
+            to="/"
+          >
+            <LayoutDashboard className="text-amber-400" size={19} />
+            Dashboard
+          </NavLink>
+        )}
 
-        <button
-          className={`flex h-12 w-full items-center gap-4 px-6 text-left text-sm font-semibold transition ${
-            mastersOpen ? 'bg-cyan-900/35 text-white' : 'hover:bg-white/5 hover:text-white'
-          }`}
-          onClick={() => setMastersOpen((value) => !value)}
-          type="button"
-        >
-          <Grid2X2 className={mastersOpen ? 'text-amber-400' : 'text-slate-300'} size={19} />
-          <span className="flex-1">Masters</span>
-          {mastersOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-        </button>
+        {isAdmin && (
+          <button
+            className={`flex h-12 w-full items-center gap-4 px-6 text-left text-sm font-semibold transition ${
+              mastersOpen ? 'bg-cyan-900/35 text-white' : 'hover:bg-white/5 hover:text-white'
+            }`}
+            onClick={() => setMastersOpen((value) => !value)}
+            type="button"
+          >
+            <Grid2X2 className={mastersOpen ? 'text-amber-400' : 'text-slate-300'} size={19} />
+            <span className="flex-1">Masters</span>
+            {mastersOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+          </button>
+        )}
 
-        {mastersOpen && (
+        {isAdmin && mastersOpen && (
           <div className="bg-[#102239]">
             {mastersGroups.map((group) => {
               const isOpen = openGroup === group.key
@@ -266,19 +272,53 @@ export default function Sidebar({ open }: SidebarProps) {
           </div>
         )}
 
-        <NavLink
-          className={({ isActive }) =>
-            `flex h-12 items-center gap-4 border-l-4 px-5 text-sm font-semibold ${
-              isActive
-                ? 'border-amber-400 bg-cyan-900/45 text-white'
-                : 'border-transparent text-slate-300 hover:bg-white/5 hover:text-white'
-            }`
-          }
-          to="/transactions"
-        >
-          <ReceiptText className="text-amber-400" size={19} />
-          Transactions
-        </NavLink>
+        {isAdmin && (
+          <NavLink
+            className={({ isActive }) =>
+              `flex h-12 items-center gap-4 border-l-4 px-5 text-sm font-semibold ${
+                isActive
+                  ? 'border-amber-400 bg-cyan-900/45 text-white'
+                  : 'border-transparent text-slate-300 hover:bg-white/5 hover:text-white'
+              }`
+            }
+            to="/transactions"
+          >
+            <ReceiptText className="text-amber-400" size={19} />
+            Transactions
+          </NavLink>
+        )}
+
+        {!isAdmin && (
+          <>
+            <NavLink
+              className={({ isActive }) =>
+                `flex h-12 items-center gap-4 border-l-4 px-5 text-sm font-semibold ${
+                  isActive
+                    ? 'border-amber-400 bg-cyan-900/45 text-white'
+                    : 'border-transparent text-slate-300 hover:bg-white/5 hover:text-white'
+                }`
+              }
+              to="/indent-workspace"
+            >
+              <LayoutDashboard className="text-amber-400" size={19} />
+              Indent Home
+            </NavLink>
+
+            <NavLink
+              className={({ isActive }) =>
+                `flex h-12 items-center gap-4 border-l-4 px-5 text-sm font-semibold ${
+                  isActive
+                    ? 'border-amber-400 bg-cyan-900/45 text-white'
+                    : 'border-transparent text-slate-300 hover:bg-white/5 hover:text-white'
+                }`
+              }
+              to="/indent-transactions"
+            >
+              <ReceiptText className="text-amber-400" size={19} />
+              Transactions
+            </NavLink>
+          </>
+        )}
 
       </nav>
 

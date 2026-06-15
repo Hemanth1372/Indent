@@ -19,7 +19,7 @@ const USER_MASTER_SELECT_SQL = `
     u.current_pin,
     rm.created_at,
     rm.updated_at
-  FROM responsibility_master rm
+  FROM user_project_assignment_master rm
   LEFT JOIN users u ON u.login_name = rm.employee_id
   ORDER BY rm.employee_id ASC, rm.project_id ASC, rm.responsibility ASC
 `
@@ -42,7 +42,7 @@ const USER_MASTER_RETURNING_SQL = `
 `
 
 const CREATE_USER_MASTER_SQL = `
-  INSERT INTO responsibility_master (
+  INSERT INTO user_project_assignment_master (
     employee_id,
     employee_name,
     project_id,
@@ -57,7 +57,7 @@ const CREATE_USER_MASTER_SQL = `
 `
 
 const UPDATE_USER_MASTER_STATUS_SQL = `
-  UPDATE responsibility_master
+  UPDATE user_project_assignment_master
   SET manual_status = $1,
       updated_at = CURRENT_TIMESTAMP
   WHERE employee_id = $2
@@ -65,7 +65,7 @@ const UPDATE_USER_MASTER_STATUS_SQL = `
 `
 
 const UPDATE_USER_MASTER_ROLE_SQL = `
-  UPDATE responsibility_master
+  UPDATE user_project_assignment_master
   SET responsibility = $1,
       updated_at = CURRENT_TIMESTAMP
   WHERE id = $2
@@ -74,12 +74,12 @@ const UPDATE_USER_MASTER_ROLE_SQL = `
 
 const CHANGE_USER_MASTER_PASSWORD_SQL = `
   SELECT ${USER_MASTER_RETURNING_SQL}
-  FROM responsibility_master
+  FROM user_project_assignment_master
   WHERE id = $1
 `
 
 const DELETE_USER_MASTER_SQL = `
-  DELETE FROM responsibility_master
+  DELETE FROM user_project_assignment_master
   WHERE id = $1
   RETURNING id, employee_id, employee_name, responsibility
 `
@@ -212,7 +212,7 @@ export async function listUsers(req, res, next) {
           u.current_pin,
           rm.created_at,
           rm.updated_at
-        FROM responsibility_master rm
+        FROM user_project_assignment_master rm
         LEFT JOIN users u ON u.login_name = rm.employee_id
         WHERE rm.${columnName} ILIKE $1
         ORDER BY rm.employee_id ASC, rm.project_id ASC, rm.responsibility ASC
@@ -397,7 +397,7 @@ export async function deleteUser(req, res, next) {
     }
 
     const remaining = await query(
-      'SELECT 1 FROM responsibility_master WHERE employee_id = $1 LIMIT 1',
+      'SELECT 1 FROM user_project_assignment_master WHERE employee_id = $1 LIMIT 1',
       [result.rows[0].employee_id],
     )
 

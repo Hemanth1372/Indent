@@ -25,6 +25,8 @@ const adminIndentBodySchema = z.object({
   indent_type: z.string().trim().max(80).optional().nullable(),
   to_entity_type: z.string().trim().max(80).optional().nullable(),
   to_entity_id: z.string().trim().max(120).optional().nullable(),
+  approver_email: z.string().trim().email().max(255).optional().nullable(),
+  approver_name: z.string().trim().max(150).optional().nullable(),
   item_code: z.string().trim().min(1).max(50),
   item_description: z.string().trim().max(300).optional().nullable(),
   make: z.string().trim().max(120).optional().nullable(),
@@ -63,7 +65,7 @@ const syncIndentBodySchema = z.object({
     requestedQty: z.coerce.number().positive().optional(),
     remarks: z.string().trim().max(2000).optional().nullable(),
     attachmentUrl: z.string().trim().max(2000).optional().nullable(),
-  }).passthrough()).min(1).max(20),
+  }).passthrough()).min(1),
 }).passthrough()
 
 const mobileIndentBodySchema = z.object({
@@ -86,13 +88,15 @@ const mobileIndentBodySchema = z.object({
     issuedQty: z.coerce.number().nonnegative().optional(),
     remarks: z.string().trim().max(2000).optional().nullable(),
     attachmentUrl: z.string().trim().max(2000).optional().nullable(),
-  }).passthrough()).min(1).max(20),
+  }).passthrough()).min(1),
 }).passthrough()
 
 export const createIndentSchema = z.object({
   body: z.union([syncIndentBodySchema, adminIndentBodySchema, mobileIndentBodySchema]),
   params: z.object({}).optional(),
-  query: z.object({}).optional(),
+  query: z.object({
+    wait_for_email: z.enum(['true', 'false']).optional(),
+  }).optional(),
 })
 
 export const updateIndentStatusSchema = z.object({

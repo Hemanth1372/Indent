@@ -2,6 +2,7 @@ import { Alert, Button, Checkbox, Dropdown, Form, Input, Modal, Select, Spin, me
 import { Download, Eye, EyeOff, Filter, KeyRound, MoreVertical, Pencil, Plus, ShieldCheck, ToggleLeft, ToggleRight, Upload, X } from 'lucide-react'
 import { useEffect, useMemo, useRef, useState } from 'react'
 import * as XLSX from 'xlsx'
+import { NumberedPagination } from '../components/NumberedPagination'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
 
@@ -14,6 +15,7 @@ type UserRow = {
   id: number | string
   employee_id: string
   employee_name: string
+  email_id: string
   password_hash: string
   status: 'Active' | 'Inactive'
   manual_status: 'Active' | 'Inactive'
@@ -34,6 +36,7 @@ type AssignmentRow = {
 type UserFormValues = {
   employee_id: string
   employee_name: string
+  email_id?: string
   password_hash?: string
 }
 
@@ -78,6 +81,7 @@ type FilterValueOptionsResponse = {
 const searchFields = [
   { label: 'Employee ID', value: 'employee_id', placeholder: 'Enter Employee ID...' },
   { label: 'Employee Name', value: 'employee_name', placeholder: 'Enter Employee Name...' },
+  { label: 'Email ID', value: 'email_id', placeholder: 'Enter Email ID...' },
 ]
 
 const ASSIGNMENT_IMPORT_COLUMNS = [
@@ -417,6 +421,7 @@ export default function ResponsibilityMaster() {
     editForm.setFieldsValue({
       employee_id: user.employee_id,
       employee_name: user.employee_name,
+      email_id: user.email_id ?? '',
       password_hash: user.password_hash,
     })
     setEditModalOpen(true)
@@ -432,6 +437,7 @@ export default function ResponsibilityMaster() {
     try {
       await api.put(`/api/responsibilities/users/${encodeURIComponent(selectedUser.employee_id)}`, {
         employee_name: values.employee_name.trim(),
+        email_id: values.email_id?.trim() ?? '',
         password_hash: values.password_hash?.trim() || undefined,
       })
       setEditModalOpen(false)
@@ -678,18 +684,18 @@ export default function ResponsibilityMaster() {
       const downloadUrl = URL.createObjectURL(data)
       const link = document.createElement('a')
       link.href = downloadUrl
-      link.download = 'User_Project_Assignments_Export.xlsx'
+      link.download = 'User_Master_Export.xlsx'
       document.body.appendChild(link)
       link.click()
       link.remove()
       URL.revokeObjectURL(downloadUrl)
       clearSelectionBuffer()
       message.success(selectedKeys.length > 0
-        ? `${selectedKeys.length} selected user assignment set${selectedKeys.length === 1 ? '' : 's'} exported`
-        : 'User Project Assignment export started')
+        ? `${selectedKeys.length} selected user${selectedKeys.length === 1 ? '' : 's'} exported`
+        : 'User Master export started')
     } catch (requestError: any) {
       console.error(requestError)
-      message.error(requestError.response?.data?.message ?? 'Failed to export User Project Assignment data')
+      message.error(requestError.response?.data?.message ?? 'Failed to export User Master data')
     } finally {
       setExporting(false)
     }
@@ -779,6 +785,7 @@ export default function ResponsibilityMaster() {
                   </th>
                   <th className={TABLE_HEADER_CELL_CLASS}>Employee ID</th>
                   <th className={TABLE_HEADER_CELL_CLASS}>Employee Name</th>
+                  <th className={TABLE_HEADER_CELL_CLASS}>Email ID</th>
                   <th className={TABLE_HEADER_CELL_CLASS}>Pin</th>
                   <th className={TABLE_HEADER_CELL_CLASS}>Status</th>
                   <th className={TABLE_HEADER_ACTIONS_CLASS}>Actions</th>
@@ -796,6 +803,7 @@ export default function ResponsibilityMaster() {
                       </td>
                       <td className="px-5 py-4 align-middle font-mono font-bold text-slate-800">{user.employee_id}</td>
                       <td className="px-5 py-4 align-middle text-slate-700">{user.employee_name}</td>
+                      <td className="px-5 py-4 align-middle text-slate-700">{user.email_id || '-'}</td>
                       <td className="px-5 py-4 align-middle">
                         <div className="flex items-center gap-3">
                           <span className="font-mono font-bold tracking-[0.35em] text-slate-800">
@@ -869,11 +877,12 @@ export default function ResponsibilityMaster() {
 
           <div className="flex flex-wrap items-center justify-between gap-3 border-t border-slate-200 px-5 py-3 text-sm text-slate-600">
             <span>Showing users {showingStart}-{showingEnd} of {totalRecords}</span>
-            <div className="flex items-center gap-3">
-              <Button disabled={currentPage === 1 || loading} onClick={() => setCurrentPage((page) => Math.max(1, page - 1))}>Previous</Button>
-              <span className="min-w-[110px] text-center font-semibold text-slate-700">Page {currentPage} of {totalPages}</span>
-              <Button disabled={currentPage === totalPages || loading} onClick={() => setCurrentPage((page) => Math.min(totalPages, page + 1))}>Next</Button>
-            </div>
+            <NumberedPagination
+              currentPage={currentPage}
+              loading={loading}
+              onPageChange={setCurrentPage}
+              totalPages={totalPages}
+            />
           </div>
         </>
       )}
@@ -1152,6 +1161,7 @@ function normalizeUserPayload(values: UserFormValues) {
   return {
     employee_id: values.employee_id.trim(),
     employee_name: values.employee_name.trim(),
+    email_id: values.email_id?.trim() ?? '',
     password_hash: values.password_hash?.trim() || '123456',
   }
 }
@@ -1206,6 +1216,9 @@ function UserModal({
         </Form.Item>
         <Form.Item label="Employee Name" name="employee_name" rules={[{ required: true, message: 'Employee Name is required' }]}>
           <Input.TextArea autoSize={{ minRows: 1, maxRows: 3 }} />
+        </Form.Item>
+        <Form.Item label="Email ID" name="email_id" rules={[{ type: 'email', message: 'Enter a valid Email ID' }]}>
+          <Input placeholder="Enter Email ID" />
         </Form.Item>
         <Form.Item label="PIN" name="password_hash" rules={[{ pattern: /^\d{6}$/, message: 'PIN must be exactly 6 digits' }]}>
           <Input maxLength={6} />

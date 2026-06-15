@@ -13,7 +13,7 @@ namespace IndentMate.Mobile.ViewModels;
 public partial class LoginViewModel : BaseViewModel
 {
     private const int PinLength = 6;
-    private const string ApiBaseUrl = "http://localhost:4000";
+    private const string ApiBaseUrl = "https://indentmate.onrender.com";
     private const string HiddenRecentEngineersKey = "indentmate_hidden_recent_engineers";
     private static readonly TimeSpan InactivityTimeout = TimeSpan.FromMinutes(5);
     private readonly DatabaseService _databaseService;
@@ -47,7 +47,7 @@ public partial class LoginViewModel : BaseViewModel
         _httpClient = new HttpClient
         {
             BaseAddress = new Uri(ApiBaseUrl),
-            Timeout = TimeSpan.FromSeconds(15)
+            Timeout = TimeSpan.FromSeconds(60)
         };
         _inactivityTimer = new System.Timers.Timer(InactivityTimeout.TotalMilliseconds)
         {
@@ -62,26 +62,15 @@ public partial class LoginViewModel : BaseViewModel
         try
         {
             Company = await SecureStorage.Default.GetAsync("company") ?? "Company";
-            await LoadRecentEngineersAsync();
-
             var configuredEngineerId = NormalizeEngineerId(await SecureStorage.Default.GetAsync("engineer_id"));
-            var preferredEngineer = !string.IsNullOrWhiteSpace(configuredEngineerId)
-                ? RecentEngineers.FirstOrDefault(engineer =>
-                    string.Equals(NormalizeEngineerId(engineer.EngineerId), configuredEngineerId, StringComparison.OrdinalIgnoreCase))
-                : null;
-
-            SelectedEngineer = preferredEngineer ?? RecentEngineers.FirstOrDefault();
-
-            if (SelectedEngineer is null)
-            {
-                EngineerId = string.IsNullOrWhiteSpace(configuredEngineerId) ? "Not configured" : configuredEngineerId;
-                EngineerName = await SecureStorage.Default.GetAsync("engineer_name") ?? EngineerId;
-                ManualEngineerId = configuredEngineerId ?? string.Empty;
-                OnPropertyChanged(nameof(SelectedInitials));
-                return;
-            }
-
-            ApplySelectedEngineer(SelectedEngineer);
+            SelectedEngineer = null;
+            EngineerId = string.IsNullOrWhiteSpace(configuredEngineerId) ? "Not configured" : configuredEngineerId;
+            EngineerName = await SecureStorage.Default.GetAsync("engineer_name") ?? EngineerId;
+            ManualEngineerId = configuredEngineerId ?? string.Empty;
+            RecentEngineers.Clear();
+            OnPropertyChanged(nameof(HasRecentEngineers));
+            OnPropertyChanged(nameof(HasNoRecentEngineers));
+            OnPropertyChanged(nameof(SelectedInitials));
         }
         finally
         {

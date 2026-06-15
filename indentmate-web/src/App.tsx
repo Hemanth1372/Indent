@@ -1,9 +1,16 @@
 import type { ReactNode } from 'react'
 import { Navigate, Route, Routes, useParams } from 'react-router-dom'
 import AdminLayout from './components/AdminLayout'
-import SuperAdminRoute from './components/SuperAdminRoute'
-import { AuthProvider } from './context/AuthContext'
+import SuperAdminRoute, { isAdminUser } from './components/SuperAdminRoute'
+import { AuthProvider, useAuth } from './context/AuthContext'
 import Dashboard from './pages/Dashboard'
+import {
+  FieldIndentAddItem,
+  FieldIndentDraftDetails,
+  FieldIndentHeader,
+  FieldIndentHome,
+  FieldIndentSubmittedDetails,
+} from './pages/FieldIndentWorkspace'
 import GenericMasterPage from './pages/GenericMasterPage'
 import IndentDetail from './pages/IndentDetail'
 import IndentList from './pages/IndentList'
@@ -17,6 +24,36 @@ function ProtectedRoute({ children, title = 'Dashboard' }: { children: ReactNode
       <AdminLayout title={title}>{children}</AdminLayout>
     </SuperAdminRoute>
   )
+}
+
+function AuthenticatedRoute({ children, title = 'Dashboard' }: { children: ReactNode; title?: string }) {
+  const { isAuthenticated } = useAuth()
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+
+  return <AdminLayout title={title}>{children}</AdminLayout>
+}
+
+function FieldRoute({ children, title = 'Indent Home' }: { children: ReactNode; title?: string }) {
+  const { isAuthenticated, user } = useAuth()
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+
+  if (isAdminUser(user)) {
+    return <Navigate to="/" replace />
+  }
+
+  return <AdminLayout title={title}>{children}</AdminLayout>
+}
+
+function RoleHome() {
+  const { user } = useAuth()
+
+  return isAdminUser(user) ? <Dashboard /> : <FieldIndentHome />
 }
 
 function PlaceholderPage({ title }: { title: string }) {
@@ -77,9 +114,9 @@ export default function App() {
         <Route
           path="/"
           element={
-            <ProtectedRoute>
-              <Dashboard />
-            </ProtectedRoute>
+            <AuthenticatedRoute>
+              <RoleHome />
+            </AuthenticatedRoute>
           }
         />
         <Route
@@ -120,6 +157,59 @@ export default function App() {
             <ProtectedRoute title="Transactions">
               <Transactions />
             </ProtectedRoute>
+          }
+        />
+        <Route
+          path="/indent-workspace"
+          element={
+            <FieldRoute title="Indent Home">
+              <FieldIndentHome />
+            </FieldRoute>
+          }
+        />
+        <Route
+          path="/indent-transactions"
+          element={
+            <FieldRoute title="Transactions">
+              <Transactions
+                detailPath={(id) => `/indent-workspace/indents/${id}`}
+                endpoint="/api/indents/mine"
+                eyebrow="My Material Ledger"
+                title="My Transactions"
+              />
+            </FieldRoute>
+          }
+        />
+        <Route
+          path="/indent-create"
+          element={
+            <FieldRoute title="Indent Creation">
+              <FieldIndentHeader />
+            </FieldRoute>
+          }
+        />
+        <Route
+          path="/indent-drafts/:draftId"
+          element={
+            <FieldRoute title="Indent Details">
+              <FieldIndentDraftDetails />
+            </FieldRoute>
+          }
+        />
+        <Route
+          path="/indent-drafts/:draftId/items/new"
+          element={
+            <FieldRoute title="Add New Item">
+              <FieldIndentAddItem />
+            </FieldRoute>
+          }
+        />
+        <Route
+          path="/indent-workspace/indents/:indentId"
+          element={
+            <FieldRoute title="Indent Details">
+              <FieldIndentSubmittedDetails />
+            </FieldRoute>
           }
         />
         <Route
