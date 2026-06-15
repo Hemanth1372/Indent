@@ -577,6 +577,23 @@ export async function ensureSchema() {
   await query('CREATE INDEX IF NOT EXISTS idx_indent_lines_header_id ON indent_lines(indent_header_id)')
   await query('CREATE INDEX IF NOT EXISTS idx_indent_lines_item_code ON indent_lines(item_code)')
   await query(`
+    CREATE TABLE IF NOT EXISTS notifications (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+      recipient_login VARCHAR(50) NOT NULL REFERENCES users(login_name),
+      indent_header_id UUID REFERENCES indent_headers(id) ON DELETE CASCADE,
+      indent_no VARCHAR(50),
+      title VARCHAR(180) NOT NULL,
+      message TEXT NOT NULL,
+      status VARCHAR(50),
+      target_path VARCHAR(255) NOT NULL,
+      is_read BOOLEAN NOT NULL DEFAULT FALSE,
+      created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+      read_at TIMESTAMP
+    )
+  `)
+  await query('CREATE INDEX IF NOT EXISTS idx_notifications_recipient_created ON notifications(recipient_login, created_at DESC)')
+  await query('CREATE INDEX IF NOT EXISTS idx_notifications_recipient_unread ON notifications(recipient_login, is_read)')
+  await query(`
     DELETE FROM indent_lines duplicate_line
     USING indent_lines kept_line
     WHERE duplicate_line.indent_header_id = kept_line.indent_header_id

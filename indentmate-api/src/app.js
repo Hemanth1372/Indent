@@ -8,6 +8,7 @@ import { dashboardRoutes } from './routes/dashboardRoutes.js'
 import { indentRoutes } from './routes/indentRoutes.js'
 import { locationRoutes } from './routes/locationRoutes.js'
 import { masterDataRoutes } from './routes/masterDataRoutes.js'
+import { notificationRoutes } from './routes/notificationRoutes.js'
 import { projectRoutes } from './routes/projectRoutes.js'
 import { responsibilityRoutes } from './routes/responsibilityRoutes.js'
 import { userRoutes } from './routes/userRoutes.js'
@@ -53,6 +54,7 @@ export function createApp() {
   app.use('/api/indents', indentRoutes)
   app.use('/api/locations', locationRoutes)
   app.use('/api/master-data', masterDataRoutes)
+  app.use('/api/notifications', notificationRoutes)
   app.use('/api/projects', projectRoutes)
   app.use('/api/responsibilities', responsibilityRoutes)
   app.use('/api/warehouses', warehouseRoutes)

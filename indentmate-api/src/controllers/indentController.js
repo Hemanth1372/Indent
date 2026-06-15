@@ -793,6 +793,13 @@ export async function createIndent(req, res, next) {
       first_item: indentValues.items[0],
     })
 
+    await notifyIndentReviewRecipients(client, {
+      createdBy,
+      headerId,
+      indentNo,
+      requestTitle: indentValues.app_request_id || indentNo,
+    })
+
     await client.query('COMMIT')
 
     const indent = await fetchIndentById(headerId)
@@ -846,7 +853,7 @@ export async function updateIndentStatus(req, res, next) {
 
     const existingStatusResult = await client.query(
       `
-        SELECT status
+        SELECT status, created_by
         FROM indent_headers
         WHERE id = $1
         LIMIT 1
@@ -872,7 +879,7 @@ export async function updateIndentStatus(req, res, next) {
             approved_at = CASE WHEN $2::text IN ('Approved', 'Rejected', 'Issue', 'Issued') THEN CURRENT_TIMESTAMP ELSE approved_at END,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
-        RETURNING id, indent_no
+        RETURNING id, indent_no, created_by, status
       `,
       [id, status, req.user?.login_name ?? null],
     )
@@ -895,6 +902,14 @@ export async function updateIndentStatus(req, res, next) {
       `,
       [result.rows[0].indent_no, status],
     )
+
+    await notifyIndentRequester(client, {
+      actorLogin: req.user?.login_name ?? null,
+      indentId: result.rows[0].id,
+      indentNo: result.rows[0].indent_no,
+      recipientLogin: result.rows[0].created_by,
+      status: result.rows[0].status,
+    })
 
     await client.query('COMMIT')
 
@@ -1317,6 +1332,87 @@ async function resolveIndentApprover(indentValues) {
     email: TEMP_INDENT_APPROVER_EMAIL,
     name: projectIncharge?.employee_name || pickFirstValue(indentValues.approver_name, env.indentApproverName) || 'Project Incharge',
   }
+}
+
+async function notifyIndentReviewRecipients(client, { createdBy, headerId, indentNo, requestTitle }) {
+  const recipients = await resolveIndentReviewRecipients(client, createdBy)
+
+  await createIndentNotifications(client, recipients, {
+    indentHeaderId: headerId,
+    indentNo,
+    title: 'New indent request',
+    message: `${requestTitle} is waiting for approval.`,
+    status: 'Pending',
+    targetPath: `/transactions/${headerId}`,
+  })
+}
+
+async function notifyIndentRequester(client, { actorLogin, indentId, indentNo, recipientLogin, status }) {
+  if (!recipientLogin || recipientLogin === actorLogin) {
+    return
+  }
+
+  const normalizedStatus = normalizeIndentStatusForNotification(status)
+  await createIndentNotifications(client, [recipientLogin], {
+    indentHeaderId: indentId,
+    indentNo,
+    title: `Indent ${normalizedStatus}`,
+    message: `${indentNo} has been ${normalizedStatus.toLowerCase()}.`,
+    status: normalizedStatus,
+    targetPath: `/indent-workspace/indents/${indentId}`,
+  })
+}
+
+async function resolveIndentReviewRecipients(client, createdBy) {
+  const adminResult = await client.query(
+    `
+      SELECT DISTINCT u.login_name
+      FROM users u
+      LEFT JOIN user_project_assignment_master assignment
+        ON assignment.employee_id = u.login_name
+        AND COALESCE(assignment.manual_status, 'Active') = 'Active'
+        AND (assignment.valid_from IS NULL OR assignment.valid_from <= CURRENT_DATE)
+        AND (assignment.valid_to IS NULL OR assignment.valid_to >= CURRENT_DATE)
+      WHERE COALESCE(u.is_deleted, FALSE) = FALSE
+        AND COALESCE(u.is_active, TRUE) = TRUE
+        AND (
+          UPPER(TRIM(COALESCE(u.primary_role, ''))) IN ('SUPER ADMIN', 'ADMINISTRATOR', 'ADMIN')
+          OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) IN ('SUPER ADMIN', 'ADMINISTRATOR', 'ADMIN')
+        )
+    `,
+  )
+
+  return [...new Set(adminResult.rows.map((row) => row.login_name).filter((recipient) => recipient && recipient !== createdBy))]
+}
+
+async function createIndentNotifications(client, recipients, { indentHeaderId, indentNo, title, message, status, targetPath }) {
+  const uniqueRecipients = [...new Set(recipients)].filter(Boolean)
+
+  for (const recipient of uniqueRecipients) {
+    await client.query(
+      `
+        INSERT INTO notifications (
+          recipient_login,
+          indent_header_id,
+          indent_no,
+          title,
+          message,
+          status,
+          target_path
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+      `,
+      [recipient, indentHeaderId, indentNo, title, message, status, targetPath],
+    )
+  }
+}
+
+function normalizeIndentStatusForNotification(status) {
+  const normalized = String(status ?? '').trim()
+  if (normalized === 'Issue') {
+    return 'Issued'
+  }
+  return normalized || 'Updated'
 }
 
 function isFinalIndentStatus(status) {

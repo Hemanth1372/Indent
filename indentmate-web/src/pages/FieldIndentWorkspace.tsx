@@ -118,7 +118,6 @@ export function FieldIndentHome() {
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
   const [activeFilter, setActiveFilter] = useState('All')
-  const drafts = readDrafts()
   const role = getFieldRole(user)
   const displayName = user?.name?.trim() || user?.login_name?.trim() || 'Field User'
 
@@ -140,9 +139,8 @@ export function FieldIndentHome() {
   }, [])
 
   const dashboardRows = useMemo(() => {
-    const draftRows = drafts.map(draftToTransaction)
-    return [...draftRows, ...indents].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
-  }, [drafts, indents])
+    return [...indents].sort((a, b) => new Date(b.created_at).getTime() - new Date(a.created_at).getTime())
+  }, [indents])
   const filteredRows = dashboardRows.filter((row) => activeFilter === 'All' || normalizeStatus(row.status) === normalizeStatus(activeFilter))
 
   return (
@@ -219,7 +217,7 @@ export function FieldIndentHome() {
                 : 'border-slate-200 bg-white'
             }`}
             key={indent.id}
-            onClick={() => indent.id.startsWith('draft-') ? navigate(`/indent-drafts/${indent.id}`) : navigate(`/indent-workspace/indents/${indent.id}`)}
+            onClick={() => navigate(`/indent-workspace/indents/${indent.id}`)}
             type="button"
           >
             <div className="flex items-center justify-between gap-3 border-b border-slate-900/10 pb-3">
@@ -518,6 +516,13 @@ export function FieldIndentDraftDetails() {
           attachmentUrl: item.attachmentName ? `attachment://${item.attachmentName}` : null,
         })),
       })
+      window.dispatchEvent(new CustomEvent('indent-created', {
+        detail: {
+          id: response.data.data.id,
+          indent_no: response.data.data.indent_no,
+          status: response.data.data.status,
+        },
+      }))
       removeDraft(draft.id)
       navigate(`/indent-workspace/indents/${response.data.data.id}`, {
         replace: true,
