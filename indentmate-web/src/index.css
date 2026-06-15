@@ -67,9 +67,9 @@ a {
 
 .login-panel-reset {
   width: min(360px, 100%);
-  min-height: min(520px, calc(100vh - 56px));
-  padding-top: clamp(24px, 3.4vw, 36px);
-  padding-bottom: 24px;
+  min-height: min(480px, calc(100vh - 56px));
+  padding-top: clamp(22px, 3vw, 30px);
+  padding-bottom: 22px;
 }
 
 .login-brand {
@@ -109,13 +109,13 @@ a {
 }
 
 .login-panel-reset .login-brand {
-  gap: 7px;
-  margin-bottom: 18px;
+  gap: 6px;
+  margin-bottom: 12px;
 }
 
 .login-panel-reset .ncc-logo {
-  width: min(176px, 58vw);
-  padding: 8px 14px;
+  width: min(128px, 52vw);
+  padding: 7px 12px;
 }
 
 .login-panel-reset .login-brand h1 {
@@ -127,21 +127,25 @@ a {
 }
 
 .login-panel-reset .login-form {
-  gap: 12px;
+  gap: 8px;
 }
 
 .login-panel-reset .login-form label {
-  gap: 6px;
+  gap: 4px;
 }
 
 .login-panel-reset .login-input {
-  min-height: 48px;
-  border-radius: 14px;
+  min-height: 44px;
+  border-radius: 13px;
 }
 
 .login-panel-reset .login-submit {
-  height: 48px;
-  margin-top: 2px;
+  height: 46px;
+  margin-top: 0;
+}
+
+.login-panel-reset .login-message {
+  margin: -3px 0 -3px;
 }
 
 .login-form {
@@ -265,13 +269,14 @@ a {
   }
 
   .login-panel {
-    min-height: auto;
+    min-height: min(480px, calc(100vh - 36px));
     margin-right: 0;
     padding: 30px 20px 24px;
   }
 
   .login-panel-reset {
-    padding: 24px 20px 22px;
+    min-height: min(480px, calc(100vh - 36px));
+    padding: 22px 20px 20px;
   }
 
   .login-brand {

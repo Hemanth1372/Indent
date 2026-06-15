@@ -1,14 +1,17 @@
 import cors from 'cors'
 import express from 'express'
+import { activityRoutes } from './routes/activityRoutes.js'
 import { env } from './config/env.js'
 import { authRoutes } from './routes/authRoutes.js'
 import { businessPartnerRoutes } from './routes/businessPartnerRoutes.js'
 import { bpActivityRoutes } from './routes/bpActivityRoutes.js'
 import { dashboardRoutes } from './routes/dashboardRoutes.js'
 import { indentRoutes } from './routes/indentRoutes.js'
+import { itemRoutes } from './routes/itemRoutes.js'
 import { locationRoutes } from './routes/locationRoutes.js'
 import { masterDataRoutes } from './routes/masterDataRoutes.js'
 import { notificationRoutes } from './routes/notificationRoutes.js'
+import { orderRoutes } from './routes/orderRoutes.js'
 import { projectRoutes } from './routes/projectRoutes.js'
 import { responsibilityRoutes } from './routes/responsibilityRoutes.js'
 import { userRoutes } from './routes/userRoutes.js'
@@ -47,14 +50,17 @@ export function createApp() {
   })
 
   app.use('/api/auth', authRoutes)
+  app.use('/api/activities', activityRoutes)
   app.use('/api/business-partners', businessPartnerRoutes)
   app.use('/api/bp-activities', bpActivityRoutes)
   app.use('/api/users', userRoutes)
   app.use('/api/dashboard', dashboardRoutes)
   app.use('/api/indents', indentRoutes)
+  app.use('/api/items', itemRoutes)
   app.use('/api/locations', locationRoutes)
   app.use('/api/master-data', masterDataRoutes)
   app.use('/api/notifications', notificationRoutes)
+  app.use('/api/orders', orderRoutes)
   app.use('/api/projects', projectRoutes)
   app.use('/api/responsibilities', responsibilityRoutes)
   app.use('/api/warehouses', warehouseRoutes)

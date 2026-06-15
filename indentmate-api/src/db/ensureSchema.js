@@ -69,6 +69,10 @@ export async function ensureSchema() {
   await query('ALTER TABLE IF EXISTS item_master ADD COLUMN IF NOT EXISTS item_description TEXT')
   await query('ALTER TABLE IF EXISTS item_master ADD COLUMN IF NOT EXISTS purchase_unit VARCHAR(50)')
   await query('ALTER TABLE IF EXISTS item_master ADD COLUMN IF NOT EXISTS item_type VARCHAR(100)')
+  await query('ALTER TABLE IF EXISTS item_master ADD COLUMN IF NOT EXISTS site_code VARCHAR(50)')
+  await query('ALTER TABLE IF EXISTS item_master ADD COLUMN IF NOT EXISTS item_name TEXT')
+  await query('ALTER TABLE IF EXISTS item_master ADD COLUMN IF NOT EXISTS description TEXT')
+  await query('ALTER TABLE IF EXISTS item_master ADD COLUMN IF NOT EXISTS item_group VARCHAR(50)')
   await query(`
     CREATE UNIQUE INDEX IF NOT EXISTS unique_site_warehouse_item
     ON item_master (project_site, warehouse_code, item_code)
@@ -269,6 +273,19 @@ export async function ensureSchema() {
       updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `)
+  await query('ALTER TABLE IF EXISTS business_partner_master ADD COLUMN IF NOT EXISTS business_partner_code VARCHAR(100)')
+  await query('ALTER TABLE IF EXISTS business_partner_master ADD COLUMN IF NOT EXISTS business_partner_name VARCHAR(255)')
+  await query('ALTER TABLE IF EXISTS business_partner_master ADD COLUMN IF NOT EXISTS bp_name VARCHAR(255)')
+  await query('ALTER TABLE IF EXISTS business_partner_master ALTER COLUMN bp_name DROP NOT NULL')
+  await query(`
+    UPDATE business_partner_master
+    SET business_partner_name = COALESCE(NULLIF(business_partner_name, ''), NULLIF(bp_name, ''), business_partner_code)
+    WHERE business_partner_name IS NULL OR business_partner_name = ''
+  `)
+  await query(`
+    CREATE UNIQUE INDEX IF NOT EXISTS unique_business_partner_master_code
+    ON business_partner_master (business_partner_code)
+  `)
 
   await query(`
     CREATE TABLE IF NOT EXISTS bp_activity_master (
@@ -321,6 +338,41 @@ export async function ensureSchema() {
   await query('ALTER TABLE IF EXISTS warehouse_master ADD COLUMN IF NOT EXISTS project_site VARCHAR(50)')
   await query('ALTER TABLE IF EXISTS warehouse_master ADD COLUMN IF NOT EXISTS is_material_warehouse VARCHAR(10)')
   await query('ALTER TABLE IF EXISTS warehouse_master ADD COLUMN IF NOT EXISTS is_virtual_warehouse VARCHAR(10)')
+  await query('ALTER TABLE IF EXISTS warehouse_master ADD COLUMN IF NOT EXISTS description VARCHAR(255)')
+  await query('ALTER TABLE IF EXISTS warehouse_master ADD COLUMN IF NOT EXISTS site_code VARCHAR(50)')
+  await query('ALTER TABLE IF EXISTS warehouse_master ADD COLUMN IF NOT EXISTS material_warehouse VARCHAR(10)')
+  await query('ALTER TABLE IF EXISTS warehouse_master ADD COLUMN IF NOT EXISTS is_virtual BOOLEAN')
+  await query('ALTER TABLE IF EXISTS warehouse_master ADD COLUMN IF NOT EXISTS virtual_warehouse VARCHAR(10)')
+  await query(`
+    DO $$
+    BEGIN
+      IF EXISTS (
+        SELECT 1 FROM information_schema.columns
+        WHERE table_name = 'warehouse_master' AND column_name = 'description'
+      ) THEN
+        UPDATE warehouse_master
+        SET
+          warehouse_description = COALESCE(NULLIF(warehouse_description, ''), NULLIF(description, ''), warehouse_code),
+          project_site = COALESCE(NULLIF(project_site, ''), NULLIF(site_code, '')),
+          is_material_warehouse = COALESCE(NULLIF(is_material_warehouse, ''), NULLIF(material_warehouse, ''), 'No'),
+          is_virtual_warehouse = COALESCE(
+            NULLIF(is_virtual_warehouse, ''),
+            CASE WHEN is_virtual THEN 'Yes' ELSE NULL END,
+            NULLIF(virtual_warehouse, ''),
+            'No'
+          ),
+          updated_at = CURRENT_TIMESTAMP
+        WHERE warehouse_description IS NULL
+          OR warehouse_description = ''
+          OR project_site IS NULL
+          OR project_site = ''
+          OR is_material_warehouse IS NULL
+          OR is_material_warehouse = ''
+          OR is_virtual_warehouse IS NULL
+          OR is_virtual_warehouse = '';
+      END IF;
+    END $$;
+  `)
 
   await query('DROP TABLE IF EXISTS warehouse_bin_master CASCADE')
 
@@ -456,6 +508,15 @@ export async function ensureSchema() {
 
   await query('CREATE INDEX IF NOT EXISTS idx_activity_master_code ON activity_master(activity_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_activity_master_project ON activity_master(project_code)')
+  await query('CREATE INDEX IF NOT EXISTS idx_activity_master_project_code_search ON activity_master(project_code, activity_code)')
+  await query('CREATE INDEX IF NOT EXISTS idx_activity_master_project_lower ON activity_master(LOWER(btrim(project_code)))')
+  await query('CREATE INDEX IF NOT EXISTS idx_activity_master_activity_code_lower ON activity_master(LOWER(activity_code))')
+  await query('CREATE INDEX IF NOT EXISTS idx_activity_master_description_lower ON activity_master(LOWER(description))')
+  await query('CREATE INDEX IF NOT EXISTS idx_item_master_project_warehouse_code ON item_master(project_site, warehouse_code, item_code)')
+  await query('CREATE INDEX IF NOT EXISTS idx_item_master_project_site_lower ON item_master(LOWER(btrim(project_site)))')
+  await query('CREATE INDEX IF NOT EXISTS idx_item_master_warehouse_code_lower ON item_master(LOWER(btrim(warehouse_code)))')
+  await query('CREATE INDEX IF NOT EXISTS idx_item_master_item_code_lower ON item_master(LOWER(item_code))')
+  await query('CREATE INDEX IF NOT EXISTS idx_item_master_item_description_lower ON item_master(LOWER(item_description))')
   await query('CREATE INDEX IF NOT EXISTS idx_business_partner_master_code ON business_partner_master(business_partner_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_business_partner_master_name ON business_partner_master(business_partner_name)')
   await query('CREATE INDEX IF NOT EXISTS idx_bp_activity_master_project ON bp_activity_master(project_code)')
