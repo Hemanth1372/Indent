@@ -2,6 +2,7 @@ import {
   ArrowLeft,
   Building2,
   CalendarDays,
+  Camera,
   Check,
   ChevronDown,
   ClipboardList,
@@ -9,7 +10,6 @@ import {
   Folder,
   MapPin,
   PackagePlus,
-  Paperclip,
   Plus,
   RefreshCw,
   Save,
@@ -109,6 +109,7 @@ type IndentTransaction = {
 const DRAFTS_KEY = 'indent_field_drafts'
 const darkBlue = '#123468'
 const OPTION_RENDER_LIMIT = 80
+const MAX_ATTACHMENT_SIZE_BYTES = 5 * 1024 * 1024
 
 export function FieldIndentHome() {
   const navigate = useNavigate()
@@ -709,6 +710,23 @@ export function FieldIndentAddItem() {
   }
   const selectedPartner = partners.find((partner) => partner.code === form.toBusinessPartner)
 
+  function handleAttachmentSelect(event: React.ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+
+    if (!file) {
+      return
+    }
+
+    if (file.size > MAX_ATTACHMENT_SIZE_BYTES) {
+      setErrorMessage('Attachment size must be 5 MB or less.')
+      event.target.value = ''
+      return
+    }
+
+    setErrorMessage('')
+    setForm((current) => ({ ...current, attachmentName: file.name }))
+  }
+
   function saveItem() {
     if (!selectedMaterial || !form.requestedQty || Number(form.requestedQty) <= 0) {
       setErrorMessage('Select material and enter a valid requested quantity.')
@@ -812,12 +830,13 @@ export function FieldIndentAddItem() {
                 <label className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-blue-950 transition hover:bg-slate-100">
                   <Upload size={16} />
                   File
-                  <input className="sr-only" type="file" onChange={(event) => setForm((current) => ({ ...current, attachmentName: event.target.files?.[0]?.name ?? '' }))} />
+                  <input className="sr-only" type="file" onChange={handleAttachmentSelect} />
                 </label>
-                <button className="inline-flex h-12 items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-blue-950 transition hover:bg-slate-100" onClick={() => setForm((current) => ({ ...current, attachmentName: 'camera-capture.jpg' }))} type="button">
-                  <Paperclip size={16} />
+                <label className="inline-flex h-12 cursor-pointer items-center justify-center gap-2 rounded-lg border border-slate-200 bg-slate-50 text-sm font-bold text-blue-950 transition hover:bg-slate-100">
+                  <Camera size={16} />
                   Camera
-                </button>
+                  <input accept="image/*" capture="environment" className="sr-only" type="file" onChange={handleAttachmentSelect} />
+                </label>
               </div>
               <p className="mt-2 text-xs text-slate-400">{form.attachmentName || 'Max attachment size: 5 MB'}</p>
             </div>
