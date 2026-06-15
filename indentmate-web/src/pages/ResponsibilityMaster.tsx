@@ -48,9 +48,19 @@ type AssignmentFormValues = {
   valid_to?: string
 }
 
+type RoleOption = {
+  role_name: string
+  responsibility: string
+}
+
 type RoleOptions = {
   responsibilities: string[]
-  roles?: Array<{ role_name: string; responsibility: string }>
+  roles?: RoleOption[]
+}
+
+type SelectOption = {
+  label: string
+  value: string
 }
 
 type ProjectOption = {
@@ -165,6 +175,7 @@ export default function ResponsibilityMaster() {
   const allVisibleRowsSelected = visibleRowKeys.length > 0 && selectedVisibleCount === visibleRowKeys.length
   const someVisibleRowsSelected = selectedVisibleCount > 0 && selectedVisibleCount < visibleRowKeys.length
   const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.primary_role === 'Super Admin'
+  const roleSelectOptions = useMemo(() => buildRoleSelectOptions(roles), [roles])
 
   useEffect(() => {
     loadUsers(isFilterActive ? filterRequestParams(currentPage) : { filters: [], page: currentPage })
@@ -525,14 +536,18 @@ export default function ResponsibilityMaster() {
     setProjectModalOpen(true)
     await Promise.all([
       loadAssignments(user.employee_id),
-      roles.responsibilities.length ? Promise.resolve() : loadRoleOptions(),
+      roleSelectOptions.length ? Promise.resolve() : loadRoleOptions(),
       projectOptions.length ? Promise.resolve() : loadProjectOptions(),
     ])
   }
 
   function getRoleDisplay(value: string) {
-    const match = roles.roles?.find((role) => role.role_name === value || role.responsibility === value)
-    return match?.responsibility ?? value
+    const exactRoleNameMatch = roles.roles?.find((role) => role.role_name === value)
+    if (exactRoleNameMatch) {
+      return formatRoleOptionLabel(exactRoleNameMatch)
+    }
+
+    return value
   }
 
   function handleEditAssignment(assignment: AssignmentRow) {
@@ -1037,7 +1052,7 @@ export default function ResponsibilityMaster() {
               <div className="grid grid-cols-1 gap-x-4 md:grid-cols-3">
                 <ProjectFields form={assignmentForm} projectOptions={projectOptions} projectOptionsLoading={projectOptionsLoading} />
                 <Form.Item label="Role" name="responsibility" rules={[{ required: true, message: 'Role is required' }]}>
-                  <Select loading={optionsLoading} optionFilterProp="label" options={roles.responsibilities.map((role) => ({ label: role, value: role }))} showSearch />
+                  <Select loading={optionsLoading} optionFilterProp="label" options={roleSelectOptions} showSearch />
                 </Form.Item>
                 <Form.Item label="Valid From" name="valid_from">
                   <Input type="date" />
@@ -1164,6 +1179,38 @@ function normalizeUserPayload(values: UserFormValues) {
     email_id: values.email_id?.trim() ?? '',
     password_hash: values.password_hash?.trim() || '123456',
   }
+}
+
+function buildRoleSelectOptions(roleOptions: RoleOptions): SelectOption[] {
+  const sourceRoles = roleOptions.roles?.length
+    ? roleOptions.roles
+    : roleOptions.responsibilities.map((responsibility) => ({ role_name: responsibility, responsibility }))
+  const seenRoleNames = new Set<string>()
+
+  return sourceRoles
+    .map((role) => ({
+      role_name: String(role.role_name || role.responsibility || '').trim(),
+      responsibility: String(role.responsibility || role.role_name || '').trim(),
+    }))
+    .filter((role) => role.role_name)
+    .filter((role) => {
+      const key = role.role_name.toLowerCase()
+      if (seenRoleNames.has(key)) {
+        return false
+      }
+      seenRoleNames.add(key)
+      return true
+    })
+    .map((role) => ({
+      label: formatRoleOptionLabel(role),
+      value: role.role_name,
+    }))
+}
+
+function formatRoleOptionLabel(role: RoleOption) {
+  return role.responsibility && role.responsibility !== role.role_name
+    ? `${role.responsibility} (${role.role_name})`
+    : role.role_name
 }
 
 function normalizeAssignmentPayload(values: AssignmentFormValues) {

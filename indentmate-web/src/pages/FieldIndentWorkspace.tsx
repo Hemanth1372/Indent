@@ -19,7 +19,7 @@ import {
   Warehouse,
   XCircle,
 } from 'lucide-react'
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { useLocation, useNavigate, useParams } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
@@ -28,6 +28,7 @@ type Option = {
   code: string
   label: string
   description?: string
+  group?: string
   meta?: Record<string, string | number | null | undefined>
 }
 
@@ -107,6 +108,7 @@ type IndentTransaction = {
 
 const DRAFTS_KEY = 'indent_field_drafts'
 const darkBlue = '#123468'
+const OPTION_RENDER_LIMIT = 80
 
 export function FieldIndentHome() {
   const navigate = useNavigate()
@@ -281,7 +283,7 @@ export function FieldIndentHeader() {
     async function loadProjectOptions() {
       const [warehouseResponse, orderResponse] = await Promise.all([
         api.get<{ data: Array<{ warehouse_code: string; warehouse_description: string }> }>(`/api/warehouses/options?projectCode=${encodeURIComponent(form.projectCode)}`),
-        api.get<{ data: Array<{ order_no: string; order_type: string; description: string; item_code?: string | null; item_description?: string | null; serial_number?: string | null }> }>(`/api/indents/options/orders?projectCode=${encodeURIComponent(form.projectCode)}`),
+        api.get<{ data: Array<{ order_no: string; order_type: string; order_group?: string; description: string; item_code?: string | null; item_description?: string | null; serial_number?: string | null; status?: string | null }> }>(`/api/indents/options/orders?projectCode=${encodeURIComponent(form.projectCode)}`),
       ])
       const nextWarehouses = warehouseResponse.data.data.map((warehouse) => ({
         code: warehouse.warehouse_code,
@@ -289,10 +291,12 @@ export function FieldIndentHeader() {
         description: warehouse.warehouse_description,
       }))
       const nextOrders = orderResponse.data.data.map((order) => ({
-        code: order.order_no,
-        label: `${order.order_no} - ${order.description}`,
+        code: `${order.order_type}:${order.order_no}`,
+        label: formatOrderLabel(order.order_no, order.status, order.description),
         description: order.description,
+        group: order.order_group ?? (order.order_type === 'Rental_Order' ? 'Rental Orders' : 'Service Orders'),
         meta: {
+          orderNo: order.order_no,
           orderType: order.order_type,
           equipment: formatOrderEquipment(order.item_code, order.item_description, order.serial_number),
         },
@@ -306,7 +310,7 @@ export function FieldIndentHeader() {
         warehouseCode: nextWarehouses.some((warehouse) => warehouse.code === current.warehouseCode) ? current.warehouseCode : nextWarehouses[0]?.code ?? '',
         sourceLocationCode: '',
         toEntityId: '',
-        orderNo: nextOrders.some((order) => order.code === current.orderNo) ? current.orderNo : nextOrders[0]?.code ?? '',
+        orderNo: nextOrders.some((order) => order.code === current.orderNo) ? current.orderNo : '',
       }))
       setErrorMessage('')
     }
@@ -397,7 +401,7 @@ export function FieldIndentHeader() {
       sourceLocationLabel: selectedLocation?.label,
       toEntityId: role === 'SIE' ? selectedPartner?.code : selectedOrder?.code,
       toEntityLabel: role === 'SIE' ? selectedPartner?.label : selectedOrder?.label,
-      orderNo: selectedOrder?.code,
+      orderNo: String(selectedOrder?.meta?.orderNo ?? selectedOrder?.code ?? ''),
       orderType: String(selectedOrder?.meta?.orderType ?? ''),
       equipmentDisplay: String(selectedOrder?.meta?.equipment ?? ''),
       items: [],
@@ -416,7 +420,17 @@ export function FieldIndentHeader() {
             <OptionField label="Project *" value={form.projectCode} onChange={(value) => setForm((current) => ({ ...current, projectCode: value }))} options={projects} placeholder="Select Project" />
             {role === 'SER' ? (
               <>
-                <OptionField label="Service / Rental Order *" value={form.orderNo} onChange={(value) => setForm((current) => ({ ...current, orderNo: value }))} options={orders} placeholder="Select order" />
+                <OptionField
+                  label="Service / Rental Order *"
+                  value={form.orderNo}
+                  onChange={(value) => setForm((current) => ({ ...current, orderNo: value }))}
+                  onSearch={(search) => loadOrderOptions(form.projectCode, search).then((nextOrders) => {
+                    setOrders((current) => mergeOptions(current, nextOrders))
+                    return nextOrders
+                  })}
+                  options={orders}
+                  placeholder="Select Order"
+                />
                 <ReadonlyField label="Equipment" value={String(orders.find((order) => order.code === form.orderNo)?.meta?.equipment ?? 'Auto-filled after order selection')} />
               </>
             ) : null}
@@ -644,18 +658,23 @@ export function FieldIndentAddItem() {
     const sourceDraft = draft
 
     async function loadOptions() {
-      const [materialResponse, activityResponse, locationResponse, partnerResponse] = await Promise.all([
-        api.get<OptionResponse<{ item_code: string; item_description: string; uom: string }>>(`/api/indents/options/items?projectCode=${encodeURIComponent(sourceDraft.projectCode)}&warehouseCode=${encodeURIComponent(sourceDraft.warehouseCode ?? '')}&limit=500`),
+      const materialScope = sourceDraft.engineerType === 'SER' ? 'all' : 'project'
+      const initialMaterials = await loadMaterialOptions(sourceDraft.projectCode, sourceDraft.engineerType === 'SIE' ? sourceDraft.warehouseCode ?? '' : '', '', materialScope)
+      setMaterials(initialMaterials)
+
+      void loadAllMaterialOptions(sourceDraft.projectCode, sourceDraft.engineerType === 'SIE' ? sourceDraft.warehouseCode ?? '' : '', materialScope)
+        .then((allMaterials) => setMaterials((current) => mergeOptions(current, allMaterials)))
+        .catch(() => undefined)
+
+      if (sourceDraft.engineerType !== 'SIE') {
+        return
+      }
+
+      const [activityResponse, locationResponse, partnerResponse] = await Promise.all([
         api.get<OptionResponse<{ activity_code: string; description: string }>>(`/api/indents/options/activities?projectCode=${encodeURIComponent(sourceDraft.projectCode)}&limit=500`),
         api.get<{ data: Array<{ location_code: string; description: string }> }>(`/api/indents/options/warehouse-locations?projectCode=${encodeURIComponent(sourceDraft.projectCode)}&warehouseCode=${encodeURIComponent(sourceDraft.warehouseCode ?? '')}`),
         loadDeliveryPointOptions(sourceDraft.projectCode, ''),
       ])
-      setMaterials(materialResponse.data.data.map((material) => ({
-        code: material.item_code,
-        label: `${material.item_code} - ${material.item_description}`,
-        description: material.item_description,
-        meta: { uom: material.uom },
-      })))
       setActivities(activityResponse.data.data.map((activity) => ({
         code: activity.activity_code,
         label: `${activity.activity_code} - ${activity.description}`,
@@ -764,7 +783,7 @@ export function FieldIndentAddItem() {
               label="Material *"
               value={form.materialCode}
               onChange={(value) => setForm((current) => ({ ...current, materialCode: value }))}
-              onSearch={(search) => loadMaterialOptions(activeDraft.projectCode, activeDraft.warehouseCode ?? '', search).then((nextMaterials) => {
+              onSearch={(search) => loadMaterialOptions(activeDraft.projectCode, activeDraft.engineerType === 'SIE' ? activeDraft.warehouseCode ?? '' : '', search, activeDraft.engineerType === 'SER' ? 'all' : 'project').then((nextMaterials) => {
                 setMaterials((current) => mergeOptions(current, nextMaterials))
                 return nextMaterials
               })}
@@ -884,6 +903,9 @@ function OptionField({
   const [searchOptions, setSearchOptions] = useState<Option[]>(options)
   const [open, setOpen] = useState(false)
   const [isSearching, setIsSearching] = useState(false)
+  const onSearchRef = useRef(onSearch)
+  const optionsRef = useRef(options)
+  const searchRequestIdRef = useRef(0)
   const usesServerSearch = options.length > 20 && Boolean(onSearch)
   const visibleOptions = useMemo(() => {
     const sourceOptions = usesServerSearch ? searchOptions : options
@@ -893,15 +915,34 @@ function OptionField({
       : []
 
     if (usesServerSearch) {
-      return [...selectedInSource, ...sourceOptions]
+      const narrowedOptions = normalizedQuery.length === 1
+        ? sourceOptions.filter((option) => option.label.toLowerCase().includes(normalizedQuery))
+        : sourceOptions
+
+      return [...selectedInSource, ...narrowedOptions.slice(0, OPTION_RENDER_LIMIT)]
     }
 
     const filteredOptions = normalizedQuery
       ? sourceOptions.filter((option) => option.label.toLowerCase().includes(normalizedQuery))
       : sourceOptions
 
-    return [...selectedInSource, ...filteredOptions]
+    return [...selectedInSource, ...filteredOptions.slice(0, OPTION_RENDER_LIMIT)]
   }, [options, query, searchOptions, selectedOption, usesServerSearch])
+  const visibleOptionRows = useMemo(() => {
+    const rows: Array<{ type: 'group'; label: string } | { type: 'option'; option: Option }> = []
+    let currentGroup = ''
+
+    for (const option of visibleOptions) {
+      const nextGroup = option.group ?? ''
+      if (nextGroup && nextGroup !== currentGroup) {
+        rows.push({ type: 'group', label: nextGroup })
+        currentGroup = nextGroup
+      }
+      rows.push({ type: 'option', option })
+    }
+
+    return rows
+  }, [visibleOptions])
 
   useEffect(() => {
     if (selectedOption) {
@@ -910,28 +951,52 @@ function OptionField({
   }, [selectedOption?.code])
 
   useEffect(() => {
-    if (!usesServerSearch || !onSearch) {
+    onSearchRef.current = onSearch
+  }, [onSearch])
+
+  useEffect(() => {
+    optionsRef.current = options
+
+    if (!usesServerSearch || query.trim().length < 2) {
       setSearchOptions(options)
+    }
+  }, [options, query, usesServerSearch])
+
+  useEffect(() => {
+    if (!usesServerSearch || !onSearchRef.current) {
       return
     }
 
     const searchText = query.trim()
 
     if (searchText.length < 2) {
-      setSearchOptions(options)
       return
     }
 
     const timeoutId = window.setTimeout(() => {
+      const requestId = searchRequestIdRef.current + 1
+      searchRequestIdRef.current = requestId
       setIsSearching(true)
-      onSearch(searchText)
-        .then(setSearchOptions)
-        .catch(() => setSearchOptions(options))
-        .finally(() => setIsSearching(false))
+      onSearchRef.current?.(searchText)
+        .then((nextOptions) => {
+          if (searchRequestIdRef.current === requestId) {
+            setSearchOptions(nextOptions)
+          }
+        })
+        .catch(() => {
+          if (searchRequestIdRef.current === requestId) {
+            setSearchOptions(optionsRef.current)
+          }
+        })
+        .finally(() => {
+          if (searchRequestIdRef.current === requestId) {
+            setIsSearching(false)
+          }
+        })
     }, 300)
 
     return () => window.clearTimeout(timeoutId)
-  }, [onSearch, options, query, usesServerSearch])
+  }, [query, usesServerSearch])
 
   function selectOption(option: Option) {
     setQuery(option.label)
@@ -974,21 +1039,25 @@ function OptionField({
 
       {open ? (
         <div className="absolute left-0 right-0 top-[calc(100%+6px)] z-30 max-h-72 overflow-y-auto rounded-lg border border-slate-200 bg-white py-1 text-sm font-semibold text-slate-800 shadow-xl">
-          {isSearching ? (
+          {isSearching && visibleOptions.length === 0 ? (
             <div className="px-4 py-3 text-slate-400">Searching...</div>
           ) : visibleOptions.length === 0 ? (
             <div className="px-4 py-3 text-slate-400">No matching options.</div>
-          ) : visibleOptions.map((option) => (
+          ) : visibleOptionRows.map((row) => row.type === 'group' ? (
+            <div className="px-4 pb-1 pt-2 text-center text-xs font-black uppercase text-slate-700" key={`group-${row.label}`}>
+              -- {row.label} --
+            </div>
+          ) : (
             <button
               className={`block w-full px-4 py-2.5 text-left transition hover:bg-blue-50 ${
-                option.code === value ? 'bg-blue-50 text-blue-800' : 'text-slate-800'
+                row.option.code === value ? 'bg-blue-50 text-blue-800' : 'text-slate-800'
               }`}
-              key={option.code}
+              key={row.option.code}
               onMouseDown={(event) => event.preventDefault()}
-              onClick={() => selectOption(option)}
+              onClick={() => selectOption(row.option)}
               type="button"
             >
-              {option.label}
+              {row.option.label}
             </button>
           ))}
         </div>
@@ -1045,17 +1114,46 @@ function EmptyState({ label }: { label: string }) {
   return <div className="rounded-lg border border-slate-200 bg-white px-4 py-8 text-center text-sm font-semibold text-slate-500 shadow-sm">{label}</div>
 }
 
-async function loadMaterialOptions(projectCode: string, warehouseCode = '', search = '') {
+async function loadMaterialOptions(projectCode: string, warehouseCode = '', search = '', scope: 'project' | 'all' = 'project') {
+  const response = await fetchMaterialOptions(projectCode, warehouseCode, search, 500, 0, scope)
+  return mapMaterialOptions(response.data)
+}
+
+async function loadAllMaterialOptions(projectCode: string, warehouseCode = '', scope: 'project' | 'all' = 'project') {
   if (!projectCode) {
     return []
   }
 
+  const allMaterials: Option[] = []
+  let offset = 0
+  let hasMore = true
+
+  while (hasMore) {
+    const response = await fetchMaterialOptions(projectCode, warehouseCode, '', 500, offset, scope)
+    allMaterials.push(...mapMaterialOptions(response.data))
+    hasMore = Boolean(response.hasMore)
+    offset = response.nextOffset ?? allMaterials.length
+  }
+
+  return allMaterials
+}
+
+async function fetchMaterialOptions(projectCode: string, warehouseCode = '', search = '', limit = 500, offset = 0, scope: 'project' | 'all' = 'project') {
+  if (!projectCode && scope !== 'all') {
+    return { data: [] }
+  }
+
   const params = new URLSearchParams({
     projectCode,
-    limit: '500',
+    limit: String(limit),
+    offset: String(offset),
   })
 
-  if (warehouseCode) {
+  if (scope === 'all') {
+    params.set('scope', 'all')
+  }
+
+  if (warehouseCode && scope !== 'all') {
     params.set('warehouseCode', warehouseCode)
   }
 
@@ -1063,12 +1161,16 @@ async function loadMaterialOptions(projectCode: string, warehouseCode = '', sear
     params.set('search', search.trim())
   }
 
-  const response = await api.get<OptionResponse<{ item_code: string; item_description: string; uom: string }>>(`/api/indents/options/items?${params}`)
-  return response.data.data.map((material) => ({
+  const response = await api.get<OptionResponse<{ item_code: string; item_description: string; item_type?: string | null; uom: string }>>(`/api/indents/options/items?${params}`)
+  return response.data
+}
+
+function mapMaterialOptions(materials: Array<{ item_code: string; item_description: string; item_type?: string | null; uom: string }>) {
+  return materials.map((material) => ({
     code: material.item_code,
-    label: `${material.item_code} - ${material.item_description}`,
+    label: formatMaterialLabel(material.item_code, material.item_type, material.item_description),
     description: material.item_description,
-    meta: { uom: material.uom },
+    meta: { itemType: material.item_type, uom: material.uom },
   }))
 }
 
@@ -1121,6 +1223,44 @@ async function loadContractorOptions(projectCode: string, locationCode = '', sea
     code: partner.business_partner_code,
     label: `${partner.business_partner_code} - ${partner.business_partner_name}`,
     description: partner.business_partner_name,
+  }))
+}
+
+async function loadOrderOptions(projectCode: string, search = '') {
+  if (!projectCode) {
+    return []
+  }
+
+  const params = new URLSearchParams({
+    projectCode,
+    limit: search.trim().length >= 2 ? '80' : '600',
+  })
+
+  if (search.trim().length >= 2) {
+    params.set('search', search.trim())
+  }
+
+  const response = await api.get<OptionResponse<{
+    order_no: string
+    order_type: string
+    order_group?: string
+    description: string
+    item_code?: string | null
+    item_description?: string | null
+    serial_number?: string | null
+    status?: string | null
+  }>>(`/api/indents/options/orders?${params}`)
+
+  return response.data.data.map((order) => ({
+    code: `${order.order_type}:${order.order_no}`,
+    label: formatOrderLabel(order.order_no, order.status, order.description),
+    description: order.description,
+    group: order.order_group ?? (order.order_type === 'Rental_Order' ? 'Rental Orders' : 'Service Orders'),
+    meta: {
+      orderNo: order.order_no,
+      orderType: order.order_type,
+      equipment: formatOrderEquipment(order.item_code, order.item_description, order.serial_number),
+    },
   }))
 }
 
@@ -1285,6 +1425,41 @@ function formatQty(value: string | number) {
   return Number.isFinite(parsed) ? parsed.toLocaleString('en-IN') : String(value ?? '-')
 }
 
+function formatMaterialLabel(itemCode: string, itemType?: string | null, itemDescription?: string | null) {
+  const code = String(itemCode ?? '').trim()
+  const type = String(itemType ?? '').trim()
+  const description = String(itemDescription ?? '').trim()
+  const details = type && description && !description.toLowerCase().startsWith(`${type.toLowerCase()} -`)
+    ? `${type} - ${description}`
+    : description || type
+
+  return [code, details].filter(Boolean).join(' - ')
+}
+
+function formatOrderLabel(orderNo: string, status?: string | null, description?: string | null) {
+  const statusText = String(status ?? '').trim()
+  const descriptionText = String(description ?? '').trim()
+
+  if (descriptionText && descriptionText !== orderNo && statusText) {
+    return `${orderNo} - ${descriptionText} - ${statusText}`
+  }
+
+  if (descriptionText && descriptionText !== orderNo) {
+    return `${orderNo} - ${descriptionText}`
+  }
+
+  if (statusText) {
+    return `${orderNo} - ${statusText}`
+  }
+
+  return orderNo
+}
+
 function formatOrderEquipment(itemCode?: string | null, itemDescription?: string | null, serialNumber?: string | null) {
-  return [formatPair(itemCode, itemDescription), serialNumber].filter((part) => part && part !== '-').join(' · ') || 'Auto-filled'
+  const description = String(itemDescription ?? '').trim()
+  const code = String(itemCode ?? '').trim()
+  const serial = String(serialNumber ?? '').trim()
+  const equipment = description || code
+
+  return [equipment, serial].filter(Boolean).join(' - ') || 'Auto-filled'
 }

@@ -358,24 +358,36 @@ export async function listIndentItemOptions(req, res, next) {
     const projectCode = String(req.query?.projectCode ?? '').trim()
     const warehouseCode = String(req.query?.warehouseCode ?? '').trim()
     const search = String(req.query?.search ?? '').trim()
+    const scope = String(req.query?.scope ?? '').trim().toLowerCase()
     const limit = normalizeOptionLimit(req.query?.limit)
     const offset = normalizeOptionOffset(req.query?.offset)
 
-    if (!projectCode) {
+    if (!projectCode && scope !== 'all') {
       return res.status(400).json({ message: 'projectCode is required' })
     }
 
-    const params = [projectCode]
-    const filters = ['project_site = $1']
+    const params = []
+    const filters = []
 
-    if (warehouseCode) {
+    if (scope !== 'all') {
+      params.push(projectCode)
+      filters.push(`project_site = $${params.length}`)
+    }
+
+    if (warehouseCode && scope !== 'all') {
       params.push(warehouseCode)
       filters.push(`(warehouse_code = $${params.length} OR warehouse_code IS NULL)`)
     }
 
     if (search) {
       params.push(`%${search}%`)
-      filters.push(`(item_code ILIKE $${params.length} OR item_description ILIKE $${params.length})`)
+      filters.push(`(
+        item_code ILIKE $${params.length}
+        OR item_description ILIKE $${params.length}
+        OR COALESCE(item_type, '') ILIKE $${params.length}
+        OR CONCAT(COALESCE(item_type, ''), ' - ', item_description) ILIKE $${params.length}
+        OR CONCAT(item_code, ' - ', COALESCE(item_type, ''), ' - ', item_description) ILIKE $${params.length}
+      )`)
     }
 
     params.push(limit + 1)
@@ -389,11 +401,12 @@ export async function listIndentItemOptions(req, res, next) {
           item_code,
           item_description,
           purchase_unit AS uom,
+          item_type,
           warehouse_code,
           warehouse_description,
           on_hand_qty
         FROM item_master
-        WHERE ${filters.join(' AND ')}
+        ${filters.length ? `WHERE ${filters.join(' AND ')}` : ''}
         ORDER BY item_code ASC
         LIMIT $${limitParam}
         OFFSET $${offsetParam}
@@ -565,44 +578,74 @@ export async function listIndentDeliveryPointOptions(req, res, next) {
 export async function listIndentOrderOptions(req, res, next) {
   try {
     const projectCode = String(req.query?.projectCode ?? '').trim()
+    const search = String(req.query?.search ?? '').trim()
+    const limit = normalizeOptionLimit(req.query?.limit)
 
     if (!projectCode) {
       return res.status(400).json({ message: 'projectCode is required' })
     }
+
+    const params = [projectCode]
+    const serviceFilters = ['project_site = $1']
+    const rentalFilters = ['project_code = $1']
+
+    if (search) {
+      params.push(`%${search}%`)
+      const searchParam = params.length
+      serviceFilters.push(`(
+        service_order_no ILIKE $${searchParam}
+        OR COALESCE(description, '') ILIKE $${searchParam}
+        OR COALESCE(item_code, '') ILIKE $${searchParam}
+        OR COALESCE(item_description, '') ILIKE $${searchParam}
+        OR COALESCE(status, '') ILIKE $${searchParam}
+      )`)
+      rentalFilters.push(`(
+        rental_order ILIKE $${searchParam}
+        OR COALESCE(rental_description, '') ILIKE $${searchParam}
+        OR COALESCE(item_code, '') ILIKE $${searchParam}
+        OR COALESCE(item_description, '') ILIKE $${searchParam}
+        OR COALESCE(status, '') ILIKE $${searchParam}
+      )`)
+    }
+
+    params.push(limit)
+    const limitParam = params.length
 
     const serviceOrders = await query(
       `
         SELECT
           service_order_no AS order_no,
           'Service_Order' AS order_type,
-          COALESCE(NULLIF(description, ''), item_description, service_order_no) AS description,
+          'Service Orders' AS order_group,
+          COALESCE(NULLIF(item_description, ''), NULLIF(description, ''), service_order_no) AS description,
           item_code,
           item_description,
           serial_number,
           status
         FROM service_orders
-        WHERE project_site = $1
+        WHERE ${serviceFilters.join(' AND ')}
         ORDER BY service_order_no ASC
-        LIMIT 300
+        LIMIT $${limitParam}
       `,
-      [projectCode],
+      params,
     )
     const rentalOrders = await query(
       `
         SELECT
           rental_order AS order_no,
           'Rental_Order' AS order_type,
+          'Rental Orders' AS order_group,
           rental_description AS description,
           item_code,
           item_description,
           NULL AS serial_number,
           status
         FROM rental_order_master
-        WHERE project_code = $1
+        WHERE ${rentalFilters.join(' AND ')}
         ORDER BY rental_order ASC
-        LIMIT 300
+        LIMIT $${limitParam}
       `,
-      [projectCode],
+      params,
     )
 
     return res.json({ data: [...serviceOrders.rows, ...rentalOrders.rows] })

@@ -784,6 +784,11 @@ type RoleOption = {
   responsibility: string
 }
 
+type SelectOption = {
+  label: string
+  value: string
+}
+
 type MasterListResponse = {
   data: MasterRecord[]
   metadata?: {
@@ -895,6 +900,35 @@ function formatDisplayDate(value: unknown) {
   const year = date.getFullYear()
 
   return `${day}/${month}/${year}`
+}
+
+function buildRoleSelectOptions(roles: RoleOption[]): SelectOption[] {
+  const seenRoleNames = new Set<string>()
+
+  return roles
+    .map((role) => ({
+      role_name: role.role_name || role.responsibility,
+      responsibility: role.responsibility || role.role_name,
+    }))
+    .filter((role) => role.role_name)
+    .filter((role) => {
+      const key = role.role_name.toLowerCase()
+      if (seenRoleNames.has(key)) {
+        return false
+      }
+      seenRoleNames.add(key)
+      return true
+    })
+    .map((role) => {
+      const label = role.responsibility && role.responsibility !== role.role_name
+        ? `${role.responsibility} (${role.role_name})`
+        : role.role_name
+
+      return {
+        label,
+        value: role.role_name,
+      }
+    })
 }
 
 function toDateTimeInputValue(value: unknown) {
@@ -1231,10 +1265,7 @@ export default function GenericMasterPage() {
     [userOptions],
   )
   const roleSelectOptions = useMemo(
-    () => roleOptions.map((role) => ({
-      label: role.responsibility,
-      value: role.responsibility,
-    })),
+    () => buildRoleSelectOptions(roleOptions),
     [roleOptions],
   )
 
@@ -1584,7 +1615,7 @@ export default function GenericMasterPage() {
           role_name: String(role.role_name ?? role.responsibility ?? '').trim(),
           responsibility: String(role.responsibility ?? role.role_name ?? '').trim(),
         }))
-        .filter((role) => role.responsibility)
+        .filter((role) => role.role_name || role.responsibility)
 
       setRoleOptions(options)
     } catch (requestError) {
