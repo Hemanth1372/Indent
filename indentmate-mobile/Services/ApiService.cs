@@ -207,8 +207,28 @@ public class ApiService
         return response?.Data
             .Select(indent => new RemoteIndentReference(
                 (indent.AppRequestId ?? string.Empty).Trim(),
-                (indent.IndentNo ?? string.Empty).Trim()))
+                (indent.IndentNo ?? string.Empty).Trim(),
+                (indent.Status ?? string.Empty).Trim()))
             .ToList() ?? new List<RemoteIndentReference>();
+    }
+
+    public async Task<NotificationListResult> GetNotificationsAsync(CancellationToken ct = default)
+    {
+        var response = await GetAsync<NotificationsResponse>("/api/notifications", ct);
+        return new NotificationListResult(response?.Data ?? new List<AppNotification>(), response?.UnreadCount ?? 0);
+    }
+
+    public async Task MarkNotificationReadAsync(string notificationId, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(notificationId))
+            return;
+
+        await PatchAsync($"/api/notifications/{Uri.EscapeDataString(notificationId)}/read", ct);
+    }
+
+    public async Task MarkAllNotificationsReadAsync(CancellationToken ct = default)
+    {
+        await PatchAsync("/api/notifications/read-all", ct);
     }
 
     /// <summary>Generic PUT request.</summary>
@@ -219,6 +239,17 @@ public class ApiService
         var json = JsonConvert.SerializeObject(payload);
         var content = new StringContent(json, Encoding.UTF8, "application/json");
         var response = await _httpClient.PutAsync(endpoint, content, ct);
+        response.EnsureSuccessStatusCode();
+    }
+
+    public async Task PatchAsync(string endpoint, CancellationToken ct = default)
+    {
+        await ApplyStoredAuthTokenAsync();
+        using var request = new HttpRequestMessage(HttpMethod.Patch, endpoint)
+        {
+            Content = new StringContent("{}", Encoding.UTF8, "application/json")
+        };
+        var response = await _httpClient.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
     }
 
@@ -247,6 +278,15 @@ public class ApiService
         public List<MyIndentRow> Data { get; set; } = new();
     }
 
+    private sealed class NotificationsResponse
+    {
+        [JsonProperty("data")]
+        public List<AppNotification> Data { get; set; } = new();
+
+        [JsonProperty("unreadCount")]
+        public int UnreadCount { get; set; }
+    }
+
     private sealed class MyIndentRow
     {
         [JsonProperty("app_request_id")]
@@ -254,6 +294,9 @@ public class ApiService
 
         [JsonProperty("indent_no")]
         public string? IndentNo { get; set; }
+
+        [JsonProperty("status")]
+        public string? Status { get; set; }
     }
 
     private sealed class ProjectMasterRow
@@ -685,7 +728,35 @@ public sealed record PagedApiResult<T>(List<T> Data, bool HasMore, int NextOffse
     public static PagedApiResult<T> Empty { get; } = new(new List<T>(), false, 0);
 }
 
-public sealed record RemoteIndentReference(string AppRequestId, string IndentNo);
+public sealed record RemoteIndentReference(string AppRequestId, string IndentNo, string Status);
+public sealed record NotificationListResult(List<AppNotification> Notifications, int UnreadCount);
+
+public sealed class AppNotification
+{
+    [JsonProperty("id")]
+    public string Id { get; set; } = string.Empty;
+
+    [JsonProperty("indent_no")]
+    public string IndentNo { get; set; } = string.Empty;
+
+    [JsonProperty("title")]
+    public string Title { get; set; } = string.Empty;
+
+    [JsonProperty("message")]
+    public string Message { get; set; } = string.Empty;
+
+    [JsonProperty("status")]
+    public string Status { get; set; } = string.Empty;
+
+    [JsonProperty("target_path")]
+    public string TargetPath { get; set; } = string.Empty;
+
+    [JsonProperty("is_read")]
+    public bool IsRead { get; set; }
+
+    [JsonProperty("created_at")]
+    public DateTime CreatedAt { get; set; }
+}
 
 public sealed record ApiPostResult<T>(
     HttpStatusCode StatusCode,

@@ -1,4 +1,5 @@
 using SQLite;
+using IndentMate.Mobile.Services;
 
 namespace IndentMate.Mobile.Data;
 
@@ -134,6 +135,14 @@ public class DatabaseService
             .ToListAsync();
     }
 
+    public async Task<LocalIndent?> GetIndentByOfficialNoAsync(string engineerId, string officialIndentNo)
+    {
+        var db = await GetDbAsync();
+        return await db.Table<LocalIndent>()
+            .Where(i => i.EngineerId == engineerId && i.OfficialIndentNo == officialIndentNo)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task RemoveSyncedIndentsMissingFromServerAsync(
         string engineerId,
         IReadOnlyCollection<string> serverRequestNumbers,
@@ -160,6 +169,59 @@ public class DatabaseService
         }
     }
 
+    public async Task UpdateSyncedIndentServerStateAsync(
+        string engineerId,
+        IReadOnlyCollection<RemoteIndentReference> serverIndents)
+    {
+        var db = await GetDbAsync();
+        var localIndents = await db.Table<LocalIndent>()
+            .Where(i => i.EngineerId == engineerId && i.IsSynced)
+            .ToListAsync();
+        var byRequestNo = serverIndents
+            .Where(indent => !string.IsNullOrWhiteSpace(indent.AppRequestId))
+            .GroupBy(indent => NormalizeLookupKey(indent.AppRequestId), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+        var byIndentNo = serverIndents
+            .Where(indent => !string.IsNullOrWhiteSpace(indent.IndentNo))
+            .GroupBy(indent => NormalizeLookupKey(indent.IndentNo), StringComparer.OrdinalIgnoreCase)
+            .ToDictionary(group => group.Key, group => group.First(), StringComparer.OrdinalIgnoreCase);
+
+        foreach (var localIndent in localIndents)
+        {
+            var requestKey = NormalizeLookupKey(localIndent.RequestNo);
+            var indentKey = NormalizeLookupKey(localIndent.OfficialIndentNo);
+            var serverIndent = byRequestNo.TryGetValue(requestKey, out var byRequest)
+                ? byRequest
+                : byIndentNo.TryGetValue(indentKey, out var byIndent)
+                    ? byIndent
+                    : null;
+
+            if (serverIndent is null)
+                continue;
+
+            var nextStatus = NormalizeServerIndentStatus(serverIndent.Status);
+            var nextIndentNo = serverIndent.IndentNo.Trim();
+            var changed = false;
+
+            if (!string.IsNullOrWhiteSpace(nextStatus) && localIndent.Status != nextStatus)
+            {
+                localIndent.Status = nextStatus;
+                changed = true;
+            }
+
+            if (!string.IsNullOrWhiteSpace(nextIndentNo) && localIndent.OfficialIndentNo != nextIndentNo)
+            {
+                localIndent.OfficialIndentNo = nextIndentNo;
+                changed = true;
+            }
+
+            if (changed)
+            {
+                await db.UpdateAsync(localIndent);
+            }
+        }
+    }
+
     /// <summary>Indents by status (e.g. "Created", "PendingApproval").</summary>
     public async Task<List<LocalIndent>> GetIndentsByStatusAsync(string engineerId, string status)
     {
@@ -172,6 +234,17 @@ public class DatabaseService
     private static string NormalizeLookupKey(string? value)
     {
         return (value ?? string.Empty).Trim().ToUpperInvariant();
+    }
+
+    private static string NormalizeServerIndentStatus(string? status)
+    {
+        var normalizedStatus = (status ?? string.Empty).Trim();
+        return normalizedStatus switch
+        {
+            "PendingApproval" => "Pending",
+            "ApprovalPending" => "Pending",
+            _ => normalizedStatus
+        };
     }
 
     public async Task<List<LocalIndent>> GetPendingSyncIndentsAsync()

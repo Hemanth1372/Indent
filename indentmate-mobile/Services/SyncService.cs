@@ -14,6 +14,7 @@ public class SyncService
     private readonly ApiService _apiService;
     private readonly LNApiService _lnApiService;
     private readonly SemaphoreSlim _pushLock = new(1, 1);
+    private CancellationTokenSource? _pendingSyncMonitorCts;
 
     public event EventHandler<SyncProgressEventArgs>? SyncProgressChanged;
 
@@ -23,6 +24,31 @@ public class SyncService
         _apiService = apiService;
         _lnApiService = lnApiService;
         Connectivity.Current.ConnectivityChanged += HandleConnectivityChanged;
+    }
+
+    public void StartPendingSyncMonitor()
+    {
+        if (_pendingSyncMonitorCts is not null)
+            return;
+
+        _pendingSyncMonitorCts = new CancellationTokenSource();
+        var token = _pendingSyncMonitorCts.Token;
+        _ = Task.Run(async () =>
+        {
+            try
+            {
+                await TryPushPendingIndentsAsync(token);
+
+                using var timer = new PeriodicTimer(TimeSpan.FromSeconds(30));
+                while (await timer.WaitForNextTickAsync(token))
+                {
+                    await TryPushPendingIndentsAsync(token);
+                }
+            }
+            catch (OperationCanceledException) when (token.IsCancellationRequested)
+            {
+            }
+        }, token);
     }
 
     public async Task PushPendingIndentsAsync(CancellationToken ct = default)
@@ -47,6 +73,21 @@ public class SyncService
         finally
         {
             _pushLock.Release();
+        }
+    }
+
+    private async Task TryPushPendingIndentsAsync(CancellationToken ct = default)
+    {
+        try
+        {
+            await PushPendingIndentsAsync(ct);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+        }
+        catch
+        {
+            // Pending records stay queued and the monitor retries later.
         }
     }
 
@@ -384,7 +425,7 @@ public class SyncService
 
         try
         {
-            await PushPendingIndentsAsync();
+            await TryPushPendingIndentsAsync();
         }
         catch
         {

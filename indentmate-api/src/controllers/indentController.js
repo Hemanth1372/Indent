@@ -48,7 +48,14 @@ const INDENT_SELECT_SQL = `
       l.uom,
       l.remarks
     FROM indent_lines l
-    LEFT JOIN item_master im ON im.project_site = h.project_code AND im.item_code = l.item_code
+    LEFT JOIN LATERAL (
+      SELECT item_description
+      FROM item_master im
+      WHERE im.project_site = h.project_code
+        AND im.item_code = l.item_code
+      ORDER BY im.id
+      LIMIT 1
+    ) im ON TRUE
     WHERE l.indent_header_id = h.id
     ORDER BY l.line_number
     LIMIT 1
@@ -73,7 +80,14 @@ const INDENT_SELECT_SQL = `
       ORDER BY l.line_number
     ) AS items
     FROM indent_lines l
-    LEFT JOIN item_master im ON im.project_site = h.project_code AND im.item_code = l.item_code
+    LEFT JOIN LATERAL (
+      SELECT item_description
+      FROM item_master im
+      WHERE im.project_site = h.project_code
+        AND im.item_code = l.item_code
+      ORDER BY im.id
+      LIMIT 1
+    ) im ON TRUE
     WHERE l.indent_header_id = h.id
   ) lines ON TRUE
 `
@@ -761,6 +775,13 @@ export async function createIndent(req, res, next) {
       )
     }
 
+    await notifyIndentReviewRecipients(client, {
+      createdBy,
+      headerId,
+      indentNo,
+      requestTitle: indentValues.app_request_id || indentNo,
+    })
+
     await insertLegacyIndent(client, {
       ...indentValues,
       indent_no: indentNo,
@@ -842,12 +863,13 @@ export async function updateIndentStatus(req, res, next) {
       `
         UPDATE indent_headers
         SET status = $2::varchar,
+            approved_by = $3,
             approved_at = CASE WHEN $2::text = 'Approved' THEN COALESCE(approved_at, CURRENT_TIMESTAMP) ELSE approved_at END,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
-        RETURNING id, indent_no
+        RETURNING id, indent_no, created_by
       `,
-      [id, status],
+      [id, status, req.user?.login_name ?? null],
     )
 
     if (!result.rows[0]) {
@@ -868,6 +890,14 @@ export async function updateIndentStatus(req, res, next) {
       `,
       [result.rows[0].indent_no, status],
     )
+
+    await notifyIndentRequester(client, {
+      actorLogin: req.user?.login_name,
+      indentId: result.rows[0].id,
+      indentNo: result.rows[0].indent_no,
+      recipientLogin: result.rows[0].created_by,
+      status,
+    })
 
     await client.query('COMMIT')
 
@@ -1086,6 +1116,105 @@ function normalizeIncomingStatus(status) {
   if (!status) return 'Created'
   if (status === 'PendingApproval') return 'Pending'
   return status
+}
+
+async function notifyIndentReviewRecipients(client, { createdBy, headerId, indentNo, requestTitle }) {
+  const recipients = await resolveIndentReviewRecipients(client, createdBy)
+
+  await createIndentNotifications(client, recipients, {
+    indentHeaderId: headerId,
+    indentNo,
+    title: 'New indent request',
+    message: `${requestTitle} is waiting for approval.`,
+    status: 'Pending',
+    targetPath: `/transactions/${headerId}`,
+  })
+}
+
+async function notifyIndentRequester(client, { actorLogin, indentId, indentNo, recipientLogin, status }) {
+  if (!recipientLogin || recipientLogin === actorLogin) {
+    return
+  }
+
+  const normalizedStatus = normalizeIndentStatusForNotification(status)
+  await createIndentNotifications(client, [recipientLogin], {
+    indentHeaderId: indentId,
+    indentNo,
+    title: `Indent ${normalizedStatus}`,
+    message: `${indentNo} has been ${normalizedStatus.toLowerCase()}.`,
+    status: normalizedStatus,
+    targetPath: `/indent-workspace/indents/${indentId}`,
+  })
+}
+
+async function resolveIndentReviewRecipients(client, createdBy) {
+  const result = await client.query(
+    `
+      SELECT DISTINCT login_name
+      FROM (
+        SELECT u.login_name
+        FROM users u
+        WHERE COALESCE(u.is_deleted, FALSE) = FALSE
+          AND COALESCE(u.is_active, TRUE) = TRUE
+          AND (
+            upper(btrim(COALESCE(u.primary_role, ''))) IN ('SUPER ADMIN', 'ADMINISTRATOR', 'ADMIN')
+            OR upper(btrim(COALESCE(u.primary_role, ''))) LIKE '%SUPER ADMIN%'
+          )
+
+        UNION
+
+        SELECT rm.employee_id AS login_name
+        FROM responsibility_master rm
+        LEFT JOIN users u ON u.login_name = rm.employee_id
+        WHERE lower(COALESCE(NULLIF(btrim(rm.manual_status), ''), 'active')) <> 'inactive'
+          AND (rm.valid_from IS NULL OR rm.valid_from <= CURRENT_DATE)
+          AND (rm.valid_to IS NULL OR rm.valid_to >= CURRENT_DATE)
+          AND COALESCE(u.is_deleted, FALSE) = FALSE
+          AND COALESCE(u.is_active, TRUE) = TRUE
+          AND (
+            upper(btrim(COALESCE(rm.responsibility, ''))) IN ('SUPER ADMIN', 'ADMINISTRATOR', 'ADMIN')
+            OR upper(btrim(COALESCE(rm.responsibility, ''))) LIKE '%SUPER ADMIN%'
+          )
+      ) admins
+      WHERE login_name IS NOT NULL
+        AND btrim(login_name) <> ''
+    `,
+  )
+
+  return [...new Set(result.rows
+    .map((row) => row.login_name)
+    .filter((recipient) => recipient && recipient !== createdBy))]
+}
+
+async function createIndentNotifications(client, recipients, { indentHeaderId, indentNo, title, message, status, targetPath }) {
+  const uniqueRecipients = [...new Set(recipients)].filter(Boolean)
+
+  for (const recipient of uniqueRecipients) {
+    await client.query(
+      `
+        INSERT INTO notifications (
+          recipient_login,
+          indent_header_id,
+          indent_no,
+          title,
+          message,
+          status,
+          target_path
+        )
+        VALUES ($1, $2, $3, $4, $5, $6, $7)
+        ON CONFLICT DO NOTHING
+      `,
+      [recipient, indentHeaderId, indentNo, title, message, status, targetPath],
+    )
+  }
+}
+
+function normalizeIndentStatusForNotification(status) {
+  const normalized = String(status ?? '').trim()
+  if (normalized === 'Issue') {
+    return 'Issued'
+  }
+  return normalized || 'Updated'
 }
 
 async function ensureMobileIndentReferences(client, indentValues) {

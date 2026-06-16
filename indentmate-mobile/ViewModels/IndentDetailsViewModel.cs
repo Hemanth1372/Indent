@@ -90,44 +90,44 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
         // Badge colours — one step darker for visibility
         StatusColor = value switch
         {
-            "Created"                                    => Color.FromArgb("#A7F3D0"),
+            "Created"                                    => Color.FromArgb("#BFDBFE"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                     => Color.FromArgb("#FDE68A"),
             "PendingSync"                                => Color.FromArgb("#FED7AA"),
-            "Approved"                                   => Color.FromArgb("#BFDBFE"),
+            "Approved"                                   => Color.FromArgb("#A7F3D0"),
             "Rejected"                                   => Color.FromArgb("#FECACA"),
             "SyncError"                                  => Color.FromArgb("#FECACA"),
             _                                            => Color.FromArgb("#E5E7EB")
         };
         StatusTextColor = value switch
         {
-            "Created"                                    => Color.FromArgb("#047857"),
+            "Created"                                    => Color.FromArgb("#1D4ED8"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                     => Color.FromArgb("#B45309"),
             "PendingSync"                                => Color.FromArgb("#C2410C"),
-            "Approved"                                   => Color.FromArgb("#1D4ED8"),
+            "Approved"                                   => Color.FromArgb("#047857"),
             "Rejected"                                   => Color.FromArgb("#B91C1C"),
             "SyncError"                                  => Color.FromArgb("#B91C1C"),
             _                                            => Color.FromArgb("#374151")
         };
         CardBg = value switch
         {
-            "Created"                                    => Color.FromArgb("#D1FAE5"),
+            "Created"                                    => Color.FromArgb("#DBEAFE"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                     => Color.FromArgb("#FEF3C7"),
             "PendingSync"                                => Color.FromArgb("#FFEDD5"),
-            "Approved"                                   => Color.FromArgb("#DBEAFE"),
+            "Approved"                                   => Color.FromArgb("#D1FAE5"),
             "Rejected"                                   => Color.FromArgb("#FEE2E2"),
             "SyncError"                                  => Color.FromArgb("#FEE2E2"),
             _                                            => Color.FromArgb("#F9FAFB")
         };
         CardAccentColor = value switch
         {
-            "Created"                                    => Color.FromArgb("#10B981"),
+            "Created"                                    => Color.FromArgb("#2563EB"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                     => Color.FromArgb("#F59E0B"),
             "PendingSync"                                => Color.FromArgb("#EA580C"),
-            "Approved"                                   => Color.FromArgb("#1565D8"),
+            "Approved"                                   => Color.FromArgb("#10B981"),
             "Rejected"                                   => Color.FromArgb("#DC2626"),
             "SyncError"                                  => Color.FromArgb("#DC2626"),
             _                                            => Color.FromArgb("#CBD5E1")
@@ -180,23 +180,7 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
             var requestId = _indent?.RequestNo ?? IndentId;
 
             if (_indent?.Status == "SyncError" && !string.IsNullOrWhiteSpace(_indent.SyncErrorMessage))
-            {
-                await Shell.Current.DisplayAlert(
-                    "Sync Failed",
-                    $"Request ID: {requestId}\n\nSync error: {_indent.SyncErrorMessage}\n\nThe indent was saved locally and will retry automatically.",
-                    "OK");
-            }
-            else
-            {
-                var indentNo = string.IsNullOrWhiteSpace(_indent?.OfficialIndentNo)
-                    ? "Will be assigned after ERP sync"
-                    : _indent!.OfficialIndentNo;
-
-                await Shell.Current.DisplayAlert(
-                    "Submitted Successfully",
-                    $"Request ID: {requestId}\nIndent No.: {indentNo}",
-                    "OK");
-            }
+                throw new InvalidOperationException($"Request ID: {requestId}. Sync error: {_indent.SyncErrorMessage}. The indent was saved locally and will retry automatically.");
 
             await Shell.Current.GoToAsync(ResolveDashboardRoute(_indent?.EngineerType));
         });
@@ -212,15 +196,6 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
     private async Task RemoveItemAsync(LocalIndentItem? item)
     {
         if (item is null || _indent is null || !CanEdit)
-            return;
-
-        var shouldRemove = await Shell.Current.DisplayAlert(
-            "Remove Item",
-            $"Remove {item.MaterialCode} from this indent?",
-            "Remove",
-            "Cancel");
-
-        if (!shouldRemove)
             return;
 
         await RunBusyAsync(async () =>

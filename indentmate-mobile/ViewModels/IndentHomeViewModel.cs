@@ -45,6 +45,8 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
 
     [ObservableProperty] private string _selectedStatusFilter = "All";
     [ObservableProperty] private bool _showAllRequests;
+    [ObservableProperty] private bool _showNotifications;
+    [ObservableProperty] private int _unreadNotificationCount;
 
     // ── Pending for Approval (amber) ─────────────────────────────────────────
     public Color PendingCardBg => PendingApprovalCount > 0 ? Color.FromArgb("#FFFBEB") : Colors.White;
@@ -61,15 +63,19 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
     public Color RejectedAccentColor => RejectedIndentsCount > 0 ? Color.FromArgb("#DC2626") : Color.FromArgb("#E5EAF2");
     public Color RejectedNumColor => RejectedIndentsCount > 0 ? Color.FromArgb("#DC2626") : Color.FromArgb("#CBD5E1");
 
-    // ── Created Status (green) ───────────────────────────────────────────────
-    public Color CreatedCardBg => CreatedStatusCount > 0 ? Color.FromArgb("#ECFDF5") : Colors.White;
-    public Color CreatedAccentColor => CreatedStatusCount > 0 ? Color.FromArgb("#10B981") : Color.FromArgb("#E5EAF2");
-    public Color CreatedNumColor => CreatedStatusCount > 0 ? Color.FromArgb("#059669") : Color.FromArgb("#CBD5E1");
+    // ── Created Status (blue) ───────────────────────────────────────────────
+    public Color CreatedCardBg => CreatedStatusCount > 0 ? Color.FromArgb("#EFF6FF") : Colors.White;
+    public Color CreatedAccentColor => CreatedStatusCount > 0 ? Color.FromArgb("#2563EB") : Color.FromArgb("#E5EAF2");
+    public Color CreatedNumColor => CreatedStatusCount > 0 ? Color.FromArgb("#1D4ED8") : Color.FromArgb("#CBD5E1");
 
     public ObservableCollection<StatusFilterViewModel> StatusFilters { get; } = new();
     public ObservableCollection<RecentIndentViewModel> RecentIndents { get; } = new();
+    public ObservableCollection<AppNotificationViewModel> Notifications { get; } = new();
     public bool HasSeeAllAction => ShowAllRequests || GetFilteredIndents().Count > 10;
     public string SeeAllText => ShowAllRequests ? "Show Recent" : "See All";
+    public bool HasUnreadNotifications => UnreadNotificationCount > 0;
+    public bool HasNotifications => Notifications.Count > 0;
+    public bool HasNoNotifications => Notifications.Count == 0;
 
     public IndentHomeViewModel()
         : this(new DatabaseService(Path.Combine(FileSystem.AppDataDirectory, "indentmate.db")), new ApiService())
@@ -80,7 +86,17 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
     {
         _databaseService = databaseService;
         _apiService = apiService;
+        Notifications.CollectionChanged += (_, _) =>
+        {
+            OnPropertyChanged(nameof(HasNotifications));
+            OnPropertyChanged(nameof(HasNoNotifications));
+        };
         BuildStatusFilters();
+    }
+
+    partial void OnUnreadNotificationCountChanged(int value)
+    {
+        OnPropertyChanged(nameof(HasUnreadNotifications));
     }
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
@@ -125,13 +141,18 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
                 IndentsRaisedCount = 0;
                 RejectedIndentsCount = 0;
                 CreatedStatusCount = 0;
+                UnreadNotificationCount = 0;
                 _allIndents = new List<LocalIndent>();
                 RecentIndents.Clear();
+                Notifications.Clear();
                 OnPropertyChanged(nameof(HasSeeAllAction));
+                OnPropertyChanged(nameof(HasNotifications));
+                OnPropertyChanged(nameof(HasNoNotifications));
                 return;
             }
 
             await ReconcileSyncedIndentsWithServerAsync();
+            await LoadNotificationsAsync();
             _allIndents = await _databaseService.GetIndentsForEngineerAsync(engineerId);
 
             PendingApprovalCount = _allIndents.Count(IsPendingStatus);
@@ -174,6 +195,54 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
     private async Task BackAsync()
     {
         await Shell.Current.GoToAsync("//login-success");
+    }
+
+    [RelayCommand]
+    private async Task ToggleNotificationsAsync()
+    {
+        ShowNotifications = !ShowNotifications;
+        if (ShowNotifications)
+        {
+            await LoadNotificationsAsync();
+        }
+    }
+
+    [RelayCommand]
+    private async Task OpenNotificationAsync(AppNotificationViewModel? notification)
+    {
+        if (notification is null)
+            return;
+
+        var wasUnread = !notification.IsRead;
+        await _apiService.MarkNotificationReadAsync(notification.Id);
+        notification.IsRead = true;
+        if (wasUnread)
+        {
+            UnreadNotificationCount = Math.Max(0, UnreadNotificationCount - 1);
+        }
+
+        var engineerId = await SecureStorage.Default.GetAsync("engineer_id") ?? string.Empty;
+        var indent = await _databaseService.GetIndentByOfficialNoAsync(engineerId, notification.IndentNo);
+        if (indent is not null)
+        {
+            ShowNotifications = false;
+            await Shell.Current.GoToAsync($"//indent-details?indentId={Uri.EscapeDataString(indent.IndentId)}");
+        }
+    }
+
+    [RelayCommand]
+    private async Task MarkAllNotificationsReadAsync()
+    {
+        if (Notifications.Count == 0)
+            return;
+
+        await _apiService.MarkAllNotificationsReadAsync();
+        foreach (var notification in Notifications)
+        {
+            notification.IsRead = true;
+        }
+
+        UnreadNotificationCount = 0;
     }
 
     [RelayCommand]
@@ -249,10 +318,33 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
                 UserId,
                 serverRequestNumbers,
                 serverIndentNumbers);
+            await _databaseService.UpdateSyncedIndentServerStateAsync(UserId, serverIndents);
         }
         catch
         {
             // Keep the offline cache if the server cannot be reached.
+        }
+    }
+
+    private async Task LoadNotificationsAsync()
+    {
+        try
+        {
+            var result = await _apiService.GetNotificationsAsync();
+            Notifications.Clear();
+            foreach (var notification in result.Notifications.Take(8))
+            {
+                Notifications.Add(new AppNotificationViewModel(notification));
+            }
+
+            UnreadNotificationCount = result.UnreadCount;
+            OnPropertyChanged(nameof(HasUnreadNotifications));
+            OnPropertyChanged(nameof(HasNotifications));
+            OnPropertyChanged(nameof(HasNoNotifications));
+        }
+        catch
+        {
+            // Notifications should not block the dashboard.
         }
     }
 
@@ -394,44 +486,44 @@ public class RecentIndentViewModel
         // Badge colours — one step darker for visibility
         StatusColor = indent.Status switch
         {
-            "Created"                                       => Color.FromArgb("#A7F3D0"),
+            "Created"                                       => Color.FromArgb("#BFDBFE"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                        => Color.FromArgb("#FDE68A"),
             "PendingSync"                                   => Color.FromArgb("#FED7AA"),
-            "Approved"                                      => Color.FromArgb("#D8DEEF"),
+            "Approved"                                      => Color.FromArgb("#A7F3D0"),
             "Rejected"                                      => Color.FromArgb("#FECACA"),
             "SyncError"                                     => Color.FromArgb("#FECACA"),
             _                                               => Color.FromArgb("#E5E7EB")
         };
         StatusTextColor = indent.Status switch
         {
-            "Created"                                       => Color.FromArgb("#047857"),
+            "Created"                                       => Color.FromArgb("#1D4ED8"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                        => Color.FromArgb("#B45309"),
             "PendingSync"                                   => Color.FromArgb("#C2410C"),
-            "Approved"                                      => Color.FromArgb("#1D2B58"),
+            "Approved"                                      => Color.FromArgb("#047857"),
             "Rejected"                                      => Color.FromArgb("#B91C1C"),
             "SyncError"                                     => Color.FromArgb("#B91C1C"),
             _                                               => Color.FromArgb("#374151")
         };
         CardBg = indent.Status switch
         {
-            "Created"                                       => Color.FromArgb("#D1FAE5"),
+            "Created"                                       => Color.FromArgb("#DBEAFE"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                        => Color.FromArgb("#FEF3C7"),
             "PendingSync"                                   => Color.FromArgb("#FFEDD5"),
-            "Approved"                                      => Color.FromArgb("#E8ECF7"),
+            "Approved"                                      => Color.FromArgb("#D1FAE5"),
             "Rejected"                                      => Color.FromArgb("#FEE2E2"),
             "SyncError"                                     => Color.FromArgb("#FEE2E2"),
             _                                               => Color.FromArgb("#F9FAFB")
         };
         CardAccentColor = indent.Status switch
         {
-            "Created"                                       => Color.FromArgb("#10B981"),
+            "Created"                                       => Color.FromArgb("#2563EB"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                        => Color.FromArgb("#F59E0B"),
             "PendingSync"                                   => Color.FromArgb("#EA580C"),
-            "Approved"                                      => Color.FromArgb("#1D2B58"),
+            "Approved"                                      => Color.FromArgb("#10B981"),
             "Rejected"                                      => Color.FromArgb("#DC2626"),
             "SyncError"                                     => Color.FromArgb("#DC2626"),
             _                                               => Color.FromArgb("#CBD5E1")
@@ -509,18 +601,18 @@ public partial class StatusFilterViewModel : ObservableObject
 
     private Color AccentColor => Label switch
     {
-        "Created"  => Color.FromArgb("#059669"),
+        "Created"  => Color.FromArgb("#1D4ED8"),
         "Pending"  => Color.FromArgb("#F7931E"),
-        "Approved" => Color.FromArgb("#1D2B58"),
+        "Approved" => Color.FromArgb("#059669"),
         "Rejected" => Color.FromArgb("#DC2626"),
         _          => Color.FromArgb("#1D2B58")
     };
 
     private Color PastelColor => Label switch
     {
-        "Created"  => Color.FromArgb("#ECFDF5"),
+        "Created"  => Color.FromArgb("#EFF6FF"),
         "Pending"  => Color.FromArgb("#FFFBEB"),
-        "Approved" => Color.FromArgb("#F4F6FB"),
+        "Approved" => Color.FromArgb("#ECFDF5"),
         "Rejected" => Color.FromArgb("#FEF2F2"),
         _          => Color.FromArgb("#F4F6FB")
     };
@@ -528,4 +620,38 @@ public partial class StatusFilterViewModel : ObservableObject
     public Color BackgroundColor => IsSelected ? AccentColor : Colors.White;
     public Color TextColor => IsSelected ? Colors.White : AccentColor;
     public Color BorderColor => IsSelected ? AccentColor : Color.FromArgb("#E5EAF2");
+}
+
+public partial class AppNotificationViewModel : ObservableObject
+{
+    public AppNotificationViewModel(AppNotification notification)
+    {
+        Id = notification.Id;
+        IndentNo = notification.IndentNo;
+        Title = notification.Title;
+        Message = notification.Message;
+        Status = notification.Status;
+        CreatedAt = notification.CreatedAt;
+        IsRead = notification.IsRead;
+    }
+
+    public string Id { get; }
+    public string IndentNo { get; }
+    public string Title { get; }
+    public string Message { get; }
+    public string Status { get; }
+    public DateTime CreatedAt { get; }
+    public string MetaText => string.IsNullOrWhiteSpace(Status)
+        ? IndentNo
+        : $"{IndentNo} - {Status.ToUpperInvariant()}";
+    [ObservableProperty] private bool _isRead;
+
+    public Color BackgroundColor => IsRead ? Colors.White : Color.FromArgb("#EFF6FF");
+    public Color AccentColor => IsRead ? Color.FromArgb("#E5EAF2") : Color.FromArgb("#2563EB");
+
+    partial void OnIsReadChanged(bool value)
+    {
+        OnPropertyChanged(nameof(BackgroundColor));
+        OnPropertyChanged(nameof(AccentColor));
+    }
 }

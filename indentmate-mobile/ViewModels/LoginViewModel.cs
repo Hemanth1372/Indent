@@ -6,7 +6,6 @@ using System.Collections.ObjectModel;
 using System.Net.Http.Json;
 using System.Text.Json;
 using System.Text.Json.Serialization;
-using System.Timers;
 
 namespace IndentMate.Mobile.ViewModels;
 
@@ -17,10 +16,8 @@ public partial class LoginViewModel : BaseViewModel
     private const int LoginLockoutSeconds = 30;
     private const string BackendConnectionErrorMessage = "Connection error. Is the backend running?";
     private const string HiddenRecentEngineersKey = "indentmate_hidden_recent_engineers";
-    private static readonly TimeSpan InactivityTimeout = TimeSpan.FromMinutes(5);
     private readonly DatabaseService _databaseService;
     private readonly HttpClient _httpClient;
-    private readonly System.Timers.Timer _inactivityTimer;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
     private int _failedLoginAttempts;
     private bool _isAutoLoginQueued;
@@ -65,11 +62,6 @@ public partial class LoginViewModel : BaseViewModel
             BaseAddress = new Uri(ApiEndpoints.BaseUrl),
             Timeout = TimeSpan.FromSeconds(15)
         };
-        _inactivityTimer = new System.Timers.Timer(InactivityTimeout.TotalMilliseconds)
-        {
-            AutoReset = false
-        };
-        _inactivityTimer.Elapsed += OnInactivityTimerElapsed;
     }
 
     public async Task LoadEngineerInfoAsync()
@@ -109,13 +101,6 @@ public partial class LoginViewModel : BaseViewModel
 
     public void ResetInactivityTimer()
     {
-        if (!_inactivityTimer.Enabled)
-        {
-            return;
-        }
-
-        _inactivityTimer.Stop();
-        _inactivityTimer.Start();
     }
 
     [RelayCommand]
@@ -365,7 +350,6 @@ public partial class LoginViewModel : BaseViewModel
 
     public async Task LogoutAsync()
     {
-        _inactivityTimer.Stop();
         _lockoutCancellationTokenSource?.Cancel();
         SecureStorage.Default.Remove("session_active");
         PinInput = string.Empty;
@@ -711,7 +695,6 @@ public partial class LoginViewModel : BaseViewModel
         IsLoginLockedOut = false;
         LockoutSecondsRemaining = 0;
         await SecureStorage.Default.SetAsync("session_active", "true");
-        _inactivityTimer.Start();
 
         await Shell.Current.GoToAsync("//login-success");
     }
@@ -909,8 +892,4 @@ public partial class LoginViewModel : BaseViewModel
         return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
     }
 
-    private void OnInactivityTimerElapsed(object? sender, ElapsedEventArgs e)
-    {
-        MainThread.BeginInvokeOnMainThread(async () => await LogoutAsync());
-    }
 }

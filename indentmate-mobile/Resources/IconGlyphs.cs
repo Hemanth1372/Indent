@@ -21,6 +21,7 @@ public static class IconGlyphs
     public const string Hash          = ""; // \ue9ef
     public const string ChevronRight  = ""; // \ue5cc
     public const string Refresh       = ""; // \ue5d5
+    public const string Notifications = ""; // \ue7f4
     public const string ArrowBack     = ""; // \ue5c4
     public const string NorthEast     = ""; // \uf1e1
     public const string SouthWest     = ""; // \uf1e5

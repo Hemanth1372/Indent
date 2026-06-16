@@ -3,19 +3,15 @@ using IndentMate.Mobile.Data;
 namespace IndentMate.Mobile.Services;
 
 /// <summary>
-/// Manages authentication: PIN validation, auto-logout timer, responsibility checks.
+/// Manages authentication: PIN validation and responsibility checks.
 /// </summary>
 public class AuthService
 {
     private readonly DatabaseService _db;
-    private System.Timers.Timer? _autoLogoutTimer;
-    private const int AutoLogoutMinutes = 5;
 
     public bool IsLoggedIn { get; private set; }
     public string? CurrentEngineerId { get; private set; }
     public string? EngineerType { get; private set; } // "SIE" or "SER"
-
-    public event EventHandler? SessionExpired;
 
     public AuthService(DatabaseService db)
     {
@@ -24,7 +20,6 @@ public class AuthService
 
     /// <summary>
     /// Validates PIN against stored hash for the given engineer ID.
-    /// Returns true on success; starts auto-logout timer.
     /// </summary>
     public async Task<bool> ValidatePinAsync(string engineerId, string pin)
     {
@@ -39,16 +34,13 @@ public class AuthService
             IsLoggedIn = true;
             CurrentEngineerId = engineerId;
             EngineerType = engineer.ResponsibilityCode; // SIE or SER
-            StartAutoLogoutTimer();
         }
         return valid;
     }
 
-    /// <summary>Resets the auto-logout timer on any user activity.</summary>
+    /// <summary>Kept for compatibility; inactivity logout is disabled.</summary>
     public void ResetActivityTimer()
     {
-        _autoLogoutTimer?.Stop();
-        _autoLogoutTimer?.Start();
     }
 
     public void Logout()
@@ -56,20 +48,6 @@ public class AuthService
         IsLoggedIn = false;
         CurrentEngineerId = null;
         EngineerType = null;
-        _autoLogoutTimer?.Stop();
-    }
-
-    private void StartAutoLogoutTimer()
-    {
-        _autoLogoutTimer?.Dispose();
-        _autoLogoutTimer = new System.Timers.Timer(TimeSpan.FromMinutes(AutoLogoutMinutes).TotalMilliseconds);
-        _autoLogoutTimer.Elapsed += (_, _) =>
-        {
-            Logout();
-            SessionExpired?.Invoke(this, EventArgs.Empty);
-        };
-        _autoLogoutTimer.AutoReset = false;
-        _autoLogoutTimer.Start();
     }
 
     private static string ComputeHash(string input)

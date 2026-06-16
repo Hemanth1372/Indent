@@ -11,6 +11,7 @@ public partial class DropdownField : ContentView
     private const double DefaultDropdownWidth = 436;
     private const double ItemHeight = 52;
     private const int MaxVisibleItems = 10;
+    private const int MaxRenderedItems = 80;
     private const double SearchEntryHeight = 44;
     private const int SearchThreshold = 25;
 
@@ -428,16 +429,22 @@ public partial class DropdownField : ContentView
         if (_popupItemList is null) return;
         _popupItemList.Children.Clear();
         var orderedItems = PrioritizeSelectedItem(items);
+        var renderedItems = orderedItems.Take(MaxRenderedItems).ToList();
 
-        if (orderedItems.Count == 0)
+        if (renderedItems.Count == 0)
         {
             _popupItemList.Children.Add(CreateStatusRow(GetEmptyStateText()));
         }
 
-        foreach (var item in orderedItems)
+        foreach (var item in renderedItems)
             _popupItemList.Children.Add(CreateOptionRow(item));
 
-        if (IsLoading && orderedItems.Count != 0)
+        if (orderedItems.Count > renderedItems.Count && SearchCommand is null && LoadMoreCommand is null)
+        {
+            _popupItemList.Children.Add(CreateStatusRow("Type to narrow more options."));
+        }
+
+        if (IsLoading && renderedItems.Count != 0)
         {
             _popupItemList.Children.Add(CreateStatusRow("Loading..."));
         }
@@ -551,6 +558,9 @@ public partial class DropdownField : ContentView
         var primaryText = GetPrimaryText(item);
         var secondaryText = GetSecondaryText(item);
 
+        var selectedBackground = Color.FromArgb("#EAF3FF");
+        var hoverBackground = Color.FromArgb("#F1F6FE");
+        var normalBackground = isSelected ? selectedBackground : Colors.White;
         var rowText = new VerticalStackLayout
         {
             Spacing = 2,
@@ -563,7 +573,7 @@ public partial class DropdownField : ContentView
                     FontAttributes = FontAttributes.Bold,
                     LineBreakMode = LineBreakMode.TailTruncation,
                     Text = primaryText,
-                    TextColor = isSelected ? Colors.White : Color.FromArgb("#172033")
+                    TextColor = isSelected ? Color.FromArgb("#0E2A5C") : Color.FromArgb("#172033")
                 }
             }
         };
@@ -575,7 +585,7 @@ public partial class DropdownField : ContentView
                 FontSize = 12,
                 LineBreakMode = LineBreakMode.TailTruncation,
                 Text = secondaryText,
-                TextColor = isSelected ? Color.FromArgb("#D8E8FF") : Color.FromArgb("#667085")
+                TextColor = Color.FromArgb("#667085")
             });
         }
 
@@ -588,29 +598,17 @@ public partial class DropdownField : ContentView
             },
             Padding = new Thickness(16, 6),
             HeightRequest = ItemHeight,
-            BackgroundColor = isSelected ? Color.FromArgb("#0E2A5C") : Colors.White,
+            BackgroundColor = normalBackground,
             Children = { rowText }
         };
-
-        if (isSelected)
-        {
-            var selectedMark = new Label
-            {
-                Text = "OK",
-                FontSize = 12,
-                FontAttributes = FontAttributes.Bold,
-                TextColor = Colors.White,
-                HorizontalOptions = LayoutOptions.Center,
-                VerticalOptions = LayoutOptions.Center,
-                Margin = new Thickness(12, 0, 0, 0)
-            };
-            Grid.SetColumn(selectedMark, 1);
-            row.Children.Add(selectedMark);
-        }
 
         var tap = new TapGestureRecognizer();
         tap.Tapped += (_, _) => SelectOption(item);
         row.GestureRecognizers.Add(tap);
+        var pointer = new PointerGestureRecognizer();
+        pointer.PointerEntered += (_, _) => row.BackgroundColor = hoverBackground;
+        pointer.PointerExited += (_, _) => row.BackgroundColor = normalBackground;
+        row.GestureRecognizers.Add(pointer);
 
         return row;
     }
@@ -618,9 +616,11 @@ public partial class DropdownField : ContentView
     private void SelectOption(object item)
     {
         _searchDebounceCts?.Cancel();
-        SelectedItem = item;
         _currentSearchText = string.Empty;
+        SelectedTextLabel.Text = GetDisplayText(item);
+        SelectedTextLabel.TextColor = Color.FromArgb("#101828");
         SetOpen(false);
+        SelectedItem = item;
 
         if (SearchCommand?.CanExecute(string.Empty) == true)
         {
@@ -630,6 +630,9 @@ public partial class DropdownField : ContentView
 
     private string GetPrimaryText(object item)
     {
+        if (TryGetTextProperty(item, "DisplayName", out var displayName))
+            return displayName;
+
         if (TryGetTextProperty(item, "ItemCode", out var itemCode))
             return itemCode;
 
@@ -641,6 +644,9 @@ public partial class DropdownField : ContentView
 
     private string GetSecondaryText(object item)
     {
+        if (TryGetTextProperty(item, "DisplayName", out _))
+            return string.Empty;
+
         if (TryGetTextProperty(item, "Description", out var description))
             return description;
 

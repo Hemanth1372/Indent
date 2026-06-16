@@ -12,6 +12,7 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
     private readonly ApiService _apiService;
     private int _locationLoadVersion;
     private int _contractorLoadVersion;
+    private int _contractorSelectionVersion;
 
     public ObservableCollection<LocalProject> Projects { get; } = new();
     public ObservableCollection<string> IndentTypes { get; } = new() { "Issue", "Issue Return" };
@@ -123,12 +124,12 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
     partial void OnSelectedIndentTypeChanged(string value)
     {
         IsIssueReturn = value == "Issue Return";
-        _ = ReloadContractorsAsync();
+        _ = ReloadContractorsAfterSelectionAsync();
     }
 
     partial void OnSelectedFromLocationChanged(SelectionOption? value)
     {
-        _ = ReloadContractorsAsync();
+        _ = ReloadContractorsAfterSelectionAsync();
     }
 
     partial void OnIsAutoWarehouseChanged(bool value)
@@ -356,6 +357,15 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
                 string.Equals(location.Id, previousLocationId, StringComparison.OrdinalIgnoreCase))
             : null;
         SelectedFromLocation ??= FromLocations.FirstOrDefault();
+    }
+
+    private async Task ReloadContractorsAfterSelectionAsync()
+    {
+        var selectionVersion = Interlocked.Increment(ref _contractorSelectionVersion);
+        await Task.Delay(75);
+        if (selectionVersion != _contractorSelectionVersion)
+            return;
+
         await ReloadContractorsAsync();
     }
 

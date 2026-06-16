@@ -148,9 +148,6 @@ export function FieldIndentHome() {
       <div className="overflow-hidden rounded-lg border border-blue-950/10 bg-white shadow-sm">
         <div className="flex items-center justify-between gap-3 px-4 py-4 text-white" style={{ backgroundColor: darkBlue }}>
           <div className="flex min-w-0 items-center gap-3">
-            <button className="grid h-11 w-11 place-items-center rounded-lg bg-white/10 transition hover:bg-white/15" onClick={() => navigate('/')} type="button" title="Back">
-              <ArrowLeft size={22} />
-            </button>
             <h2 className="truncate text-xl font-bold">Indent Home</h2>
           </div>
           <div className="flex gap-2">
@@ -178,9 +175,9 @@ export function FieldIndentHome() {
       {errorMessage ? <Alert text={errorMessage} /> : null}
 
       <div className="grid gap-4 md:grid-cols-2">
-        <MetricBox count={countStatus(dashboardRows, ['Pending', 'PendingApproval', 'ApprovalPending'])} label="Pending for Approval" tone="muted" />
+        <MetricBox count={countStatus(dashboardRows, ['Pending', 'PendingApproval', 'ApprovalPending'])} label="Pending for Approval" tone="yellow" />
         <MetricBox count={dashboardRows.length} label="Indents Raised" tone="blue" />
-        <MetricBox count={countStatus(dashboardRows, ['Rejected'])} label="Rejected Indents" tone="muted" />
+        <MetricBox count={countStatus(dashboardRows, ['Rejected'])} label="Rejected Indents" tone="red" />
         <MetricBox count={countStatus(dashboardRows, ['Approved'])} label="Approved Indents" tone="green" />
       </div>
 
@@ -900,11 +897,12 @@ function IndentSummaryCard({ indent }: { indent: IndentTransaction }) {
   )
 }
 
-function MetricBox({ count, label, tone }: { count: number; label: string; tone: 'blue' | 'green' | 'muted' }) {
+function MetricBox({ count, label, tone }: { count: number; label: string; tone: 'blue' | 'green' | 'red' | 'yellow' }) {
   const toneClasses = {
-    blue: 'border-l-blue-950 bg-white text-blue-950',
+    blue: 'border-l-blue-950 bg-blue-50/40 text-blue-950',
     green: 'border-l-emerald-500 bg-emerald-50 text-emerald-700',
-    muted: 'border-l-slate-100 bg-white text-slate-300',
+    red: 'border-l-red-500 bg-red-50 text-red-700',
+    yellow: 'border-l-amber-400 bg-amber-50 text-amber-700',
   }
   return (
     <button className={`min-h-24 rounded-lg border border-slate-200 border-l-4 p-4 text-left shadow-sm ${toneClasses[tone]}`} type="button">

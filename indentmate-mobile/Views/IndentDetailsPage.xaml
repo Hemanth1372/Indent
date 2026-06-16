@@ -348,7 +348,7 @@
                                     <BoxView BackgroundColor="#0E2A5C" />
                                     <VerticalStackLayout Grid.Column="1" Padding="14,12,14,12" Spacing="6">
                                         <!-- Material code + type badge -->
-                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
                                             <Label
                                                 FontAttributes="Bold"
                                                 FontSize="14"
@@ -369,6 +369,22 @@
                                                     Text="{Binding WorkType}"
                                                     TextColor="#4F46E5" />
                                             </Border>
+                                            <Button
+                                                Grid.Column="2"
+                                                Padding="10,0"
+                                                BackgroundColor="#FFF5F5"
+                                                BorderColor="#FECACA"
+                                                BorderWidth="1"
+                                                Command="{Binding BindingContext.RemoveItemCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                                CommandParameter="{Binding .}"
+                                                CornerRadius="8"
+                                                FontAttributes="Bold"
+                                                FontSize="12"
+                                                HeightRequest="32"
+                                                IsVisible="{Binding BindingContext.CanEdit, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                                Text="Remove"
+                                                TextColor="#DC2626"
+                                                VerticalOptions="Center" />
                                         </Grid>
                                         <!-- Material description -->
                                         <Grid ColumnDefinitions="16,*" ColumnSpacing="6">
@@ -404,22 +420,6 @@
                                                  </Label.FormattedText>
                                              </Label>
                                          </Grid>
-                                         <Button
-                                             Margin="0,6,0,0"
-                                             Padding="12,0"
-                                             BackgroundColor="#FFF5F5"
-                                             BorderColor="#FECACA"
-                                             BorderWidth="1"
-                                             Command="{Binding BindingContext.RemoveItemCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
-                                             CommandParameter="{Binding .}"
-                                             CornerRadius="8"
-                                             FontAttributes="Bold"
-                                             FontSize="12"
-                                             HeightRequest="38"
-                                             HorizontalOptions="End"
-                                             IsVisible="{Binding BindingContext.CanEdit, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
-                                             Text="Remove"
-                                             TextColor="#DC2626" />
                                      </VerticalStackLayout>
                                  </Grid>
                              </Border>
@@ -436,11 +436,18 @@
             Grid.Row="2"
             BackgroundColor="White"
             Padding="18,12,18,24"
-            RowDefinitions="Auto,Auto"
+            RowDefinitions="Auto,Auto,Auto"
             RowSpacing="10">
+            <Label
+                FontAttributes="Bold"
+                FontSize="13"
+                IsVisible="{Binding HasError}"
+                Text="{Binding StatusMessage}"
+                TextColor="#DC2626" />
 
             <!-- Submit for Approval -->
             <Border
+                Grid.Row="1"
                 BackgroundColor="#0E2A5C"
                 HeightRequest="54"
                 IsEnabled="{Binding IsNotBusy}"
@@ -470,10 +477,11 @@
 
             <!-- Save as Draft -->
             <Border
-                Grid.Row="1"
+                Grid.Row="2"
                 BackgroundColor="White"
                 HeightRequest="50"
                 IsEnabled="{Binding IsNotBusy}"
+                IsVisible="{Binding CanEdit}"
                 Stroke="#0E2A5C"
                 StrokeShape="RoundRectangle 12"
                 StrokeThickness="1.5">

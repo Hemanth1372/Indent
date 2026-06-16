@@ -23,7 +23,7 @@
                 StrokeThickness="0">
                 <VerticalStackLayout Spacing="0">
 
-                    <Grid ColumnDefinitions="40,*,40,40" ColumnSpacing="12" Padding="16,14,16,0">
+                    <Grid ColumnDefinitions="40,*,40,40,40" ColumnSpacing="12" Padding="16,14,16,0">
 
                         <Border
                             BackgroundColor="#1AFFFFFF"
@@ -74,6 +74,45 @@
 
                         <Border
                             Grid.Column="3"
+                            BackgroundColor="#1AFFFFFF"
+                            HeightRequest="40"
+                            HorizontalOptions="End"
+                            StrokeShape="Ellipse"
+                            StrokeThickness="0"
+                            VerticalOptions="Center"
+                            WidthRequest="40">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ToggleNotificationsCommand}" />
+                            </Border.GestureRecognizers>
+                            <Grid>
+                                <controls:IconLabel
+                                    Glyph="{x:Static glyphs:IconGlyphs.Notifications}"
+                                    IconSize="18"
+                                    IconColor="White"
+                                    HorizontalOptions="Center"
+                                    VerticalOptions="Center" />
+                                <Border
+                                    BackgroundColor="#EF4444"
+                                    HeightRequest="16"
+                                    HorizontalOptions="End"
+                                    IsVisible="{Binding HasUnreadNotifications}"
+                                    StrokeShape="Ellipse"
+                                    StrokeThickness="0"
+                                    VerticalOptions="Start"
+                                    WidthRequest="16">
+                                    <Label
+                                        FontAttributes="Bold"
+                                        FontSize="9"
+                                        HorizontalTextAlignment="Center"
+                                        Text="{Binding UnreadNotificationCount}"
+                                        TextColor="White"
+                                        VerticalTextAlignment="Center" />
+                                </Border>
+                            </Grid>
+                        </Border>
+
+                        <Border
+                            Grid.Column="4"
                             BackgroundColor="#F7931E"
                             HeightRequest="40"
                             HorizontalOptions="End"
@@ -574,5 +613,96 @@
             </RefreshView>
 
         </Grid>
+
+        <Border
+            Grid.Row="0"
+            Grid.RowSpan="2"
+            Margin="0,58,28,0"
+            BackgroundColor="White"
+            HorizontalOptions="End"
+            IsVisible="{Binding ShowNotifications}"
+            Stroke="#DDE5F0"
+            StrokeShape="RoundRectangle 12"
+            StrokeThickness="1"
+            VerticalOptions="Start"
+            WidthRequest="424"
+            ZIndex="50">
+            <Border.Shadow>
+                <Shadow Brush="#33000000" Offset="0,8" Radius="18" Opacity="0.35" />
+            </Border.Shadow>
+            <VerticalStackLayout Spacing="0">
+                <Grid Padding="14,12" ColumnDefinitions="*,Auto">
+                    <VerticalStackLayout Spacing="1">
+                        <Label
+                            FontAttributes="Bold"
+                            FontSize="15"
+                            Text="Notifications"
+                            TextColor="#172033" />
+                        <Label
+                            FontSize="12"
+                            Text="{Binding UnreadNotificationCount, StringFormat='{0} unread'}"
+                            TextColor="#64748B" />
+                    </VerticalStackLayout>
+                    <Label
+                        Grid.Column="1"
+                        FontAttributes="Bold"
+                        FontSize="12"
+                        Text="Mark all read"
+                        TextColor="#1D4ED8"
+                        VerticalOptions="Center">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding MarkAllNotificationsReadCommand}" />
+                        </Label.GestureRecognizers>
+                    </Label>
+                </Grid>
+                <Label
+                    Padding="14,0,14,16"
+                    FontSize="13"
+                    IsVisible="{Binding HasNoNotifications}"
+                    Text="No notifications received."
+                    TextColor="#94A3B8" />
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Notifications}" Spacing="0">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate x:DataType="vm:AppNotificationViewModel">
+                            <Border
+                                BackgroundColor="{Binding BackgroundColor}"
+                                Padding="18,12"
+                                Stroke="#EEF2F7"
+                                StrokeThickness="1">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.OpenNotificationCommand}"
+                                        CommandParameter="{Binding .}" />
+                                </Border.GestureRecognizers>
+                                <Grid ColumnDefinitions="4,*" ColumnSpacing="12">
+                                    <BoxView
+                                        BackgroundColor="{Binding AccentColor}"
+                                        WidthRequest="4" />
+                                    <VerticalStackLayout Grid.Column="1" Spacing="4">
+                                        <Label
+                                            FontAttributes="Bold"
+                                            FontSize="14"
+                                            LineBreakMode="TailTruncation"
+                                            Text="{Binding Title}"
+                                            TextColor="#172033" />
+                                        <Label
+                                            FontSize="13"
+                                            LineBreakMode="TailTruncation"
+                                            Text="{Binding Message}"
+                                            TextColor="#667085" />
+                                        <Label
+                                            FontAttributes="Bold"
+                                            FontSize="12"
+                                            LineBreakMode="TailTruncation"
+                                            Text="{Binding MetaText}"
+                                            TextColor="#94A3B8" />
+                                    </VerticalStackLayout>
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+            </VerticalStackLayout>
+        </Border>
     </Grid>
 </ContentPage>
