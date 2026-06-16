@@ -18,6 +18,7 @@ const mastersGroups = [
     key: 'admin',
     label: 'Admin',
     items: [
+      'User Master',
       'User Project Assignment Master',
       'Role Master',
       'Business Partner Master',
@@ -61,6 +62,10 @@ function slugify(value: string) {
 }
 
 function getMasterPath(groupKey: string, item: string) {
+  if (item === 'User Master') {
+    return '/admin/user-master'
+  }
+
   const realMasterItems = new Set([
     'Role Master',
     'User Project Assignment Master',

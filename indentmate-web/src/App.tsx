@@ -15,6 +15,7 @@ import GenericMasterPage from './pages/GenericMasterPage'
 import IndentDetail from './pages/IndentDetail'
 import IndentList from './pages/IndentList'
 import Login from './pages/Login'
+import ResponsibilityMaster from './pages/ResponsibilityMaster'
 import Transactions from './pages/Transactions'
 
 function ProtectedRoute({ children, title = 'Dashboard' }: { children: ReactNode; title?: string }) {
@@ -121,7 +122,9 @@ export default function App() {
         <Route
           path="/admin/user-master"
           element={
-            <Navigate to="/master-data/responsibility-master" replace />
+            <ProtectedRoute title="User Master">
+              <ResponsibilityMaster />
+            </ProtectedRoute>
           }
         />
         <Route
