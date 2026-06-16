@@ -1,4 +1,5 @@
 import ExcelJS from 'exceljs'
+import bcrypt from 'bcryptjs'
 import xlsx from 'xlsx'
 import { pool, query } from '../db/pool.js'
 
@@ -726,6 +727,9 @@ export async function updateMasterData(req, res, next) {
       return res.status(404).json({ message: 'Master not found' })
     }
 
+    const previousRecord = req.params.masterKey === 'responsibility-master'
+      ? await fetchRecord(definition, req.params.id)
+      : null
     const payload = normalizePayload(req.body, definition)
     const editableFields = definition.fields.filter((field) => field !== 'status')
     const missingField = definition.required.find((field) => payload[field] === undefined || payload[field] === '')
@@ -758,6 +762,13 @@ export async function updateMasterData(req, res, next) {
     }
 
     const record = await fetchRecord(definition, result.rows[0][definition.primaryKey])
+
+    if (req.params.masterKey === 'responsibility-master') {
+      await syncResponsibilityUser(record)
+      if (previousRecord?.employee_id && previousRecord.employee_id !== record.employee_id) {
+        await cleanupResponsibilityUser(previousRecord.employee_id)
+      }
+    }
 
     return res.json({
       message: 'Record updated successfully',
@@ -834,6 +845,10 @@ export async function createMasterData(req, res, next) {
 
     const record = await fetchRecord(definition, result.rows[0][definition.primaryKey])
 
+    if (req.params.masterKey === 'responsibility-master') {
+      await syncResponsibilityUser(record)
+    }
+
     return res.status(201).json({
       message: 'Record created successfully',
       data: record,
@@ -855,7 +870,7 @@ export async function deleteMasterData(req, res, next) {
       `
         DELETE FROM ${definition.table}
         WHERE ${definition.primaryKey} = $1
-        RETURNING ${definition.primaryKey}
+        RETURNING *
       `,
       [req.params.id],
     )
@@ -864,7 +879,14 @@ export async function deleteMasterData(req, res, next) {
       return res.status(404).json({ message: 'Record not found' })
     }
 
-    return res.json({ message: 'Record deleted successfully' })
+    if (req.params.masterKey === 'responsibility-master') {
+      await cleanupResponsibilityUser(result.rows[0].employee_id)
+    }
+
+    return res.json({
+      message: 'Record deleted successfully',
+      data: result.rows[0],
+    })
   } catch (error) {
     return handleMasterError(error, res, next)
   }
@@ -1481,6 +1503,91 @@ function throwBadRequest(message) {
   const error = new Error(message)
   error.statusCode = 400
   throw error
+}
+
+function normalizeFieldRole(role) {
+  const r = String(role ?? '').trim().toUpperCase()
+  if (r === 'SIE' || r.includes('(SIE)') || r.includes('SITE ENGINEER')) return 'SIE'
+  if (r === 'SER' || r === 'SRE' || r.includes('(SER)') || r.includes('(SRE)') || r.includes('SERVICE ENGINEER') || r.includes('SITE RECEIVING')) return 'SER'
+  return null
+}
+
+function formatDateOnly(value) {
+  if (!value) {
+    return null
+  }
+
+  if (value instanceof Date) {
+    return value.toISOString().slice(0, 10)
+  }
+
+  return String(value).slice(0, 10) || null
+}
+
+function computeResponsibilityStatus(row) {
+  if (String(row?.manual_status ?? '').trim().toLowerCase() === 'inactive') {
+    return 'Inactive'
+  }
+
+  const validTo = formatDateOnly(row?.valid_to)
+
+  if (!validTo) {
+    return 'Active'
+  }
+
+  return new Date().toISOString().slice(0, 10) <= validTo ? 'Active' : 'Inactive'
+}
+
+async function syncResponsibilityUser(row) {
+  if (!row?.employee_id) {
+    return
+  }
+
+  const primaryRole = normalizeFieldRole(row.responsibility) ?? row.responsibility
+  const pin = '123456'
+  const passwordHash = await bcrypt.hash(pin, 12)
+  const isActive = computeResponsibilityStatus(row) === 'Active'
+
+  await query(
+    `
+      INSERT INTO users (login_name, employee_name, primary_role, password_hash, is_active, current_pin, is_deleted)
+      VALUES ($1, $2, $3, $4, $5, $6, FALSE)
+      ON CONFLICT (login_name)
+      DO UPDATE SET
+        employee_name = EXCLUDED.employee_name,
+        primary_role = CASE
+          WHEN btrim(COALESCE(users.primary_role, '')) IN ('', '-') THEN EXCLUDED.primary_role
+          WHEN $7::boolean THEN EXCLUDED.primary_role
+          ELSE users.primary_role
+        END,
+        is_active = EXCLUDED.is_active,
+        is_deleted = FALSE
+    `,
+    [
+      row.employee_id,
+      row.employee_name,
+      primaryRole,
+      passwordHash,
+      isActive,
+      pin,
+      Boolean(normalizeFieldRole(row.responsibility)),
+    ],
+  )
+}
+
+async function cleanupResponsibilityUser(employeeId) {
+  if (!employeeId) {
+    return
+  }
+
+  const remaining = await query(
+    'SELECT 1 FROM responsibility_master WHERE employee_id = $1 LIMIT 1',
+    [employeeId],
+  )
+
+  if (!remaining.rows[0]) {
+    await query('DELETE FROM users WHERE login_name = $1', [employeeId])
+  }
 }
 
 function normalizePayload(body, definition) {
