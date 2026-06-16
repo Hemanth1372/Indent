@@ -348,7 +348,7 @@
                                     <BoxView BackgroundColor="#0E2A5C" />
                                     <VerticalStackLayout Grid.Column="1" Padding="14,12,14,12" Spacing="6">
                                         <!-- Material code + type badge -->
-                                        <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                        <Grid ColumnDefinitions="*,Auto,Auto,Auto" ColumnSpacing="8">
                                             <Label
                                                 FontAttributes="Bold"
                                                 FontSize="14"
@@ -371,6 +371,22 @@
                                             </Border>
                                             <Button
                                                 Grid.Column="2"
+                                                Padding="10,0"
+                                                BackgroundColor="#F8FAFC"
+                                                BorderColor="#CBD5E1"
+                                                BorderWidth="1"
+                                                Command="{Binding BindingContext.EditItemCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                                CommandParameter="{Binding .}"
+                                                CornerRadius="8"
+                                                FontAttributes="Bold"
+                                                FontSize="12"
+                                                HeightRequest="32"
+                                                IsVisible="{Binding BindingContext.CanEdit, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                                Text="Edit"
+                                                TextColor="#334155"
+                                                VerticalOptions="Center" />
+                                            <Button
+                                                Grid.Column="3"
                                                 Padding="10,0"
                                                 BackgroundColor="#FFF5F5"
                                                 BorderColor="#FECACA"

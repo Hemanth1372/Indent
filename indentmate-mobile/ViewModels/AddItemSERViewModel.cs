@@ -17,11 +17,13 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
     private int _materialOffset;
     private int _materialSearchVersion;
     private string _materialSearchText = string.Empty;
+    private LocalIndentItem? _editingItem;
 
     public ObservableCollection<LocalItem> Materials { get; } = new();
     public List<string> Categories { get; } = new() { "Spare", "Diesel", "Other" };
 
     [ObservableProperty] private string _indentId = string.Empty;
+    [ObservableProperty] private string _itemLineId = string.Empty;
     [ObservableProperty] private LocalItem? _selectedMaterial;
     [ObservableProperty] private string _selectedCategory = "Spare";
     [ObservableProperty] private string _uoM = string.Empty;
@@ -57,8 +59,13 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
         if (query.TryGetValue("indentId", out var value))
         {
             IndentId = Uri.UnescapeDataString(value?.ToString() ?? string.Empty);
-            _ = LoadAsync();
         }
+        if (query.TryGetValue("itemLineId", out var itemValue))
+        {
+            ItemLineId = Uri.UnescapeDataString(itemValue?.ToString() ?? string.Empty);
+        }
+
+        _ = LoadAsync();
     }
 
     partial void OnSelectedMaterialChanged(LocalItem? value)
@@ -123,6 +130,12 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
             return;
         }
 
+        if (SelectedMaterial.OnHandQty <= 0)
+        {
+            ValidationMessage = "Selected material does not have available on hand quantity.";
+            return;
+        }
+
         if (!decimal.TryParse(RequestedQty, out var qty) || qty <= 0)
         {
             ValidationMessage = "Requested quantity must be greater than 0.";
@@ -137,13 +150,13 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
 
         await RunBusyAsync(async () =>
         {
-            if (await _databaseService.CountItemsForIndentAsync(_indent.IndentId) >= 20)
+            if (_editingItem is null && await _databaseService.CountItemsForIndentAsync(_indent.IndentId) >= 20)
             {
                 await Shell.Current.DisplayAlert("Limit reached", "Maximum 20 items allowed per indent.", "OK");
                 return;
             }
 
-            if (await _databaseService.HasDuplicateSERItemAsync(_indent.IndentId, SelectedMaterial.ItemCode))
+            if (await _databaseService.HasDuplicateSERItemAsync(_indent.IndentId, SelectedMaterial.ItemCode, ItemLineId))
             {
                 ValidationMessage = "This material has already been added to this indent.";
                 return;
@@ -151,7 +164,7 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
 
             await _databaseService.SaveAsync(new LocalIndentItem
             {
-                ItemLineId = Guid.NewGuid().ToString(),
+                ItemLineId = _editingItem?.ItemLineId ?? Guid.NewGuid().ToString(),
                 IndentId = _indent.IndentId,
                 MaterialCode = SelectedMaterial.ItemCode,
                 MaterialDesc = SelectedMaterial.Description,
@@ -174,10 +187,16 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
             if (_indent is null) return;
 
             _project = await _databaseService.GetProjectAsync(_indent.ProjectId);
+            _editingItem = string.IsNullOrWhiteSpace(ItemLineId)
+                ? null
+                : await _databaseService.GetIndentItemByLineIdAsync(ItemLineId);
             Materials.Clear();
             SelectedMaterial = null;
             HasMoreMaterials = false;
             await SearchMaterialsAsync(string.Empty);
+
+            if (_editingItem is not null)
+                ApplyEditingItem();
         });
     }
 
@@ -218,7 +237,7 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
         {
             var projectCode = GetPrimarySiteCode();
             var offset = reset ? 0 : _materialOffset;
-            var result = await _apiService.SearchItemsForProjectAsync(projectCode, string.Empty, query, SearchPageSize, offset, "all");
+            var result = await _apiService.SearchItemsForProjectAsync(projectCode, string.Empty, query, SearchPageSize, offset, "project");
             if (version != _materialSearchVersion)
                 return;
 
@@ -248,7 +267,7 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
 
     private void AddMaterials(IEnumerable<LocalItem> materials)
     {
-        foreach (var material in materials.OrderBy(m => m.ItemCode))
+        foreach (var material in materials.Where(m => m.OnHandQty > 0).OrderBy(m => m.ItemCode))
         {
             if (!Materials.Any(existing =>
                     string.Equals(existing.ItemCode, material.ItemCode, StringComparison.OrdinalIgnoreCase)))
@@ -256,6 +275,23 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
                 Materials.Add(material);
             }
         }
+    }
+
+    private void ApplyEditingItem()
+    {
+        if (_editingItem is null)
+            return;
+
+        SelectedCategory = string.IsNullOrWhiteSpace(_editingItem.WorkType) ? SelectedCategory : _editingItem.WorkType;
+        SelectedMaterial = Materials.FirstOrDefault(material =>
+            string.Equals(material.ItemCode, _editingItem.MaterialCode, StringComparison.OrdinalIgnoreCase));
+        UoM = _editingItem.UoM;
+        RequestedQty = _editingItem.RequestedQty.ToString("0.##");
+        Remarks = _editingItem.Remarks;
+        AttachmentPath = _editingItem.AttachmentUrl;
+        AttachmentName = string.IsNullOrWhiteSpace(_editingItem.AttachmentUrl)
+            ? string.Empty
+            : Path.GetFileName(_editingItem.AttachmentUrl);
     }
 
     private string GetPrimarySiteCode()

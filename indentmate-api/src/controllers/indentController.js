@@ -23,6 +23,7 @@ const INDENT_SELECT_SQL = `
     first_line.make,
     first_line.required_qty,
     first_line.issued_qty,
+    first_line.on_hand_qty,
     first_line.uom,
     COALESCE(first_line.remarks, h.remarks) AS remarks,
     h.status,
@@ -45,11 +46,12 @@ const INDENT_SELECT_SQL = `
       l.make,
       l.required_qty,
       l.issued_qty,
+      COALESCE(im.on_hand_qty, 0) AS on_hand_qty,
       l.uom,
       l.remarks
     FROM indent_lines l
     LEFT JOIN LATERAL (
-      SELECT item_description
+      SELECT item_description, on_hand_qty
       FROM item_master im
       WHERE im.project_site = h.project_code
         AND im.item_code = l.item_code
@@ -71,6 +73,7 @@ const INDENT_SELECT_SQL = `
         'uom', l.uom,
         'required_qty', l.required_qty,
         'issued_qty', l.issued_qty,
+        'on_hand_qty', COALESCE(im.on_hand_qty, 0),
         'work_type', l.work_type,
         'activity_code', l.activity_code,
         'location_code', l.location_code,
@@ -81,7 +84,7 @@ const INDENT_SELECT_SQL = `
     ) AS items
     FROM indent_lines l
     LEFT JOIN LATERAL (
-      SELECT item_description
+      SELECT item_description, on_hand_qty
       FROM item_master im
       WHERE im.project_site = h.project_code
         AND im.item_code = l.item_code
@@ -233,7 +236,6 @@ export async function listIndentProjectOptions(req, res, next) {
 export async function listIndentWarehouseLocationOptions(req, res, next) {
   try {
     const projectCode = String(req.query?.projectCode ?? '').trim()
-    const warehouseCode = String(req.query?.warehouseCode ?? '').trim()
 
     if (!projectCode) {
       return res.status(400).json({ message: 'projectCode is required' })
@@ -246,21 +248,16 @@ export async function listIndentWarehouseLocationOptions(req, res, next) {
       "btrim(location_code) <> ''",
     ]
 
-    if (warehouseCode) {
-      params.push(warehouseCode.toLowerCase())
-      clauses.push(`lower(btrim(warehouse_code)) = $${params.length}`)
-    }
-
     const result = await query(
       `
         SELECT DISTINCT ON (location_code)
           project_code,
-          warehouse_code,
+          NULL::text AS warehouse_code,
           location_code,
-          COALESCE(NULLIF(location_description, ''), location_code) AS description
-        FROM warehouse_location_master
+          COALESCE(NULLIF(description, ''), location_code) AS description
+        FROM location_master
         WHERE ${clauses.join('\n          AND ')}
-        ORDER BY location_code ASC, location_description ASC
+        ORDER BY location_code ASC, description ASC
       `,
       params,
     )
@@ -519,6 +516,7 @@ export async function listIndentItemOptions(req, res, next) {
     const clauses = [
       'item_code IS NOT NULL',
       "btrim(item_code) <> ''",
+      'COALESCE(on_hand_qty, 0) > 0',
     ]
 
     if (scope !== 'all') {
@@ -568,7 +566,7 @@ export async function listIndentItemOptions(req, res, next) {
           COALESCE(NULLIF(warehouse_description, ''), '') AS warehouse_description
         FROM item_master
         WHERE ${clauses.join('\n          AND ')}
-        ORDER BY item_code ASC, warehouse_code NULLS LAST
+        ORDER BY item_code ASC, on_hand_qty DESC NULLS LAST, warehouse_code NULLS LAST
         LIMIT $${limitParam}
         OFFSET $${offsetParam}
       `,
@@ -594,23 +592,30 @@ export async function listIndentActivityOptions(req, res, next) {
     const search = String(req.query?.search ?? '').trim()
     const limit = normalizeOptionLimit(req.query?.limit)
     const offset = normalizeOptionOffset(req.query?.offset)
+    const employeeId = String(req.user?.login_name ?? req.user?.employeeId ?? req.user?.employee_id ?? '').trim()
 
     if (!projectCode) {
       return res.status(400).json({ message: 'projectCode is required' })
     }
 
-    const params = [projectCode.toLowerCase()]
+    if (!employeeId) {
+      return res.status(401).json({ message: 'Authenticated user is required' })
+    }
+
+    const params = [projectCode.toLowerCase(), employeeId.toLowerCase()]
     const clauses = [
-      "lower(btrim(project_code)) = $1",
-      'activity_code IS NOT NULL',
-      "btrim(activity_code) <> ''",
+      "lower(btrim(eam.project_code)) = $1",
+      "lower(btrim(eam.employee_id)) = $2",
+      'eam.activity_code IS NOT NULL',
+      "btrim(eam.activity_code) <> ''",
     ]
 
     if (search.length >= 2) {
       params.push(`%${search}%`)
       clauses.push(`(
-        activity_code ILIKE $${params.length}
-        OR description ILIKE $${params.length}
+        eam.activity_code ILIKE $${params.length}
+        OR eam.activity_description ILIKE $${params.length}
+        OR am.description ILIKE $${params.length}
       )`)
     }
 
@@ -621,16 +626,19 @@ export async function listIndentActivityOptions(req, res, next) {
 
     const result = await query(
       `
-        SELECT
-          project_code,
-          activity_code,
-          COALESCE(NULLIF(description, ''), activity_code) AS description,
-          COALESCE(NULLIF(activity_type, ''), '') AS activity_type,
-          COALESCE(NULLIF(critical_capacity_type, ''), '') AS critical_capacity_type,
-          COALESCE(NULLIF(work_auth_status, ''), 'Released') AS work_auth_status
-        FROM activity_master
+        SELECT DISTINCT ON (eam.activity_code)
+          eam.project_code,
+          eam.activity_code,
+          COALESCE(NULLIF(eam.activity_description, ''), NULLIF(am.description, ''), eam.activity_code) AS description,
+          COALESCE(NULLIF(am.activity_type, ''), 'Work package') AS activity_type,
+          COALESCE(NULLIF(am.critical_capacity_type, ''), '') AS critical_capacity_type,
+          COALESCE(NULLIF(am.work_auth_status, ''), 'Released') AS work_auth_status
+        FROM engineer_activity_master eam
+        LEFT JOIN activity_master am
+          ON lower(btrim(am.project_code)) = lower(btrim(eam.project_code))
+          AND lower(btrim(am.activity_code)) = lower(btrim(eam.activity_code))
         WHERE ${clauses.join('\n          AND ')}
-        ORDER BY activity_code ASC, description ASC
+        ORDER BY eam.activity_code ASC, description ASC
         LIMIT $${limitParam}
         OFFSET $${offsetParam}
       `,

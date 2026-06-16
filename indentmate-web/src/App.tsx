@@ -15,7 +15,6 @@ import GenericMasterPage from './pages/GenericMasterPage'
 import IndentDetail from './pages/IndentDetail'
 import IndentList from './pages/IndentList'
 import Login from './pages/Login'
-import ResponsibilityMaster from './pages/ResponsibilityMaster'
 import Transactions from './pages/Transactions'
 
 function ProtectedRoute({ children, title = 'Dashboard' }: { children: ReactNode; title?: string }) {
@@ -122,9 +121,7 @@ export default function App() {
         <Route
           path="/admin/user-master"
           element={
-            <ProtectedRoute title="User Master">
-              <ResponsibilityMaster />
-            </ProtectedRoute>
+            <Navigate to="/master-data/responsibility-master" replace />
           }
         />
         <Route
@@ -142,13 +139,13 @@ export default function App() {
         <Route
           path="/responsibility-master"
           element={
-            <Navigate to="/admin/user-master" replace />
+            <Navigate to="/master-data/responsibility-master" replace />
           }
         />
         <Route
           path="/admin/responsibility-master"
           element={
-            <Navigate to="/admin/user-master" replace />
+            <Navigate to="/master-data/responsibility-master" replace />
           }
         />
         <Route
@@ -200,6 +197,14 @@ export default function App() {
           path="/indent-drafts/:draftId/items/new"
           element={
             <FieldRoute title="Add New Item">
+              <FieldIndentAddItem />
+            </FieldRoute>
+          }
+        />
+        <Route
+          path="/indent-drafts/:draftId/items/:itemId/edit"
+          element={
+            <FieldRoute title="Edit Item">
               <FieldIndentAddItem />
             </FieldRoute>
           }

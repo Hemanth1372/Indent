@@ -1,5 +1,29 @@
 import { query } from './pool.js'
 
+async function repairSerialSequence(tableName, columnName = 'id') {
+  if (!/^[a-z_][a-z0-9_]*$/i.test(tableName) || !/^[a-z_][a-z0-9_]*$/i.test(columnName)) {
+    throw new Error('Invalid sequence repair target')
+  }
+
+  const sequenceResult = await query('SELECT pg_get_serial_sequence($1, $2) AS sequence_name', [tableName, columnName])
+  const sequenceName = sequenceResult.rows[0]?.sequence_name
+
+  if (!sequenceName) {
+    return
+  }
+
+  await query(
+    `
+      SELECT setval(
+        $1::regclass,
+        GREATEST((SELECT COALESCE(MAX("${columnName}"), 0) FROM "${tableName}"), 1),
+        true
+      )
+    `,
+    [sequenceName],
+  )
+}
+
 export async function ensureSchema() {
   await query('CREATE EXTENSION IF NOT EXISTS pgcrypto')
   await query(`
@@ -152,6 +176,7 @@ export async function ensureSchema() {
 
   await query('CREATE INDEX IF NOT EXISTS idx_responsibility_master_project_id ON responsibility_master(project_id)')
   await query('CREATE INDEX IF NOT EXISTS idx_responsibility_master_employee_id ON responsibility_master(employee_id)')
+  await repairSerialSequence('responsibility_master')
 
   await query(`
     CREATE TABLE IF NOT EXISTS role_master (

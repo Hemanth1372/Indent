@@ -14,6 +14,7 @@ type IndentLineItem = {
   uom?: string | null
   required_qty: string | number
   issued_qty: string | number
+  on_hand_qty?: string | number | null
   work_type?: string | null
   activity_code?: string | null
   location_code?: string | null
@@ -222,7 +223,7 @@ export default function IndentDetail() {
           {indent.items.length === 0 ? (
             <div className="px-5 py-8 text-center text-sm text-slate-500">No item details found.</div>
           ) : (
-            <table className="w-full min-w-[1120px] border-collapse text-left text-sm">
+            <table className="w-full min-w-[1200px] border-collapse text-left text-sm">
               <thead className="bg-slate-50 text-xs uppercase tracking-wide text-slate-500">
                 <tr>
                   <th className="px-4 py-3">Line</th>
@@ -232,6 +233,7 @@ export default function IndentDetail() {
                   <th className="px-4 py-3">Material</th>
                   <th className="px-4 py-3">UOM</th>
                   <th className="px-4 py-3">Requested Qty</th>
+                  <th className="px-4 py-3">On Hand Qty</th>
                   <th className="px-4 py-3">Issued Qty</th>
                   <th className="px-4 py-3">Remarks</th>
                   <th className="px-4 py-3">Attachment</th>
@@ -247,6 +249,7 @@ export default function IndentDetail() {
                     <td className="px-4 py-4 font-mono font-bold text-slate-900">{formatWithDash(item.item_code, item.item_name)}</td>
                     <td className="px-4 py-4 text-slate-700">{item.uom || '-'}</td>
                     <td className="px-4 py-4 text-slate-700">{formatQty(item.required_qty)}</td>
+                    <td className="px-4 py-4 text-slate-700">{formatQty(item.on_hand_qty ?? '-')}</td>
                     <td className="px-4 py-4 text-slate-700">{formatQty(item.issued_qty)}</td>
                     <td className="max-w-[240px] px-4 py-4 text-slate-700">{item.remarks || '-'}</td>
                     <td className="px-4 py-4">
@@ -408,6 +411,7 @@ function printIndentPdf(indent: IndentDetailRecord) {
       <td>${escapeHtml(formatWithDash(item.item_code, item.item_name))}</td>
       <td>${escapeHtml(item.uom || '-')}</td>
       <td>${escapeHtml(formatQty(item.required_qty))}</td>
+      <td>${escapeHtml(formatQty(item.on_hand_qty ?? '-'))}</td>
       <td>${escapeHtml(formatQty(item.issued_qty))}</td>
       <td>${escapeHtml(item.remarks || '-')}</td>
     </tr>
@@ -445,7 +449,8 @@ function printIndentPdf(indent: IndentDetailRecord) {
           th:nth-child(6), td:nth-child(6) { width: 7%; }
           th:nth-child(7), td:nth-child(7) { width: 11%; }
           th:nth-child(8), td:nth-child(8) { width: 9%; }
-          th:nth-child(9), td:nth-child(9) { width: 9%; }
+          th:nth-child(9), td:nth-child(9) { width: 8%; }
+          th:nth-child(10), td:nth-child(10) { width: 8%; }
           @media print { body { margin: 12mm; } }
         </style>
       </head>
@@ -497,11 +502,12 @@ function printIndentPdf(indent: IndentDetailRecord) {
               <th>Material</th>
               <th>UOM</th>
               <th>Requested Qty</th>
+              <th>On Hand Qty</th>
               <th>Issued Qty</th>
               <th>Remarks</th>
             </tr>
           </thead>
-          <tbody>${itemRows || '<tr><td colspan="9">No item details found.</td></tr>'}</tbody>
+          <tbody>${itemRows || '<tr><td colspan="10">No item details found.</td></tr>'}</tbody>
         </table>
       </body>
     </html>

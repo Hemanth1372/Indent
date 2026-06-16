@@ -10,6 +10,7 @@ import {
   Folder,
   MapPin,
   PackagePlus,
+  Pencil,
   Plus,
   RefreshCw,
   Save,
@@ -53,6 +54,7 @@ type DraftItem = {
   toBusinessPartnerLabel?: string
   remarks?: string
   attachmentName?: string
+  onHandQty?: string | number
 }
 
 type IndentDraft = {
@@ -97,6 +99,7 @@ type IndentTransaction = {
     item_code: string
     item_name?: string | null
     uom?: string | null
+    on_hand_qty?: string | number | null
     required_qty: string | number
     work_type?: string | null
     activity_code?: string | null
@@ -573,10 +576,16 @@ export function FieldIndentDraftDetails() {
                   <p className="mt-1 text-sm text-slate-500">Qty: {item.requestedQty} {item.uom} · {item.workType}</p>
                   <p className="mt-1 text-xs text-slate-400">{item.locationLabel || draft.sourceLocationLabel || '-'} · {item.activityLabel || '-'}</p>
                 </div>
-                <button className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-red-200 px-3 text-sm font-bold text-red-600 transition hover:bg-red-50" onClick={() => deleteItem(item.id)} type="button">
-                  <Trash2 size={15} />
-                  Remove
-                </button>
+                <div className="flex flex-wrap gap-2">
+                  <button className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-200 px-3 text-sm font-bold text-slate-700 transition hover:bg-slate-50" onClick={() => navigate(`/indent-drafts/${draft.id}/items/${item.id}/edit`)} type="button">
+                    <Pencil size={15} />
+                    Edit
+                  </button>
+                  <button className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-red-200 px-3 text-sm font-bold text-red-600 transition hover:bg-red-50" onClick={() => deleteItem(item.id)} type="button">
+                    <Trash2 size={15} />
+                    Remove
+                  </button>
+                </div>
               </div>
             ))}
           </div>
@@ -644,22 +653,23 @@ export function FieldIndentSubmittedDetails() {
 }
 
 export function FieldIndentAddItem() {
-  const { draftId = '' } = useParams()
+  const { draftId = '', itemId = '' } = useParams()
   const navigate = useNavigate()
   const draft = readDrafts().find((item) => item.id === draftId) ?? null
+  const editItem = draft?.items.find((item) => item.id === itemId) ?? null
   const [materials, setMaterials] = useState<Option[]>([])
   const [activities, setActivities] = useState<Option[]>([])
   const [locations, setLocations] = useState<Option[]>([])
   const [partners, setPartners] = useState<Option[]>([])
   const [form, setForm] = useState({
-    workType: 'BOQ',
-    locationCode: draft?.sourceLocationCode ?? '',
-    activityCode: '',
-    materialCode: '',
-    requestedQty: '',
-    toBusinessPartner: draft?.toEntityId ?? '',
-    remarks: '',
-    attachmentName: '',
+    workType: editItem?.workType ?? 'BOQ',
+    locationCode: editItem?.locationCode ?? draft?.sourceLocationCode ?? '',
+    activityCode: editItem?.activityCode ?? '',
+    materialCode: editItem?.materialCode ?? '',
+    requestedQty: editItem?.requestedQty ?? '',
+    toBusinessPartner: editItem?.toBusinessPartner ?? draft?.toEntityId ?? '',
+    remarks: editItem?.remarks ?? '',
+    attachmentName: editItem?.attachmentName ?? '',
   })
   const [errorMessage, setErrorMessage] = useState('')
 
@@ -670,7 +680,15 @@ export function FieldIndentAddItem() {
     async function loadOptions() {
       const materialScope = sourceDraft.engineerType === 'SER' ? 'all' : 'project'
       const initialMaterials = await loadMaterialOptions(sourceDraft.projectCode, sourceDraft.engineerType === 'SIE' ? sourceDraft.warehouseCode ?? '' : '', '', materialScope)
-      setMaterials(initialMaterials)
+      const editMaterial = editItem
+        ? [{
+          code: editItem.materialCode,
+          label: `${editItem.materialCode} - ${editItem.materialDesc}`,
+          description: editItem.materialDesc,
+          meta: { uom: editItem.uom, onHandQty: editItem.onHandQty },
+        }]
+        : []
+      setMaterials(mergeOptions(initialMaterials, editMaterial))
 
       void loadAllMaterialOptions(sourceDraft.projectCode, sourceDraft.engineerType === 'SIE' ? sourceDraft.warehouseCode ?? '' : '', materialScope)
         .then((allMaterials) => setMaterials((current) => mergeOptions(current, allMaterials)))
@@ -704,12 +722,13 @@ export function FieldIndentAddItem() {
     }
 
     loadOptions().catch(() => setErrorMessage('Unable to load item options.'))
-  }, [draftId])
+  }, [draftId, itemId])
 
   if (!draft) {
     return <MobileShell title="Add New Item" onBack={() => navigate('/indent-workspace')}><EmptyState label="Draft not found." /></MobileShell>
   }
   const activeDraft = draft
+  const isEditMode = Boolean(editItem)
 
   const selectedMaterial = materials.find((material) => material.code === form.materialCode)
   const selectedActivity = activities.find((activity) => activity.code === form.activityCode)
@@ -742,7 +761,13 @@ export function FieldIndentAddItem() {
       return
     }
 
+    if (Number(selectedMaterial.meta?.onHandQty ?? 0) <= 0) {
+      setErrorMessage('Selected material does not have available on hand quantity.')
+      return
+    }
+
     const duplicate = activeDraft.items.some((item) =>
+      item.id !== itemId &&
       item.materialCode === selectedMaterial.code &&
       item.locationCode === selectedLocation.code &&
       item.activityCode === selectedActivity?.code &&
@@ -754,9 +779,7 @@ export function FieldIndentAddItem() {
       return
     }
 
-    const nextDraft: IndentDraft = {
-      ...activeDraft,
-      items: [...activeDraft.items, {
+    const nextItem: DraftItem = {
         id: crypto.randomUUID(),
         workType: form.workType,
         locationCode: selectedLocation.code,
@@ -771,14 +794,20 @@ export function FieldIndentAddItem() {
         toBusinessPartnerLabel: selectedPartner?.label ?? activeDraft.toEntityLabel,
         remarks: form.remarks,
         attachmentName: form.attachmentName,
-      }],
+        onHandQty: selectedMaterial.meta?.onHandQty ?? undefined,
+      }
+    const nextDraft: IndentDraft = {
+      ...activeDraft,
+      items: isEditMode
+        ? activeDraft.items.map((item) => (item.id === itemId ? { ...nextItem, id: item.id } : item))
+        : [...activeDraft.items, nextItem],
     }
     upsertDraft(nextDraft)
     navigate(`/indent-drafts/${activeDraft.id}`)
   }
 
   return (
-    <MobileShell title="Add New Item" onBack={() => navigate(`/indent-drafts/${draft.id}`)}>
+    <MobileShell title={isEditMode ? 'Edit Item' : 'Add New Item'} onBack={() => navigate(`/indent-drafts/${draft.id}`)}>
       <div className="mx-auto grid w-full max-w-[560px] gap-5">
         <div className="rounded-lg border border-slate-200 bg-white p-6 shadow-sm">
           <h3 className="mb-5 flex items-center gap-3 border-b border-slate-100 pb-4 text-lg font-black text-slate-900">
@@ -818,6 +847,7 @@ export function FieldIndentAddItem() {
               placeholder="Select material"
             />
             <ReadonlyField label="UOM (Auto-filled)" value={String(selectedMaterial?.meta?.uom ?? '') || '-'} />
+            <ReadonlyField label="On Hand Qty" value={String(selectedMaterial?.meta?.onHandQty ?? '-') || '-'} />
             <TextField label="Requested Qty *" value={form.requestedQty} onChange={(value) => setForm((current) => ({ ...current, requestedQty: value }))} placeholder="Enter quantity" type="number" />
             {draft.engineerType === 'SIE' ? (
               <OptionField
@@ -854,7 +884,7 @@ export function FieldIndentAddItem() {
         </div>
         <button className="inline-flex h-14 items-center justify-center gap-3 rounded-lg bg-blue-950 text-base font-black text-white transition hover:bg-blue-900" onClick={saveItem} type="button">
           <Check size={19} />
-          Save Item
+          {isEditMode ? 'Update Item' : 'Save Item'}
         </button>
       </div>
     </MobileShell>
@@ -1190,16 +1220,16 @@ async function fetchMaterialOptions(projectCode: string, warehouseCode = '', sea
     params.set('search', search.trim())
   }
 
-  const response = await api.get<OptionResponse<{ item_code: string; item_description: string; item_type?: string | null; uom?: string | null; purchase_unit?: string | null }>>(`/api/indents/options/items?${params}`)
+  const response = await api.get<OptionResponse<{ item_code: string; item_description: string; item_type?: string | null; uom?: string | null; purchase_unit?: string | null; on_hand_qty?: string | number | null }>>(`/api/indents/options/items?${params}`)
   return response.data
 }
 
-function mapMaterialOptions(materials: Array<{ item_code: string; item_description: string; item_type?: string | null; uom?: string | null; purchase_unit?: string | null }>) {
+function mapMaterialOptions(materials: Array<{ item_code: string; item_description: string; item_type?: string | null; uom?: string | null; purchase_unit?: string | null; on_hand_qty?: string | number | null }>) {
   return materials.map((material) => ({
     code: material.item_code,
     label: formatMaterialLabel(material.item_code, material.item_type, material.item_description),
     description: material.item_description,
-    meta: { itemType: material.item_type, uom: material.uom || material.purchase_unit || '' },
+    meta: { itemType: material.item_type, uom: material.uom || material.purchase_unit || '', onHandQty: material.on_hand_qty },
   }))
 }
 
@@ -1415,6 +1445,7 @@ function draftToTransaction(draft: IndentDraft): IndentTransaction {
       item_code: item.materialCode,
       item_name: item.materialDesc,
       uom: item.uom,
+      on_hand_qty: item.onHandQty,
       required_qty: item.requestedQty,
       work_type: item.workType,
       activity_code: item.activityCode,

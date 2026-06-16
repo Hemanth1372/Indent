@@ -38,7 +38,7 @@ export const MASTER_DEFINITIONS = {
     primaryKey: 'id',
     fields: ['activity_code', 'project_code', 'description', 'activity_type', 'critical_capacity_type', 'work_auth_status', 'resource_required', 'scheduled_start_date', 'scheduled_finish_date'],
     required: ['activity_code', 'project_code', 'description', 'activity_type', 'critical_capacity_type', 'work_auth_status', 'resource_required'],
-    searchableFields: ['activity_code', 'project_code', 'description', 'activity_type', 'critical_capacity_type', 'work_auth_status', 'resource_required'],
+    searchableFields: ['activity_code', 'project_code', 'description', 'activity_type', 'critical_capacity_type', 'work_auth_status', 'resource_required', 'scheduled_start_date', 'scheduled_finish_date'],
   },
   'location-master': {
     table: 'location_master',
@@ -56,7 +56,7 @@ export const MASTER_DEFINITIONS = {
     primaryKey: 'id',
     fields: ['project_site', 'site_description', 'warehouse_code', 'warehouse_description', 'on_hand_qty', 'item_code', 'item_description', 'purchase_unit', 'item_type'],
     required: ['project_site', 'site_description', 'item_code', 'item_description', 'purchase_unit', 'item_type'],
-    searchableFields: ['project_site', 'site_description', 'warehouse_code', 'warehouse_description', 'item_code', 'item_description', 'purchase_unit', 'item_type'],
+    searchableFields: ['project_site', 'site_description', 'warehouse_code', 'warehouse_description', 'on_hand_qty', 'item_code', 'item_description', 'purchase_unit', 'item_type'],
   },
   'service-order-master': {
     table: 'service_orders',
@@ -544,7 +544,8 @@ function buildFilterClause(filters, searchableFields, aliasMap = {}) {
     }
 
     params.push(`%${filter.value}%`)
-    whereConditions.push(`${dbField}::TEXT ILIKE $${params.length}`)
+    const expression = isDateOnlyField(filter.field) ? `${dbField}::DATE::TEXT` : `${dbField}::TEXT`
+    whereConditions.push(`${expression} ILIKE $${params.length}`)
   }
 
   return {
@@ -627,12 +628,23 @@ export async function listMasterData(req, res, next) {
       const limit = Number.isFinite(requestedLimit) && requestedLimit > 0
         ? Math.min(requestedLimit, 500)
         : 100
+      const isItemMaster = req.params.masterKey === 'item-master'
       const countResult = await query(
-        `
-          SELECT COUNT(*)::int AS total
-          FROM ${definition.table}
-          ${whereClause}
-        `,
+        isItemMaster
+          ? `
+            SELECT COUNT(*)::int AS total
+            FROM (
+              SELECT 1
+              FROM item_master
+              ${whereClause}
+              GROUP BY lower(btrim(COALESCE(project_site, ''))), lower(btrim(COALESCE(item_code, '')))
+            ) deduped_items
+          `
+          : `
+            SELECT COUNT(*)::int AS total
+            FROM ${definition.table}
+            ${whereClause}
+          `,
         params,
       )
       const totalRecords = Number(countResult.rows[0]?.total ?? 0)
@@ -642,13 +654,34 @@ export async function listMasterData(req, res, next) {
         : 1
       const offset = (currentPage - 1) * limit
       const result = await query(
-        `
-          SELECT ${definition.select}
-          FROM ${definition.table}
-          ${whereClause}
-          ORDER BY ${definition.orderBy}
-          LIMIT $${params.length + 1} OFFSET $${params.length + 2}
-        `,
+        isItemMaster
+          ? `
+            WITH ranked_items AS (
+              SELECT
+                ${definition.select},
+                ROW_NUMBER() OVER (
+                  PARTITION BY lower(btrim(COALESCE(project_site, ''))), lower(btrim(COALESCE(item_code, '')))
+                  ORDER BY
+                    CASE WHEN COALESCE(on_hand_qty, 0) > 0 THEN 0 ELSE 1 END,
+                    CASE WHEN btrim(COALESCE(warehouse_code, '')) <> '' THEN 0 ELSE 1 END,
+                    id ASC
+                ) AS row_rank
+              FROM item_master
+              ${whereClause}
+            )
+            SELECT id, project_site, site_description, warehouse_code, warehouse_description, on_hand_qty, item_code, item_description, purchase_unit, item_type, created_at, updated_at
+            FROM ranked_items
+            WHERE row_rank = 1
+            ORDER BY project_site ASC, item_code ASC
+            LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+          `
+          : `
+            SELECT ${definition.select}
+            FROM ${definition.table}
+            ${whereClause}
+            ORDER BY ${definition.orderBy}
+            LIMIT $${params.length + 1} OFFSET $${params.length + 2}
+          `,
         [...params, limit, offset],
       )
 
@@ -795,9 +828,10 @@ export async function listMasterFilterOptions(req, res, next) {
     }
 
     const descriptionExpression = descriptionExpressionForFilter(definition, field)
+    const valueExpression = isDateOnlyField(field) ? `${field}::DATE::TEXT` : `${field}::TEXT`
     const result = await query(
       `
-        SELECT DISTINCT ${field}::TEXT AS value${descriptionExpression ? `, ${descriptionExpression}::TEXT AS description` : ''}
+        SELECT DISTINCT ${valueExpression} AS value${descriptionExpression ? `, ${descriptionExpression}::TEXT AS description` : ''}
         FROM ${definition.table}
         WHERE ${field} IS NOT NULL AND TRIM(${field}::TEXT) <> ''
         ORDER BY value ASC
@@ -1061,7 +1095,18 @@ export async function exportMasterData(req, res, next) {
       .split(',')
       .map((key) => key.trim())
       .filter(Boolean)
+    const requestedColumns = String(req.query?.columns ?? '')
+      .split(',')
+      .map((column) => column.trim())
+      .filter(Boolean)
     const searchableFields = definition.searchableFields ?? []
+    const allowedColumns = requestedColumns.length > 0
+      ? importConfig.columns.filter((column) => requestedColumns.includes(column.dbColumn))
+      : importConfig.columns
+
+    if (allowedColumns.length === 0) {
+      return res.status(400).json({ message: 'At least one export column is required' })
+    }
 
     if (parsedFilters === null) {
       return res.status(400).json({ message: 'Invalid filter payload' })
@@ -1096,7 +1141,7 @@ export async function exportMasterData(req, res, next) {
 
     const result = await query(
       `
-        SELECT ${importConfig.columns.map((column) => column.dbColumn).join(', ')}
+        SELECT ${allowedColumns.map((column) => column.dbColumn).join(', ')}
         FROM ${importConfig.tableName}
         ${whereClause}
         ORDER BY ${importConfig.orderBy}
@@ -1107,7 +1152,7 @@ export async function exportMasterData(req, res, next) {
     const workbook = new ExcelJS.Workbook()
     const exportName = importConfig.exportName
     const worksheet = workbook.addWorksheet(exportName)
-    worksheet.columns = importConfig.columns.map((column) => ({
+    worksheet.columns = allowedColumns.map((column) => ({
       header: column.excelHeader,
       key: column.dbColumn,
       width: Math.max(18, Math.min(44, column.excelHeader.length + 8)),
@@ -1588,6 +1633,10 @@ async function cleanupResponsibilityUser(employeeId) {
   if (!remaining.rows[0]) {
     await query('DELETE FROM users WHERE login_name = $1', [employeeId])
   }
+}
+
+function isDateOnlyField(field) {
+  return ['scheduled_start_date', 'scheduled_finish_date', 'valid_from', 'valid_to'].includes(field)
 }
 
 function normalizePayload(body, definition) {

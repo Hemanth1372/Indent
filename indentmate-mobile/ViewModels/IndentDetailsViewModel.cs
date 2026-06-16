@@ -152,6 +152,16 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
     }
 
     [RelayCommand]
+    private async Task EditItemAsync(LocalIndentItem? item)
+    {
+        if (item is null || _indent is null || !CanEdit)
+            return;
+
+        var route = _indent.EngineerType == "SER" ? "add-item-ser" : "add-item";
+        await Shell.Current.GoToAsync($"//{route}?indentId={Uri.EscapeDataString(_indent.IndentId)}&itemLineId={Uri.EscapeDataString(item.ItemLineId)}");
+    }
+
+    [RelayCommand]
     private async Task SubmitAsync()
     {
         await RunBusyAsync(async () =>

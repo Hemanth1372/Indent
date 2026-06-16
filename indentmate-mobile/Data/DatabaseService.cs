@@ -278,6 +278,14 @@ public class DatabaseService
             .ToListAsync();
     }
 
+    public async Task<LocalIndentItem?> GetIndentItemByLineIdAsync(string itemLineId)
+    {
+        var db = await GetDbAsync();
+        return await db.Table<LocalIndentItem>()
+            .Where(i => i.ItemLineId == itemLineId)
+            .FirstOrDefaultAsync();
+    }
+
     public async Task UpdateIndentAsync(LocalIndent indent)
     {
         var db = await GetDbAsync();
@@ -618,7 +626,7 @@ public class DatabaseService
     }
 
     public async Task<bool> HasDuplicateSIEItemAsync(
-        string indentId, string materialCode, string locationId, string activityId, string businessPartnerId)
+        string indentId, string materialCode, string locationId, string activityId, string businessPartnerId, string excludeItemLineId = "")
     {
         var db = await GetDbAsync();
         return await db.Table<LocalIndentItem>()
@@ -626,15 +634,16 @@ public class DatabaseService
                         && i.MaterialCode == materialCode
                         && i.LocationId == locationId
                         && i.ActivityId == activityId
-                        && i.BusinessPartnerId == businessPartnerId)
+                        && i.BusinessPartnerId == businessPartnerId
+                        && i.ItemLineId != excludeItemLineId)
             .CountAsync() > 0;
     }
 
-    public async Task<bool> HasDuplicateSERItemAsync(string indentId, string materialCode)
+    public async Task<bool> HasDuplicateSERItemAsync(string indentId, string materialCode, string excludeItemLineId = "")
     {
         var db = await GetDbAsync();
         return await db.Table<LocalIndentItem>()
-            .Where(i => i.IndentId == indentId && i.MaterialCode == materialCode)
+            .Where(i => i.IndentId == indentId && i.MaterialCode == materialCode && i.ItemLineId != excludeItemLineId)
             .CountAsync() > 0;
     }
 

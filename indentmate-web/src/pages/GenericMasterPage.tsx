@@ -345,8 +345,8 @@ const masterConfigs: Record<string, MasterConfig> = {
       { key: 'critical_capacity_type', label: 'Critical Capacity Type', required: true },
       { key: 'work_auth_status', label: 'Work Auth Status', required: true },
       { key: 'resource_required', label: 'Resource Required', required: true },
-      { key: 'scheduled_start_date', label: 'Scheduled Start Date', type: 'datetime' },
-      { key: 'scheduled_finish_date', label: 'Scheduled Finish Date', type: 'datetime' },
+      { key: 'scheduled_start_date', label: 'Scheduled Start Date', type: 'date' },
+      { key: 'scheduled_finish_date', label: 'Scheduled Finish Date', type: 'date' },
     ],
     columns: [
       { key: 'project_code', label: 'Project Code' },
@@ -357,8 +357,8 @@ const masterConfigs: Record<string, MasterConfig> = {
       { key: 'critical_capacity_type', label: 'Critical Capacity' },
       { key: 'work_auth_status', label: 'Auth Status' },
       { key: 'resource_required', label: 'Resource Required' },
-      { key: 'scheduled_start_date', label: 'Start Date', type: 'datetime' },
-      { key: 'scheduled_finish_date', label: 'Finish Date', type: 'datetime' },
+      { key: 'scheduled_start_date', label: 'Start Date', type: 'date' },
+      { key: 'scheduled_finish_date', label: 'Finish Date', type: 'date' },
     ],
     searchFields: [
       { label: 'Activity Code', value: 'activity_code', placeholder: 'Enter Activity Code...' },
@@ -368,6 +368,8 @@ const masterConfigs: Record<string, MasterConfig> = {
       { label: 'Critical Capacity Type', value: 'critical_capacity_type', placeholder: 'Enter Critical Capacity Type...' },
       { label: 'Work Auth Status', value: 'work_auth_status', placeholder: 'Enter Work Auth Status...' },
       { label: 'Resource Required', value: 'resource_required', placeholder: 'Enter Resource Required (Yes or No)...' },
+      { label: 'Start Date', value: 'scheduled_start_date', placeholder: 'Enter Start Date (YYYY-MM-DD)...' },
+      { label: 'Finish Date', value: 'scheduled_finish_date', placeholder: 'Enter Finish Date (YYYY-MM-DD)...' },
     ],
   },
   'location-master': {
@@ -423,6 +425,7 @@ const masterConfigs: Record<string, MasterConfig> = {
       { label: 'Project Code', value: 'project_site', placeholder: 'Enter Project Code (e.g. EODBHS001)...' },
       { label: 'Project Description', value: 'site_description', placeholder: 'Enter Project Description...' },
       { label: 'Warehouse Code', value: 'warehouse_code', placeholder: 'Enter Warehouse Code (e.g. B80039)...' },
+      { label: 'On Hand Qty', value: 'on_hand_qty', placeholder: 'Enter On Hand Qty...' },
       { label: 'Item Code', value: 'item_code', placeholder: 'Enter Item Code (e.g. 1113131)...' },
       { label: 'Item Description', value: 'item_description', placeholder: 'Enter Item Description...' },
       { label: 'Item Type', value: 'item_type', placeholder: 'Enter Item Type (e.g. Product)...' },
@@ -2895,9 +2898,15 @@ export default function GenericMasterPage() {
           return
         }
 
-        const initialMapping = Object.fromEntries(
-          headers.map((header) => [header, true]),
-        )
+        const initialMapping = {
+          ...defaultFieldsMapping(importMetadata),
+          ...Object.fromEntries(headers.map((header) => [header, true])),
+        }
+        for (const column of importMetadata.columns) {
+          if (headers.some((header) => header === column.excelHeader || (column.aliases ?? []).includes(header))) {
+            initialMapping[column.excelHeader] = true
+          }
+        }
         initialMapping[importMetadata.excelLookupKey] = true
         setDetectedHeaders(headers)
         setFieldsMapping(initialMapping)
@@ -2965,11 +2974,12 @@ export default function GenericMasterPage() {
 
     try {
       const selectedKeys = Array.from(selectedRowKeys)
+      const exportColumns = visibleColumns.map((column) => column.key).join(',')
       const exportParams = selectedKeys.length > 0
-        ? { selectedKeys: selectedKeys.join(',') }
+        ? { selectedKeys: selectedKeys.join(','), columns: exportColumns }
         : isFilterActive
-          ? { filters: JSON.stringify(normalizedFilters().map(({ field, value }) => ({ field, value }))) }
-          : undefined
+          ? { filters: JSON.stringify(normalizedFilters().map(({ field, value }) => ({ field, value }))), columns: exportColumns }
+          : { columns: exportColumns }
       const { data } = await api.get<Blob>(`/api/master-data/${masterKey}/export`, {
         params: exportParams,
         responseType: 'blob',
@@ -3411,39 +3421,45 @@ export default function GenericMasterPage() {
             width={760}
           >
             <p className="mb-4 text-sm text-slate-500">
-              Select spreadsheet columns to sync into {config.title}.
+              Select supported fields to sync and keep visible in {config.title}. Fields not present in the file stay visible if selected, but are not updated by this import.
             </p>
             <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
-              {detectedHeaders.map((header) => {
-                const isLookupColumn = header === importMetadata.excelLookupKey
-                const isSupported = importMetadata.columns.some((column) =>
-                  column.excelHeader === header || (column.aliases ?? []).includes(header),
-                )
+              {importMetadata.columns.map((column) => {
+                const matchingHeader = [column.excelHeader, ...(column.aliases ?? [])].find((header) => detectedHeaders.includes(header))
+                const mappingKey = matchingHeader ?? column.excelHeader
+                const isLookupColumn = column.excelHeader === importMetadata.excelLookupKey || (column.aliases ?? []).includes(importMetadata.excelLookupKey)
 
                 return (
                   <label
-                    className={`flex items-center gap-3 rounded-md border px-3 py-2 text-sm ${
-                      isSupported ? 'border-slate-200' : 'border-slate-100 bg-slate-50 text-slate-400'
-                    }`}
-                    key={header}
+                    className="flex items-center gap-3 rounded-md border border-slate-200 px-3 py-2 text-sm"
+                    key={column.dbColumn}
                   >
                     <Checkbox
-                      checked={fieldsMapping[header] || false}
+                      checked={fieldsMapping[mappingKey] ?? fieldsMapping[column.excelHeader] ?? false}
                       disabled={isLookupColumn}
                       onChange={(event) =>
                         setFieldsMapping((currentMapping) => ({
                           ...currentMapping,
-                          [header]: event.target.checked,
+                          [mappingKey]: event.target.checked,
+                          [column.excelHeader]: event.target.checked,
                         }))
                       }
                     />
                     <span className="font-medium text-slate-700">
-                      {isLookupColumn ? `${header} (Required)` : header}
+                      {isLookupColumn ? `${column.label} (Required)` : column.label}
+                      <span className="ml-2 text-xs font-normal text-slate-400">
+                        {matchingHeader ? `File: ${matchingHeader}` : 'Not in file'}
+                      </span>
                     </span>
                   </label>
                 )
               })}
             </div>
+            {detectedHeaders.some((header) => !importMetadata.columns.some((column) => column.excelHeader === header || (column.aliases ?? []).includes(header))) ? (
+              <div className="mt-4 rounded-md border border-slate-100 bg-slate-50 px-3 py-2 text-xs text-slate-500">
+                Extra file fields: {detectedHeaders.filter((header) => !importMetadata.columns.some((column) => column.excelHeader === header || (column.aliases ?? []).includes(header))).join(', ')}
+              </div>
+            ) : null}
           </Modal>
 
           <Modal
