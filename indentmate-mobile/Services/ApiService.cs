@@ -12,16 +12,10 @@ namespace IndentMate.Mobile.Services;
 public class ApiService
 {
     private readonly HttpClient _httpClient;
-    private const string BaseUrl = "https://indentmate.onrender.com";
 
     public ApiService()
     {
-        _httpClient = new HttpClient
-        {
-            BaseAddress = new Uri(BaseUrl),
-            Timeout = TimeSpan.FromSeconds(60)
-        };
-        _httpClient.DefaultRequestHeaders.ConnectionClose = true;
+        _httpClient = new HttpClient { BaseAddress = new Uri(ApiEndpoints.BaseUrl) };
         _httpClient.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/json"));
     }
@@ -206,6 +200,17 @@ public class ApiService
             responseJson);
     }
 
+    public async Task<List<RemoteIndentReference>> GetMyIndentReferencesAsync(CancellationToken ct = default)
+    {
+        var response = await GetAsync<MyIndentsResponse>("/api/indents/mine", ct);
+
+        return response?.Data
+            .Select(indent => new RemoteIndentReference(
+                (indent.AppRequestId ?? string.Empty).Trim(),
+                (indent.IndentNo ?? string.Empty).Trim()))
+            .ToList() ?? new List<RemoteIndentReference>();
+    }
+
     /// <summary>Generic PUT request.</summary>
     public async Task PutAsync<TRequest>(
         string endpoint, TRequest payload, CancellationToken ct = default)
@@ -234,6 +239,21 @@ public class ApiService
     {
         [JsonProperty("data")]
         public List<ProjectMasterRow> Data { get; set; } = new();
+    }
+
+    private sealed class MyIndentsResponse
+    {
+        [JsonProperty("data")]
+        public List<MyIndentRow> Data { get; set; } = new();
+    }
+
+    private sealed class MyIndentRow
+    {
+        [JsonProperty("app_request_id")]
+        public string? AppRequestId { get; set; }
+
+        [JsonProperty("indent_no")]
+        public string? IndentNo { get; set; }
     }
 
     private sealed class ProjectMasterRow
@@ -308,6 +328,229 @@ public class ApiService
         public string? BusinessPartnerName { get; set; }
     }
 
+    /// <summary>Gets items for the given site codes (and optional warehouse) from the admin API.</summary>
+    public async Task<List<LocalItem>> GetItemsForProjectAsync(
+        IEnumerable<string> siteCodes,
+        string? warehouseCode = null,
+        CancellationToken ct = default)
+    {
+        var codes = NormalizeCodes(siteCodes);
+
+        if (codes.Count == 0)
+        {
+            return new List<LocalItem>();
+        }
+
+        var queryParts = codes.Select(code => $"projectSite={Uri.EscapeDataString(code)}").ToList();
+
+        if (!string.IsNullOrWhiteSpace(warehouseCode))
+        {
+            queryParts.Add($"warehouseCode={Uri.EscapeDataString(warehouseCode.Trim())}");
+        }
+
+        var response = await GetAsync<ItemOptionsListResponse>($"/api/items/options?{string.Join("&", queryParts)}", ct);
+        return response?.Data
+            .Select(item => new LocalItem
+            {
+                ItemCode    = (item.ItemCode ?? string.Empty).Trim(),
+                Description = (item.ItemDescription ?? string.Empty).Trim(),
+                PurchaseUnit = (item.PurchaseUnit ?? "NOS").Trim(),
+                UoM         = (item.PurchaseUnit ?? "NOS").Trim(),
+                SiteCode    = (item.ProjectSite ?? string.Empty).Trim(),
+                OnHandQty   = item.OnHandQty,
+            })
+            .Where(item => !string.IsNullOrWhiteSpace(item.ItemCode))
+            .GroupBy(item => item.ItemCode, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(item => item.ItemCode)
+            .ToList() ?? new List<LocalItem>();
+    }
+
+    /// <summary>Gets activities for the given project codes from the admin API.</summary>
+    public async Task<List<LocalActivity>> GetActivitiesForProjectAsync(
+        IEnumerable<string> projectCodes,
+        CancellationToken ct = default)
+    {
+        var codes = NormalizeCodes(projectCodes);
+
+        if (codes.Count == 0)
+        {
+            return new List<LocalActivity>();
+        }
+
+        var queryString = string.Join("&", codes.Select(code => $"projectCode={Uri.EscapeDataString(code)}"));
+        var response = await GetAsync<ActivityOptionsListResponse>($"/api/activities/options?{queryString}", ct);
+        return response?.Data
+            .Select(activity => new LocalActivity
+            {
+                ActivityId   = (activity.ActivityCode ?? string.Empty).Trim(),
+                ProjectId    = (activity.ProjectCode ?? string.Empty).Trim(),
+                Description  = (activity.Description ?? string.Empty).Trim(),
+                ActivityType = (activity.ActivityType ?? string.Empty).Trim(),
+                CapacityType = (activity.CriticalCapacityType ?? string.Empty).Trim(),
+                Status       = (activity.WorkAuthStatus ?? "Released").Trim(),
+            })
+            .Where(activity => !string.IsNullOrWhiteSpace(activity.ActivityId))
+            .GroupBy(activity => activity.ActivityId, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(activity => activity.ActivityId)
+            .ToList() ?? new List<LocalActivity>();
+    }
+
+    /// <summary>Searches item options without downloading the full item master.</summary>
+    public async Task<PagedApiResult<LocalItem>> SearchItemsForProjectAsync(
+        string projectCode,
+        string? warehouseCode,
+        string search,
+        int limit = 50,
+        int offset = 0,
+        string scope = "project",
+        CancellationToken ct = default)
+    {
+        var normalizedProjectCode = (projectCode ?? string.Empty).Trim();
+        var normalizedSearch = (search ?? string.Empty).Trim();
+
+        if (string.IsNullOrWhiteSpace(normalizedProjectCode) && !string.Equals(scope, "all", StringComparison.OrdinalIgnoreCase))
+        {
+            return PagedApiResult<LocalItem>.Empty;
+        }
+
+        var queryParts = new List<string>
+        {
+            $"projectCode={Uri.EscapeDataString(normalizedProjectCode)}",
+            $"search={Uri.EscapeDataString(normalizedSearch)}",
+            $"limit={limit}",
+            $"offset={offset}",
+            $"scope={Uri.EscapeDataString(scope)}"
+        };
+
+        if (!string.IsNullOrWhiteSpace(warehouseCode))
+        {
+            queryParts.Add($"warehouseCode={Uri.EscapeDataString(warehouseCode.Trim())}");
+        }
+
+        var response = await GetAsync<PagedItemOptionsListResponse>($"/api/indents/options/items?{string.Join("&", queryParts)}", ct);
+        var data = response?.Data
+            .Select(item => new LocalItem
+            {
+                ItemCode = (item.ItemCode ?? string.Empty).Trim(),
+                Description = (item.ItemDescription ?? string.Empty).Trim(),
+                PurchaseUnit = (item.PurchaseUnit ?? "NOS").Trim(),
+                UoM = (item.PurchaseUnit ?? "NOS").Trim(),
+                SiteCode = (item.ProjectSite ?? string.Empty).Trim(),
+                OnHandQty = item.OnHandQty,
+            })
+            .Where(item => !string.IsNullOrWhiteSpace(item.ItemCode))
+            .GroupBy(item => item.ItemCode, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(item => item.ItemCode)
+            .ToList() ?? new List<LocalItem>();
+
+        return new PagedApiResult<LocalItem>(
+            data,
+            response?.HasMore == true,
+            response?.NextOffset ?? offset + data.Count);
+    }
+
+    /// <summary>Searches activity options without downloading the full activity master.</summary>
+    public async Task<PagedApiResult<LocalActivity>> SearchActivitiesForProjectAsync(
+        string projectCode,
+        string search,
+        int limit = 50,
+        int offset = 0,
+        CancellationToken ct = default)
+    {
+        var normalizedProjectCode = (projectCode ?? string.Empty).Trim();
+        var normalizedSearch = (search ?? string.Empty).Trim();
+
+        if (string.IsNullOrWhiteSpace(normalizedProjectCode))
+        {
+            return PagedApiResult<LocalActivity>.Empty;
+        }
+
+        var queryParts = new List<string>
+        {
+            $"projectCode={Uri.EscapeDataString(normalizedProjectCode)}",
+            $"search={Uri.EscapeDataString(normalizedSearch)}",
+            $"limit={limit}",
+            $"offset={offset}"
+        };
+
+        var response = await GetAsync<PagedActivityOptionsListResponse>($"/api/indents/options/activities?{string.Join("&", queryParts)}", ct);
+        var data = response?.Data
+            .Select(activity => new LocalActivity
+            {
+                ActivityId = (activity.ActivityCode ?? string.Empty).Trim(),
+                ProjectId = (activity.ProjectCode ?? string.Empty).Trim(),
+                Description = (activity.Description ?? string.Empty).Trim(),
+                ActivityType = (activity.ActivityType ?? string.Empty).Trim(),
+                CapacityType = (activity.CriticalCapacityType ?? string.Empty).Trim(),
+                Status = (activity.WorkAuthStatus ?? "Released").Trim(),
+            })
+            .Where(activity => !string.IsNullOrWhiteSpace(activity.ActivityId))
+            .GroupBy(activity => activity.ActivityId, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(activity => activity.ActivityId)
+            .ToList() ?? new List<LocalActivity>();
+
+        return new PagedApiResult<LocalActivity>(
+            data,
+            response?.HasMore == true,
+            response?.NextOffset ?? offset + data.Count);
+    }
+
+    /// <summary>Gets service and rental order options for the given project codes from the admin API.</summary>
+    public async Task<List<ApiOrderOption>> GetOrderOptionsForProjectAsync(
+        IEnumerable<string> projectCodes,
+        string search = "",
+        int limit = 500,
+        int offset = 0,
+        CancellationToken ct = default)
+    {
+        var codes = NormalizeCodes(projectCodes);
+
+        if (codes.Count == 0)
+        {
+            return new List<ApiOrderOption>();
+        }
+
+        var queryParts = codes.Select(code => $"projectCode={Uri.EscapeDataString(code)}").ToList();
+        queryParts.Add($"search={Uri.EscapeDataString((search ?? string.Empty).Trim())}");
+        queryParts.Add($"limit={limit}");
+        queryParts.Add($"offset={offset}");
+
+        var response = await GetAsync<OrderOptionsListResponse>($"/api/orders/options?{string.Join("&", queryParts)}", ct);
+        return response?.Data ?? new List<ApiOrderOption>();
+    }
+
+    public async Task<PagedApiResult<ApiOrderOption>> SearchOrderOptionsForProjectAsync(
+        IEnumerable<string> projectCodes,
+        string search,
+        int limit = 80,
+        int offset = 0,
+        CancellationToken ct = default)
+    {
+        var codes = NormalizeCodes(projectCodes);
+
+        if (codes.Count == 0)
+        {
+            return PagedApiResult<ApiOrderOption>.Empty;
+        }
+
+        var queryParts = codes.Select(code => $"projectCode={Uri.EscapeDataString(code)}").ToList();
+        queryParts.Add($"search={Uri.EscapeDataString((search ?? string.Empty).Trim())}");
+        queryParts.Add($"limit={limit}");
+        queryParts.Add($"offset={offset}");
+
+        var response = await GetAsync<PagedOrderOptionsListResponse>($"/api/orders/options?{string.Join("&", queryParts)}", ct);
+        var data = response?.Data ?? new List<ApiOrderOption>();
+
+        return new PagedApiResult<ApiOrderOption>(
+            data,
+            response?.HasMore == true,
+            response?.NextOffset ?? offset + data.Count);
+    }
+
     private static List<string> NormalizeCodes(IEnumerable<string> codes)
     {
         return codes
@@ -321,7 +564,128 @@ public class ApiService
     {
         return string.Equals(value?.Trim(), "Yes", StringComparison.OrdinalIgnoreCase);
     }
+
+    private class ItemOptionsListResponse
+    {
+        [JsonProperty("data")]
+        public List<ItemOptionsRow> Data { get; set; } = new();
+    }
+
+    private sealed class PagedItemOptionsListResponse : ItemOptionsListResponse
+    {
+        [JsonProperty("hasMore")]
+        public bool HasMore { get; set; }
+
+        [JsonProperty("nextOffset")]
+        public int NextOffset { get; set; }
+    }
+
+    private sealed class ItemOptionsRow
+    {
+        [JsonProperty("item_code")]
+        public string? ItemCode { get; set; }
+
+        [JsonProperty("item_description")]
+        public string? ItemDescription { get; set; }
+
+        [JsonProperty("purchase_unit")]
+        public string? PurchaseUnit { get; set; }
+
+        [JsonProperty("item_group")]
+        public string? ItemGroup { get; set; }
+
+        [JsonProperty("on_hand_qty")]
+        public decimal OnHandQty { get; set; }
+
+        [JsonProperty("project_site")]
+        public string? ProjectSite { get; set; }
+    }
+
+    private class ActivityOptionsListResponse
+    {
+        [JsonProperty("data")]
+        public List<ActivityOptionsRow> Data { get; set; } = new();
+    }
+
+    private sealed class PagedActivityOptionsListResponse : ActivityOptionsListResponse
+    {
+        [JsonProperty("hasMore")]
+        public bool HasMore { get; set; }
+
+        [JsonProperty("nextOffset")]
+        public int NextOffset { get; set; }
+    }
+
+    private sealed class ActivityOptionsRow
+    {
+        [JsonProperty("project_code")]
+        public string? ProjectCode { get; set; }
+
+        [JsonProperty("activity_code")]
+        public string? ActivityCode { get; set; }
+
+        [JsonProperty("description")]
+        public string? Description { get; set; }
+
+        [JsonProperty("activity_type")]
+        public string? ActivityType { get; set; }
+
+        [JsonProperty("critical_capacity_type")]
+        public string? CriticalCapacityType { get; set; }
+
+        [JsonProperty("work_auth_status")]
+        public string? WorkAuthStatus { get; set; }
+    }
+
+    private class OrderOptionsListResponse
+    {
+        [JsonProperty("data")]
+        public List<ApiOrderOption> Data { get; set; } = new();
+    }
+
+    private sealed class PagedOrderOptionsListResponse : OrderOptionsListResponse
+    {
+        [JsonProperty("hasMore")]
+        public bool HasMore { get; set; }
+
+        [JsonProperty("nextOffset")]
+        public int NextOffset { get; set; }
+    }
 }
+
+public sealed class ApiOrderOption
+{
+    [JsonProperty("order_no")]
+    public string OrderNo { get; set; } = string.Empty;
+
+    [JsonProperty("order_type")]
+    public string OrderType { get; set; } = string.Empty;
+
+    [JsonProperty("status")]
+    public string? Status { get; set; }
+
+    [JsonProperty("project_code")]
+    public string ProjectCode { get; set; } = string.Empty;
+
+    [JsonProperty("item_code")]
+    public string ItemCode { get; set; } = string.Empty;
+
+    [JsonProperty("item_description")]
+    public string? ItemDescription { get; set; }
+
+    [JsonProperty("serial_number")]
+    public string? SerialNumber { get; set; }
+
+    [JsonProperty("order_description")]
+    public string? OrderDescription { get; set; }
+}
+
+public sealed record PagedApiResult<T>(List<T> Data, bool HasMore, int NextOffset)
+{
+    public static PagedApiResult<T> Empty { get; } = new(new List<T>(), false, 0);
+}
+
+public sealed record RemoteIndentReference(string AppRequestId, string IndentNo);
 
 public sealed record ApiPostResult<T>(
     HttpStatusCode StatusCode,

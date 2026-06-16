@@ -529,10 +529,17 @@ export function FieldIndentDraftDetails() {
         state: { indent: response.data.data },
       })
     } catch (error) {
-      const serverMessage = error && typeof error === 'object' && 'response' in error
-        ? (error as { response?: { data?: { message?: string } } }).response?.data?.message
+      const responseData = error && typeof error === 'object' && 'response' in error
+        ? (error as { response?: { data?: { message?: string; issues?: unknown } } }).response?.data
+        : undefined
+      const serverMessage = responseData?.message === 'Validation failed'
+        ? formatValidationIssues(responseData.issues) || responseData.message
+        : responseData?.message
+      const hasBlankUom = draft.items.some((item) => !String(item.uom ?? '').trim())
+      const friendlyMessage = hasBlankUom
+        ? 'One or more items is missing UOM. Please remove and add the item again.'
         : ''
-      setMessage(serverMessage || 'Unable to submit this indent.')
+      setMessage(friendlyMessage || serverMessage || 'Unable to submit this indent.')
     } finally {
       setIsSubmitting(false)
     }
@@ -1185,17 +1192,38 @@ async function fetchMaterialOptions(projectCode: string, warehouseCode = '', sea
     params.set('search', search.trim())
   }
 
-  const response = await api.get<OptionResponse<{ item_code: string; item_description: string; item_type?: string | null; uom: string }>>(`/api/indents/options/items?${params}`)
+  const response = await api.get<OptionResponse<{ item_code: string; item_description: string; item_type?: string | null; uom?: string | null; purchase_unit?: string | null }>>(`/api/indents/options/items?${params}`)
   return response.data
 }
 
-function mapMaterialOptions(materials: Array<{ item_code: string; item_description: string; item_type?: string | null; uom: string }>) {
+function mapMaterialOptions(materials: Array<{ item_code: string; item_description: string; item_type?: string | null; uom?: string | null; purchase_unit?: string | null }>) {
   return materials.map((material) => ({
     code: material.item_code,
     label: formatMaterialLabel(material.item_code, material.item_type, material.item_description),
     description: material.item_description,
-    meta: { itemType: material.item_type, uom: material.uom },
+    meta: { itemType: material.item_type, uom: material.uom || material.purchase_unit || '' },
   }))
+}
+
+function formatValidationIssues(issues: unknown) {
+  if (!issues || typeof issues !== 'object') {
+    return ''
+  }
+
+  const fieldErrors = 'fieldErrors' in issues
+    ? (issues as { fieldErrors?: Record<string, string[]> }).fieldErrors
+    : undefined
+  const formErrors = 'formErrors' in issues
+    ? (issues as { formErrors?: string[] }).formErrors
+    : undefined
+  const messages = [
+    ...(formErrors ?? []),
+    ...Object.entries(fieldErrors ?? {}).flatMap(([field, errors]) =>
+      errors.map((message) => `${field}: ${message}`),
+    ),
+  ]
+
+  return messages[0] ?? ''
 }
 
 async function loadActivityOptions(projectCode: string, search = '') {

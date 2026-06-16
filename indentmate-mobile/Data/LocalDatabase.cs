@@ -54,6 +54,8 @@ public class LocalActivity
     public string Status { get; set; } = string.Empty;
     public bool IsMultilocation { get; set; }
     public bool DprEngineerControl { get; set; }
+    [Ignore]
+    public string DisplayName => string.IsNullOrWhiteSpace(Description) ? ActivityId : $"{ActivityId} – {Description}";
 }
 
 [Table("LocalLocations")]
@@ -64,6 +66,8 @@ public class LocalLocation
     public string ProjectId { get; set; } = string.Empty;
     public string Description { get; set; } = string.Empty;
     public string WarehouseCode { get; set; } = string.Empty;
+    [Ignore]
+    public string DisplayName => string.IsNullOrWhiteSpace(Description) ? LocationCode : $"{LocationCode} – {Description}";
 }
 
 [Table("LocalBusinessPartners")]
@@ -92,11 +96,15 @@ public class LocalIndent
     public string OfficialIndentNo { get; set; } = string.Empty;
     public string EngineerId { get; set; } = string.Empty;
     public string ProjectId { get; set; } = string.Empty;
+    public string ProjectName { get; set; } = string.Empty;
     public string WarehouseId { get; set; } = string.Empty;
+    public string WarehouseName { get; set; } = string.Empty;
     public string IndentType { get; set; } = string.Empty;   // Issue | IssueReturn
     public string EngineerType { get; set; } = string.Empty; // SIE | SER
     public string FromLocationId { get; set; } = string.Empty;
+    public string FromLocationName { get; set; } = string.Empty;
     public string ToContractorId { get; set; } = string.Empty;
+    public string ToContractorName { get; set; } = string.Empty;
     public string OrderNo { get; set; } = string.Empty;
     public string OrderType { get; set; } = string.Empty; // Service | Rental
     public string EquipmentDisplay { get; set; } = string.Empty;
@@ -130,6 +138,8 @@ public class LocalIndentItem
     public decimal RequestedQty { get; set; }
     public string Remarks { get; set; } = string.Empty;
     public string AttachmentUrl { get; set; } = string.Empty;
+    public string BusinessPartnerId { get; set; } = string.Empty;
+    public string BusinessPartnerName { get; set; } = string.Empty;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -188,6 +198,8 @@ public class LocalItem
     public string SiteCode { get; set; } = string.Empty;
     public decimal OnHandQty { get; set; }
     public string UoM { get; set; } = string.Empty;
+    [Ignore]
+    public string DisplayName => string.IsNullOrWhiteSpace(Description) ? ItemCode : $"{ItemCode} – {Description}";
 }
 
 [Table("LocalServiceOrders")]

@@ -13,7 +13,7 @@ export const MASTER_DEFINITIONS = {
     searchableFields: ['role_name', 'description'],
   },
   'responsibility-master': {
-    table: 'user_project_assignment_master',
+    table: 'responsibility_master',
     select: 'id, employee_id, employee_name, project_id, project_description, responsibility, valid_from, valid_to, manual_status, created_at, updated_at',
     orderBy: 'employee_id ASC, project_id ASC, responsibility ASC',
     primaryKey: 'id',
@@ -151,11 +151,13 @@ export const MASTER_DEFINITIONS = {
 
 export const MASTER_IMPORT_CONFIGS = {
   'role-master': {
+    exportName: 'Role Master',
     tableName: 'role_master',
     lookupDbColumn: 'role_name',
     keyDbColumns: ['role_name'],
     excelLookupKey: 'Role Name',
     orderBy: 'role_name ASC',
+    deduplicateByDescription: 'description',
     defaults: {
       description: null,
     },
@@ -165,7 +167,8 @@ export const MASTER_IMPORT_CONFIGS = {
     ],
   },
   'responsibility-master': {
-    tableName: 'user_project_assignment_master',
+    exportName: 'User Project Assignment Master',
+    tableName: 'responsibility_master',
     lookupDbColumn: 'employee_id',
     keyDbColumns: ['employee_id', 'project_id', 'responsibility'],
     excelLookupKey: 'Employee ID',
@@ -184,6 +187,7 @@ export const MASTER_IMPORT_CONFIGS = {
     ],
   },
   'project-master': {
+    exportName: 'Project Master',
     tableName: 'project_master',
     lookupDbColumn: 'project_code',
     keyDbColumns: ['project_code'],
@@ -204,6 +208,7 @@ export const MASTER_IMPORT_CONFIGS = {
     ],
   },
   'activity-master': {
+    exportName: 'Activity Master',
     tableName: 'activity_master',
     lookupDbColumn: 'activity_code',
     keyDbColumns: ['project_code', 'activity_code'],
@@ -230,20 +235,9 @@ export const MASTER_IMPORT_CONFIGS = {
       { label: 'Start Date', excelHeader: 'Scheduled Start Date', dbColumn: 'scheduled_start_date', type: 'date' },
       { label: 'Finish Date', excelHeader: 'Scheduled Finish Date', dbColumn: 'scheduled_finish_date', type: 'date' },
     ],
-    exportColumns: [
-      { excelHeader: 'Project Code', dbColumn: 'project_code' },
-      { excelHeader: 'Project Description', dbColumn: 'project_description' },
-      { excelHeader: 'Activity Code', dbColumn: 'activity_code' },
-      { excelHeader: 'Description', dbColumn: 'description' },
-      { excelHeader: 'Activity Type', dbColumn: 'activity_type' },
-      { excelHeader: 'Critical Capacity', dbColumn: 'critical_capacity_type' },
-      { excelHeader: 'Auth Status', dbColumn: 'work_auth_status' },
-      { excelHeader: 'Resource Required', dbColumn: 'resource_required' },
-      { excelHeader: 'Start Date', dbColumn: 'scheduled_start_date' },
-      { excelHeader: 'Finish Date', dbColumn: 'scheduled_finish_date' },
-    ],
   },
   'location-master': {
+    exportName: 'Location Master',
     tableName: 'location_master',
     lookupDbColumn: 'location_code',
     keyDbColumns: ['project_code', 'location_code'],
@@ -259,6 +253,7 @@ export const MASTER_IMPORT_CONFIGS = {
     ],
   },
   'item-master': {
+    exportName: 'Item Master',
     tableName: 'item_master',
     lookupDbColumn: 'item_code',
     keyDbColumns: ['project_site', 'warehouse_code', 'item_code'],
@@ -275,8 +270,8 @@ export const MASTER_IMPORT_CONFIGS = {
       item_type: '',
     },
     columns: [
-      { label: 'Project Code', excelHeader: 'Project Code', aliases: ['SITE'], dbColumn: 'project_site' },
-      { label: 'Project Description', excelHeader: 'Project Description', aliases: ['SITE Description'], dbColumn: 'site_description' },
+      { label: 'Site Code', excelHeader: 'SITE', dbColumn: 'project_site' },
+      { label: 'Site Description', excelHeader: 'SITE Description', dbColumn: 'site_description' },
       { label: 'Warehouse Code', excelHeader: 'Warehouse', dbColumn: 'warehouse_code' },
       { label: 'Warehouse Description', excelHeader: 'Warehouse Description', dbColumn: 'warehouse_description' },
       { label: 'On Hand Qty', excelHeader: 'On Hand', dbColumn: 'on_hand_qty' },
@@ -287,6 +282,7 @@ export const MASTER_IMPORT_CONFIGS = {
     ],
   },
   'service-order-master': {
+    exportName: 'Service Order Master',
     tableName: 'service_orders',
     lookupDbColumn: 'service_order_no',
     keyDbColumns: ['service_order_no'],
@@ -313,6 +309,7 @@ export const MASTER_IMPORT_CONFIGS = {
     ],
   },
   'business-partner-master': {
+    exportName: 'Business Partner Activity Master',
     tableName: 'bp_activity_master',
     lookupDbColumn: 'business_partner_code',
     keyDbColumns: ['project_code', 'location_code', 'activity_code', 'business_partner_code'],
@@ -339,6 +336,7 @@ export const MASTER_IMPORT_CONFIGS = {
     ],
   },
   'business-partner-code-master': {
+    exportName: 'Business Partner Master',
     tableName: 'business_partner_master',
     lookupDbColumn: 'business_partner_code',
     keyDbColumns: ['business_partner_code'],
@@ -353,6 +351,7 @@ export const MASTER_IMPORT_CONFIGS = {
     ],
   },
   'warehouse-master': {
+    exportName: 'Warehouse Master',
     tableName: 'warehouse_master',
     lookupDbColumn: 'warehouse_code',
     keyDbColumns: ['warehouse_code'],
@@ -375,6 +374,7 @@ export const MASTER_IMPORT_CONFIGS = {
     ],
   },
   'warehouse-bin-master': {
+    exportName: 'Warehouse Location Master',
     tableName: 'warehouse_location_master',
     lookupDbColumn: 'location_code',
     keyDbColumns: ['warehouse_code', 'location_code'],
@@ -399,6 +399,7 @@ export const MASTER_IMPORT_CONFIGS = {
     ],
   },
   'delivery-point-master': {
+    exportName: 'Delivery Point Master',
     tableName: 'delivery_master',
     lookupDbColumn: 'address_code',
     keyDbColumns: ['project_code', 'address_code', 'delivery_point'],
@@ -421,6 +422,7 @@ export const MASTER_IMPORT_CONFIGS = {
     ],
   },
   'engineer-activity-master': {
+    exportName: 'Engineer by Activity Master',
     tableName: 'engineer_activity_master',
     lookupDbColumn: 'employee_id',
     keyDbColumns: ['project_code', 'location_code', 'activity_code', 'employee_id'],
@@ -442,6 +444,7 @@ export const MASTER_IMPORT_CONFIGS = {
     ],
   },
   'rental-order-master': {
+    exportName: 'Rental Order Master',
     tableName: 'rental_order_master',
     lookupDbColumn: 'rental_order',
     keyDbColumns: ['rental_order'],
@@ -463,6 +466,7 @@ export const MASTER_IMPORT_CONFIGS = {
     ],
   },
   'purchase-office-master': {
+    exportName: 'Purchase Order Master',
     tableName: 'purchase_office_master',
     lookupDbColumn: 'purchase_order',
     keyDbColumns: ['purchase_order'],
@@ -478,6 +482,7 @@ export const MASTER_IMPORT_CONFIGS = {
     ],
   },
   'purchase-office-code-master': {
+    exportName: 'Purchase Office Master',
     tableName: 'purchase_office_code_master',
     lookupDbColumn: 'purchase_office',
     keyDbColumns: ['purchase_office'],
@@ -491,25 +496,6 @@ export const MASTER_IMPORT_CONFIGS = {
       { label: 'Purchase Office Description', excelHeader: 'Purchase Office Description', dbColumn: 'purchase_office_description' },
     ],
   },
-}
-
-const MASTER_EXPORT_TITLES = {
-  'role-master': 'Role Master',
-  'responsibility-master': 'User Project Assignment Master',
-  'project-master': 'Project Master',
-  'activity-master': 'Activity Master',
-  'location-master': 'Location Master',
-  'item-master': 'Item Master',
-  'service-order-master': 'Service Order Master',
-  'business-partner-master': 'Business Partner Activity Master',
-  'business-partner-code-master': 'Business Partner Master',
-  'warehouse-master': 'Warehouse Master',
-  'warehouse-bin-master': 'Warehouse Location Master',
-  'delivery-point-master': 'Delivery Master',
-  'engineer-activity-master': 'Engineer by Activity Master',
-  'rental-order-master': 'Rental Order Master',
-  'purchase-office-master': 'Purchase Order Master',
-  'purchase-office-code-master': 'Purchase Office Master',
 }
 
 export function getMasterDefinition(masterKey) {
@@ -797,8 +783,16 @@ export async function listMasterFilterOptions(req, res, next) {
       return res.status(400).json({ message: 'Invalid filter field' })
     }
 
-    const filterOptionsQuery = buildFilterOptionsQuery(definition, field)
-    const result = await query(filterOptionsQuery)
+    const descriptionExpression = descriptionExpressionForFilter(definition, field)
+    const result = await query(
+      `
+        SELECT DISTINCT ${field}::TEXT AS value${descriptionExpression ? `, ${descriptionExpression}::TEXT AS description` : ''}
+        FROM ${definition.table}
+        WHERE ${field} IS NOT NULL AND TRIM(${field}::TEXT) <> ''
+        ORDER BY value ASC
+        LIMIT 500
+      `,
+    )
 
     return res.json({
       data: result.rows.map((row) => ({
@@ -809,36 +803,6 @@ export async function listMasterFilterOptions(req, res, next) {
   } catch (error) {
     return next(error)
   }
-}
-
-function buildFilterOptionsQuery(definition, field) {
-  const projectFieldMap = {
-    project_code: 'project_code',
-    project_id: 'project_code',
-    project_site: 'project_code',
-  }
-
-  if (projectFieldMap[field]) {
-    return `
-      SELECT DISTINCT
-        project_code::TEXT AS value,
-        project_description::TEXT AS description
-      FROM project_master
-      WHERE project_code IS NOT NULL AND TRIM(project_code::TEXT) <> ''
-      ORDER BY value ASC
-      LIMIT 1000
-    `
-  }
-
-  const descriptionExpression = descriptionExpressionForFilter(definition, field)
-
-  return `
-    SELECT DISTINCT ${field}::TEXT AS value${descriptionExpression ? `, ${descriptionExpression}::TEXT AS description` : ''}
-    FROM ${definition.table}
-    WHERE ${field} IS NOT NULL AND TRIM(${field}::TEXT) <> ''
-    ORDER BY value ASC
-    LIMIT 1000
-  `
 }
 
 export async function createMasterData(req, res, next) {
@@ -941,7 +905,7 @@ export async function importMasterData(req, res, next) {
     const primaryLookupValues = [
       ...new Set(
         sheetRows
-          .map((row) => normalizeCell(lookupColumn ? readImportColumnValue(row, lookupColumn) : row[excelLookupKey]))
+          .map((row) => normalizeImportLookupValue(row, importConfig, lookupColumn, excelLookupKey))
           .filter(Boolean),
       ),
     ]
@@ -973,7 +937,7 @@ export async function importMasterData(req, res, next) {
     const processedLookupValues = new Set()
 
     for (const row of sheetRows) {
-      const lookupValue = normalizeCell(lookupColumn ? readImportColumnValue(row, lookupColumn) : row[excelLookupKey])
+      const lookupValue = normalizeImportLookupValue(row, importConfig, lookupColumn, excelLookupKey)
       const compositeKey = buildRowCompositeKey(row, importConfig, keyDbColumns)
 
       if (!lookupValue || !compositeKey || processedLookupValues.has(compositeKey)) {
@@ -993,6 +957,30 @@ export async function importMasterData(req, res, next) {
         updates.push(update)
       } else {
         summary.unchangedCount += 1
+      }
+    }
+
+    if (importConfig.deduplicateByDescription && inserts.length) {
+      const dedupCol = importConfig.deduplicateByDescription
+      const existingDescResult = await query(
+        `SELECT role_name, ${dedupCol} FROM ${importConfig.tableName}`,
+      )
+      const existingVals = new Set(existingDescResult.rows.map((row) => buildDeduplicationKey(row, importConfig, dedupCol)).filter(Boolean))
+      let skipped = 0
+      const kept = inserts.filter((row) => {
+        const val = buildDeduplicationKey(row, importConfig, dedupCol)
+        if (val && existingVals.has(val)) {
+          skipped++
+          return false
+        }
+        if (val) {
+          existingVals.add(val)
+        }
+        return true
+      })
+      if (skipped > 0) {
+        inserts.splice(0, inserts.length, ...kept)
+        summary.unchangedCount += skipped
       }
     }
 
@@ -1084,14 +1072,10 @@ export async function exportMasterData(req, res, next) {
       params = builtFilters.params
     }
 
-    const exportColumns = importConfig.exportColumns ?? importConfig.columns
     const result = await query(
       `
-        SELECT ${exportColumns.map((column) => column.dbColumn).join(', ')}
-        FROM (
-          SELECT ${definition.select}
-          FROM ${definition.table}
-        ) export_source
+        SELECT ${importConfig.columns.map((column) => column.dbColumn).join(', ')}
+        FROM ${importConfig.tableName}
         ${whereClause}
         ORDER BY ${importConfig.orderBy}
       `,
@@ -1099,9 +1083,9 @@ export async function exportMasterData(req, res, next) {
     )
 
     const workbook = new ExcelJS.Workbook()
-    const masterTitle = MASTER_EXPORT_TITLES[req.params.masterKey] ?? req.params.masterKey
-    const worksheet = workbook.addWorksheet(masterTitle.slice(0, 31))
-    worksheet.columns = exportColumns.map((column) => ({
+    const exportName = importConfig.exportName
+    const worksheet = workbook.addWorksheet(exportName)
+    worksheet.columns = importConfig.columns.map((column) => ({
       header: column.excelHeader,
       key: column.dbColumn,
       width: Math.max(18, Math.min(44, column.excelHeader.length + 8)),
@@ -1109,7 +1093,7 @@ export async function exportMasterData(req, res, next) {
     worksheet.getRow(1).font = { bold: true }
     worksheet.addRows(result.rows)
 
-    const filename = `${masterTitle.replace(/[^a-z0-9]+/gi, '_').replace(/^_+|_+$/g, '')}_Export.xlsx`
+    const filename = `${exportName.replace(/\s+/g, '_')}_Export.xlsx`
     res.setHeader('Content-Type', 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
     res.setHeader('Content-Disposition', `attachment; filename=${filename}`)
     await workbook.xlsx.write(res)
@@ -1182,7 +1166,7 @@ function buildGenericInsertRow(row, importConfig, fieldsMapping, lookupValue) {
     }
 
     if (fieldsMapping[column.excelHeader] && hasImportColumnValue(row, column)) {
-      insertRow[column.dbColumn] = normalizeDbValue(readImportColumnValue(row, column), column)
+      insertRow[column.dbColumn] = normalizeImportDbValue(row, importConfig, column)
       continue
     }
 
@@ -1205,7 +1189,7 @@ function buildGenericUpdate(row, existingRecord, importConfig, fieldsMapping, lo
       continue
     }
 
-    const nextValue = normalizeDbValue(readImportColumnValue(row, column), column)
+    const nextValue = normalizeImportDbValue(row, importConfig, column)
     const nextComparable = normalizeComparableValue(nextValue)
     const currentComparable = column.type === 'date'
       ? normalizeComparableValue(normalizeDateValue(existingRecord[column.dbColumn]))
@@ -1238,10 +1222,71 @@ function getImportKeyColumns(importConfig) {
 function buildRowCompositeKey(row, importConfig, keyDbColumns) {
   const values = keyDbColumns.map((dbColumn) => {
     const column = importConfig.columns.find((candidate) => candidate.dbColumn === dbColumn)
-    return column ? normalizeCell(readImportColumnValue(row, column)) : ''
+    return column ? normalizeComparableValue(normalizeImportDbValue(row, importConfig, column)) : ''
   })
 
   return values.some(Boolean) ? values.join('\u001f') : ''
+}
+
+function normalizeImportLookupValue(row, importConfig, lookupColumn, excelLookupKey) {
+  if (lookupColumn) {
+    return normalizeComparableValue(normalizeImportDbValue(row, importConfig, lookupColumn))
+  }
+
+  return normalizeCell(row[excelLookupKey])
+}
+
+function normalizeImportDbValue(row, importConfig, column) {
+  if (importConfig.tableName === 'role_master') {
+    const roleNameColumn = importConfig.columns.find((candidate) => candidate.dbColumn === 'role_name')
+    const descriptionColumn = importConfig.columns.find((candidate) => candidate.dbColumn === 'description')
+    const parsedRole = parseRoleMasterValue(
+      roleNameColumn ? readImportColumnValue(row, roleNameColumn) : '',
+      descriptionColumn ? readImportColumnValue(row, descriptionColumn) : '',
+    )
+
+    if (column.dbColumn === 'role_name') {
+      return parsedRole.roleName
+    }
+
+    if (column.dbColumn === 'description') {
+      return parsedRole.description
+    }
+  }
+
+  return normalizeDbValue(readImportColumnValue(row, column), column)
+}
+
+function parseRoleMasterValue(roleNameValue, descriptionValue) {
+  const roleName = normalizeCell(roleNameValue)
+  const description = normalizeCell(descriptionValue)
+  const codeMatch = roleName.match(/^(.*?)\s*\(([^()]*)\)\s*$/)
+
+  if (!codeMatch) {
+    return {
+      roleName,
+      description: description || null,
+      displayName: description || roleName,
+    }
+  }
+
+  const baseName = normalizeCell(codeMatch[1])
+  const roleCode = normalizeCell(codeMatch[2])
+  const displayName = description || baseName || roleCode
+
+  return {
+    roleName: roleCode || roleName,
+    description: displayName || null,
+    displayName,
+  }
+}
+
+function buildDeduplicationKey(row, importConfig, dedupCol) {
+  const displayValue = importConfig.tableName === 'role_master'
+    ? parseRoleMasterValue(row.role_name, row.description).displayName
+    : row[dedupCol]
+
+  return normalizeComparableValue(displayValue).toUpperCase()
 }
 
 function buildDbCompositeKey(record, keyDbColumns) {

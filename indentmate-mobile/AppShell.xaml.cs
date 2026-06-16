@@ -13,9 +13,11 @@ public partial class AppShell : Shell
         // Register routes not declared in XAML (for programmatic navigation)
         Routing.RegisterRoute("setup", typeof(SetupPage));
         Routing.RegisterRoute("login", typeof(LoginPage));
+        Routing.RegisterRoute("login-success", typeof(LoginSuccessPage));
         Routing.RegisterRoute("home", typeof(IndentHomePage));
         Routing.RegisterRoute("indent-home", typeof(IndentHomePage));
         Routing.RegisterRoute("sie-dashboard", typeof(IndentHomePage));
+        Routing.RegisterRoute("ser-dashboard", typeof(IndentHomePage));
         Routing.RegisterRoute("sre-dashboard", typeof(IndentHomePage));
         Routing.RegisterRoute("indent-header", typeof(SIEIndentHeaderPage));
         Routing.RegisterRoute("sie-indent-header", typeof(SIEIndentHeaderPage));

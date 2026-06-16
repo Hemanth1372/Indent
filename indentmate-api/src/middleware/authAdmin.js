@@ -16,7 +16,7 @@ export function verifySuperAdmin(req, res, next) {
     if (!isPortalAdminRole(role)) {
       return res.status(403).json({
         errorCode: 'WEB_ACCESS_DENIED',
-        message: 'Unauthorized Access: Web Admin Portal access is restricted to administrator accounts.',
+        message: 'Unauthorized Access: Web Admin Portal access is restricted to authorized Admin accounts.',
       })
     }
 
@@ -36,10 +36,20 @@ export function checkSuperAdmin(req, res, next) {
 
   return res.status(403).json({
     errorCode: 'WEB_PORTAL_UNAUTHORIZED',
-    message: 'Unauthorized Access: Web Admin Portal environments are restricted to administrator sessions.',
+    message: 'Unauthorized Access: Web Admin Portal environments are restricted to authorized Admin sessions.',
   })
 }
 
 function isPortalAdminRole(role) {
-  return ['SUPER ADMIN', 'ADMINISTRATOR', 'ADMIN'].includes(String(role ?? '').trim().toUpperCase())
+  const normalizedRole = String(role ?? '').trim().toUpperCase()
+
+  return (
+    normalizedRole === 'SUPER ADMIN' ||
+    normalizedRole.includes('SUPER ADMIN') ||
+    normalizedRole === 'ADMINISTRATOR' ||
+    normalizedRole.includes('ADMINISTRATOR') ||
+    normalizedRole === 'ADMIN' ||
+    normalizedRole.startsWith('ADMIN ') ||
+    normalizedRole.includes('(ADMIN)')
+  )
 }

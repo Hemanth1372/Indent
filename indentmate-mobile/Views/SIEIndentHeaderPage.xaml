@@ -4,6 +4,7 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:controls="clr-namespace:IndentMate.Mobile.Controls"
+    xmlns:glyphs="clr-namespace:IndentMate.Mobile.Resources"
     xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
     BackgroundColor="#F4F7FB"
     Shell.NavBarIsVisible="False">
@@ -12,56 +13,130 @@
         <vm:SIEIndentHeaderViewModel />
     </ContentPage.BindingContext>
 
-    <Grid Padding="24" RowDefinitions="Auto,*">
-        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10" Padding="0,0,0,18">
-            <Button
-                BackgroundColor="Transparent"
-                Clicked="OnBackClicked"
-                FontSize="24"
-                HeightRequest="42"
-                Padding="0"
-                Text="&#x2039;"
-                TextColor="#172033"
-                WidthRequest="42" />
-            <Label
-                Grid.Column="1"
-                FontAttributes="Bold"
-                FontSize="22"
-                Text="SIE Indent Header"
-                TextColor="#172033"
-                VerticalOptions="Center" />
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- ── Blue Header ──────────────────────────────────────────────────── -->
+        <Grid BackgroundColor="#0E2A5C" RowDefinitions="Auto,Auto">
+
+            <!-- Title row: back button | centred title | spacer -->
+            <Grid ColumnDefinitions="44,*,44" Padding="18,44,18,16" VerticalOptions="Center">
+                <Border
+                    BackgroundColor="#33FFFFFF"
+                    HeightRequest="40"
+                    StrokeShape="RoundRectangle 10"
+                    StrokeThickness="0"
+                    VerticalOptions="Center"
+                    WidthRequest="40">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Tapped="OnBackClicked" />
+                    </Border.GestureRecognizers>
+                    <controls:IconLabel
+                        Glyph="{x:Static glyphs:IconGlyphs.Back}"
+                        IconColor="White"
+                        IconSize="20"
+                        HorizontalOptions="Center"
+                        VerticalOptions="Center" />
+                </Border>
+
+                <Label
+                    Grid.Column="1"
+                    FontAttributes="Bold"
+                    FontSize="20"
+                    HorizontalOptions="Center"
+                    Text="Indent Creation"
+                    TextColor="White"
+                    VerticalOptions="Center" />
+
+                <BoxView Grid.Column="2" Color="Transparent" />
+            </Grid>
+
+            <!-- User info strip -->
+            <Border
+                Grid.Row="1"
+                BackgroundColor="#162348"
+                Padding="18,13"
+                StrokeThickness="0">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                    <Border
+                        BackgroundColor="#2A3B70"
+                        HeightRequest="36"
+                        Stroke="#50608E"
+                        StrokeShape="Ellipse"
+                        StrokeThickness="1"
+                        VerticalOptions="Center"
+                        WidthRequest="36">
+                        <Label
+                            FontAttributes="Bold"
+                            FontSize="13"
+                            HorizontalOptions="Center"
+                            Text="{Binding UserInitials}"
+                            TextColor="White"
+                            VerticalOptions="Center" />
+                    </Border>
+                    <Label
+                        Grid.Column="1"
+                        FontAttributes="Bold"
+                        FontSize="14"
+                        LineBreakMode="TailTruncation"
+                        Text="{Binding UserInfo}"
+                        TextColor="White"
+                        VerticalOptions="Center" />
+                </Grid>
+            </Border>
         </Grid>
 
+        <!-- ── Scrollable content ──────────────────────────────────────────── -->
         <ScrollView Grid.Row="1">
             <VerticalStackLayout
                 HorizontalOptions="Fill"
                 MaximumWidthRequest="540"
+                Padding="22,22,22,32"
                 Spacing="18">
                 <VerticalStackLayout.GestureRecognizers>
                     <TapGestureRecognizer Tapped="OnFormTapped" />
                 </VerticalStackLayout.GestureRecognizers>
 
+                <!-- ── Form card ────────────────────────────────────────────── -->
                 <Border
-                    Padding="20"
                     BackgroundColor="White"
+                    Padding="20"
                     Stroke="#E3EAF3"
                     StrokeShape="RoundRectangle 14"
                     StrokeThickness="1">
                     <Border.Shadow>
-                        <Shadow
-                            Brush="#22000000"
-                            Offset="0,3"
-                            Opacity="0.18"
-                            Radius="12" />
+                        <Shadow Brush="#22000000" Offset="0,3" Opacity="0.12" Radius="12" />
                     </Border.Shadow>
 
-                    <VerticalStackLayout Spacing="15">
-                        <Label
-                            FontAttributes="Bold"
-                            FontSize="18"
-                            Text="Header Details"
-                            TextColor="#172033" />
+                    <VerticalStackLayout Spacing="16">
 
+                        <!-- Card title with clipboard icon -->
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                            <Border
+                                BackgroundColor="#FFF8E7"
+                                HeightRequest="36"
+                                StrokeShape="RoundRectangle 8"
+                                StrokeThickness="0"
+                                VerticalOptions="Center"
+                                WidthRequest="36">
+                                <!-- ALIGNMENT RISK: 📋 clipboard emoji — no matching IconGlyphs constant; left as-is -->
+                                <Label
+                                    FontSize="18"
+                                    HorizontalOptions="Center"
+                                    Text="📋"
+                                    VerticalOptions="Center" />
+                            </Border>
+                            <Label
+                                Grid.Column="1"
+                                FontAttributes="Bold"
+                                FontSize="18"
+                                Text="Header Details"
+                                TextColor="#172033"
+                                VerticalOptions="Center" />
+                        </Grid>
+
+                        <BoxView BackgroundColor="#EFF2F7" HeightRequest="1" />
+
+                        <!-- Project -->
                         <VerticalStackLayout Spacing="7">
                             <Label FontAttributes="Bold" FontSize="13" Text="Project *" TextColor="#475467" />
                             <controls:DropdownField
@@ -72,8 +147,9 @@
                                 SelectedItem="{Binding SelectedProject}" />
                         </VerticalStackLayout>
 
+                        <!-- Type of Indent -->
                         <VerticalStackLayout Spacing="7">
-                            <Label FontAttributes="Bold" FontSize="13" Text="Indent Type *" TextColor="#475467" />
+                            <Label FontAttributes="Bold" FontSize="13" Text="Type of Indent *" TextColor="#475467" />
                             <controls:DropdownField
                                 HorizontalOptions="Fill"
                                 ItemsSource="{Binding IndentTypes}"
@@ -81,13 +157,14 @@
                                 SelectedItem="{Binding SelectedIndentType}" />
                         </VerticalStackLayout>
 
+                        <!-- Warehouse -->
                         <VerticalStackLayout Spacing="7">
                             <Label FontAttributes="Bold" FontSize="13" Text="Warehouse *" TextColor="#475467" />
                             <Border
-                                Padding="16,0"
                                 BackgroundColor="#F8FAFC"
                                 HeightRequest="54"
                                 IsVisible="{Binding ShowAutoWarehouse}"
+                                Padding="16,0"
                                 Stroke="#D6DEE9"
                                 StrokeShape="RoundRectangle 10"
                                 StrokeThickness="1">
@@ -98,11 +175,11 @@
                                         Text="{Binding AutoWarehouseDisplay}"
                                         TextColor="#172033"
                                         VerticalOptions="Center" />
-                                    <Label
+                                    <controls:IconLabel
                                         Grid.Column="1"
-                                        FontSize="18"
-                                        Text="&#x2304;"
-                                        TextColor="#667085"
+                                        Glyph="{x:Static glyphs:IconGlyphs.ChevronDown}"
+                                        IconSize="18"
+                                        IconColor="#667085"
                                         VerticalOptions="Center" />
                                 </Grid>
                             </Border>
@@ -111,30 +188,53 @@
                                 HorizontalOptions="Fill"
                                 IsVisible="{Binding ShowWarehousePicker}"
                                 ItemsSource="{Binding Warehouses}"
-                                Placeholder="Select Warehouse"
+                                Placeholder="Select Project first"
                                 SelectedItem="{Binding SelectedWarehouse}" />
                         </VerticalStackLayout>
 
-                        <VerticalStackLayout Spacing="7">
-                            <Label FontAttributes="Bold" FontSize="13" Text="From Location *" TextColor="#475467" />
+                        <!-- Issue: From Location → To Contractor -->
+                        <VerticalStackLayout IsVisible="{Binding IsNotIssueReturn}" Spacing="7">
+                            <Label FontAttributes="Bold" FontSize="13" Text="From (Warehouse Location) *" TextColor="#475467" />
                             <controls:DropdownField
                                 DisplayMemberPath="DisplayName"
                                 HorizontalOptions="Fill"
                                 ItemsSource="{Binding FromLocations}"
-                                Placeholder="Select from location"
+                                Placeholder="Select Location"
                                 SelectedItem="{Binding SelectedFromLocation}" />
                         </VerticalStackLayout>
 
-                        <VerticalStackLayout Spacing="7">
+                        <VerticalStackLayout IsVisible="{Binding IsNotIssueReturn}" Spacing="7">
                             <Label FontAttributes="Bold" FontSize="13" Text="To (Contractor / BP)" TextColor="#475467" />
                             <controls:DropdownField
                                 DisplayMemberPath="DisplayName"
                                 HorizontalOptions="Fill"
                                 ItemsSource="{Binding ToContractors}"
-                                Placeholder="Select contractor"
+                                Placeholder="Select Contractor (Optional)"
                                 SelectedItem="{Binding SelectedToContractor}" />
                         </VerticalStackLayout>
 
+                        <!-- Issue Return: From Contractor → To Location (swapped) -->
+                        <VerticalStackLayout IsVisible="{Binding IsIssueReturn}" Spacing="7">
+                            <Label FontAttributes="Bold" FontSize="13" Text="From (Contractor / BP) *" TextColor="#475467" />
+                            <controls:DropdownField
+                                DisplayMemberPath="DisplayName"
+                                HorizontalOptions="Fill"
+                                ItemsSource="{Binding ToContractors}"
+                                Placeholder="Select Contractor"
+                                SelectedItem="{Binding SelectedToContractor}" />
+                        </VerticalStackLayout>
+
+                        <VerticalStackLayout IsVisible="{Binding IsIssueReturn}" Spacing="7">
+                            <Label FontAttributes="Bold" FontSize="13" Text="To (Warehouse Location) *" TextColor="#475467" />
+                            <controls:DropdownField
+                                DisplayMemberPath="DisplayName"
+                                HorizontalOptions="Fill"
+                                ItemsSource="{Binding FromLocations}"
+                                Placeholder="Select Location"
+                                SelectedItem="{Binding SelectedFromLocation}" />
+                        </VerticalStackLayout>
+
+                        <!-- Validation error -->
                         <Label
                             FontSize="13"
                             IsVisible="{Binding HasError}"
@@ -143,15 +243,42 @@
                     </VerticalStackLayout>
                 </Border>
 
-                <Button
-                    BackgroundColor="#1565D8"
-                    Command="{Binding CreateRequestCommand}"
-                    CornerRadius="10"
-                    FontAttributes="Bold"
-                    FontSize="15"
-                    HeightRequest="54"
-                    Text="Create Request"
-                    TextColor="White" />
+                <!-- ── Create Request button ────────────────────────────────── -->
+                <Border
+                    BackgroundColor="#0E2A5C"
+                    HeightRequest="56"
+                    StrokeShape="RoundRectangle 12"
+                    StrokeThickness="0">
+                    <Border.Shadow>
+                        <Shadow Brush="#441565D8" Offset="0,4" Opacity="0.35" Radius="10" />
+                    </Border.Shadow>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding CreateRequestCommand}" />
+                    </Border.GestureRecognizers>
+                    <HorizontalStackLayout HorizontalOptions="Center" Spacing="10" VerticalOptions="Center">
+                        <Border
+                            BackgroundColor="#33FFFFFF"
+                            HeightRequest="30"
+                            StrokeShape="RoundRectangle 6"
+                            StrokeThickness="0"
+                            VerticalOptions="Center"
+                            WidthRequest="30">
+                            <!-- ALIGNMENT RISK: 📄 document emoji — no matching IconGlyphs constant; left as-is -->
+                            <Label
+                                FontSize="14"
+                                HorizontalOptions="Center"
+                                Text="📄"
+                                VerticalOptions="Center" />
+                        </Border>
+                        <Label
+                            FontAttributes="Bold"
+                            FontSize="16"
+                            Text="Create Request"
+                            TextColor="White"
+                            VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                </Border>
+
             </VerticalStackLayout>
         </ScrollView>
     </Grid>

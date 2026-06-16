@@ -3,6 +3,8 @@
     x:Class="IndentMate.Mobile.Views.SetupPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:controls="clr-namespace:IndentMate.Mobile.Controls"
+    xmlns:glyphs="clr-namespace:IndentMate.Mobile.Resources"
     xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
     Title="Initial Setup"
     BackgroundColor="#1A1A2E">
@@ -15,13 +17,13 @@
         <VerticalStackLayout Padding="32" Spacing="16" VerticalOptions="FillAndExpand">
 
             <!-- Logo / Branding -->
-            <Frame BorderColor="#6C63FF" CornerRadius="16" HasShadow="True"
-                   BackgroundColor="#6C63FF" HorizontalOptions="Center"
-                   Margin="0,24,0,0" Padding="0" WidthRequest="80" HeightRequest="80">
-                <Label Text="IM" FontSize="32" FontAttributes="Bold"
-                       TextColor="White" HorizontalTextAlignment="Center"
-                       VerticalTextAlignment="Center" />
-            </Frame>
+            <Image
+                Aspect="AspectFit"
+                HeightRequest="80"
+                HorizontalOptions="Center"
+                Margin="0,24,0,0"
+                Source="ncc_logo.png"
+                WidthRequest="180" />
 
             <!-- Title -->
             <Label Text="IndentMate" FontSize="32" FontAttributes="Bold"
@@ -33,7 +35,8 @@
             <Label Text="LN Environment" TextColor="White" FontSize="13" FontAttributes="Bold" />
             <Picker x:Name="EnvironmentPicker"
                     Title="Select Environment"
-                    TextColor="White"
+                    TitleColor="#AAAACC"
+                    TextColor="#F7931E"
                     BackgroundColor="#2A2A3E"
                     ItemDisplayBinding="{Binding DisplayName}"
                     SelectedItem="{Binding SelectedLNEnvironmentOption}"
@@ -44,7 +47,7 @@
             <Label Text="Company Code" TextColor="White" FontSize="13" FontAttributes="Bold" />
             <Entry Placeholder="e.g. 100"
                    Text="{Binding Company}"
-                   PlaceholderColor="#666" TextColor="White"
+                   PlaceholderColor="#666" TextColor="#F7931E"
                    BackgroundColor="#2A2A3E"
                    Keyboard="Numeric"
                    ClearButtonVisibility="WhileEditing" />
@@ -53,27 +56,46 @@
             <Label Text="Engineer ID" TextColor="White" FontSize="13" FontAttributes="Bold" />
             <Entry Placeholder="Your LN Engineer ID"
                    Text="{Binding EngineerId}"
-                   PlaceholderColor="#666" TextColor="White"
+                   PlaceholderColor="#666" TextColor="#F7931E"
                    BackgroundColor="#2A2A3E"
                    ClearButtonVisibility="WhileEditing" />
 
             <!-- PIN Entry -->
             <Label Text="PIN (6 digits)" TextColor="White" FontSize="13" FontAttributes="Bold" />
-            <Entry Placeholder="••••••"
-                   Text="{Binding Pin}"
-                   IsPassword="True"
-                   MaxLength="6"
-                   PlaceholderColor="#666" TextColor="White"
-                   BackgroundColor="#2A2A3E"
-                   Keyboard="Numeric"
-                   ClearButtonVisibility="WhileEditing" />
+            <Grid ColumnDefinitions="*,56" ColumnSpacing="12">
+                <Entry Placeholder="••••••"
+                       Text="{Binding Pin}"
+                       IsPassword="{Binding IsPinHidden}"
+                       MaxLength="6"
+                       PlaceholderColor="#666" TextColor="#F7931E"
+                       BackgroundColor="#2A2A3E"
+                       Keyboard="Numeric"
+                       ClearButtonVisibility="WhileEditing" />
+
+                <Border
+                    Grid.Column="1"
+                    BackgroundColor="#2A2A3E"
+                    HeightRequest="54"
+                    Stroke="#3A3A50"
+                    StrokeShape="RoundRectangle 10"
+                    StrokeThickness="1"
+                    WidthRequest="56">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding TogglePinVisibilityCommand}" />
+                    </Border.GestureRecognizers>
+                    <Grid>
+                        <controls:IconLabel Glyph="{x:Static glyphs:IconGlyphs.Eye}" IconSize="24" IconColor="#F7931E" IsVisible="{Binding IsPinVisible}" />
+                        <controls:IconLabel Glyph="{x:Static glyphs:IconGlyphs.EyeOff}" IconSize="26" IconColor="#F7931E" IsVisible="{Binding IsPinHidden}" />
+                    </Grid>
+                </Border>
+            </Grid>
 
             <!-- Action Button -->
             <Button Text="Save Local Setup"
                     Command="{Binding SaveAndSyncCommand}"
                     IsEnabled="{Binding IsNotBusy}"
-                    BackgroundColor="#6C63FF"
-                    TextColor="White"
+                    BackgroundColor="#F7931E"
+                    TextColor="#092759"
                     CornerRadius="8"
                     FontSize="16"
                     FontAttributes="Bold"
@@ -82,9 +104,10 @@
 
             <!-- Loading Indicator -->
             <StackLayout IsVisible="{Binding IsBusy}" HorizontalOptions="Center" Margin="0,16">
-                <ActivityIndicator IsRunning="{Binding IsBusy}"
-                                   Color="#6C63FF"
-                                   Scale="1.2" />
+                <GraphicsView
+                    x:Name="SetupLoadingSpinner"
+                    HeightRequest="36"
+                    WidthRequest="36" />
                 <Label Text="{Binding StatusMessage}"
                        TextColor="#AAAACC"
                        HorizontalOptions="Center"

@@ -1,6 +1,4 @@
-import { env } from '../config/env.js'
 import { pool, query } from '../db/pool.js'
-import { sendMail } from '../services/mailService.js'
 
 const INDENT_SELECT_SQL = `
   SELECT
@@ -30,17 +28,13 @@ const INDENT_SELECT_SQL = `
     h.status,
     h.synced_at,
     h.approved_by,
-    approved_user.employee_name AS approved_by_name,
     h.approved_at,
-    h.approver_email,
-    h.approver_name,
     h.attachments,
     h.created_at,
     h.updated_at,
     COALESCE(lines.items, '[]'::json) AS items
   FROM indent_headers h
   LEFT JOIN users u ON u.login_name = h.created_by
-  LEFT JOIN users approved_user ON approved_user.login_name = h.approved_by
   LEFT JOIN project_master pm ON pm.project_code = h.project_code
   LEFT JOIN warehouse_master wm ON wm.warehouse_code = h.source_warehouse
   LEFT JOIN delivery_master dm ON dm.project_code = h.project_code AND dm.delivery_point = h.delivery_location
@@ -54,14 +48,7 @@ const INDENT_SELECT_SQL = `
       l.uom,
       l.remarks
     FROM indent_lines l
-    LEFT JOIN LATERAL (
-      SELECT item_description
-      FROM item_master im
-      WHERE im.project_site = h.project_code
-        AND im.item_code = l.item_code
-      ORDER BY im.id
-      LIMIT 1
-    ) im ON TRUE
+    LEFT JOIN item_master im ON im.project_site = h.project_code AND im.item_code = l.item_code
     WHERE l.indent_header_id = h.id
     ORDER BY l.line_number
     LIMIT 1
@@ -86,31 +73,17 @@ const INDENT_SELECT_SQL = `
       ORDER BY l.line_number
     ) AS items
     FROM indent_lines l
-    LEFT JOIN LATERAL (
-      SELECT item_description
-      FROM item_master im
-      WHERE im.project_site = h.project_code
-        AND im.item_code = l.item_code
-      ORDER BY im.id
-      LIMIT 1
-    ) im ON TRUE
+    LEFT JOIN item_master im ON im.project_site = h.project_code AND im.item_code = l.item_code
     WHERE l.indent_header_id = h.id
   ) lines ON TRUE
 `
 
-const TEMP_INDENT_APPROVER_EMAIL = 'hemanthguntuku18@gmail.com'
-
-export async function listIndents(req, res, next) {
+export async function listIndents(_req, res, next) {
   try {
-    const { whereClause, params } = buildIndentDateFilter(req.query)
-    const result = await query(
-      `
-        ${INDENT_SELECT_SQL}
-        ${whereClause}
-        ORDER BY h.created_at DESC, h.indent_no DESC
-      `,
-      params,
-    )
+    const result = await query(`
+      ${INDENT_SELECT_SQL}
+      ORDER BY h.created_at DESC, h.indent_no DESC
+    `)
 
     return res.json({ data: result.rows })
   } catch (error) {
@@ -120,113 +93,19 @@ export async function listIndents(req, res, next) {
 
 export async function listMyIndents(req, res, next) {
   try {
-    const createdByValues = normalizeIdentityValues(req.user)
+    const createdBy = req.user?.login_name ?? req.user?.employeeId ?? req.user?.employee_id
 
-    if (!createdByValues.length) {
+    if (!createdBy) {
       return res.status(401).json({ message: 'Authenticated user is required' })
     }
 
-    const { whereClause, params } = buildMyIndentDateFilter(req.query)
-    params.push(createdByValues)
-    const ownerClause = `i.created_by = ANY($${params.length}::text[])`
-    const scopedWhereClause = whereClause
-      ? `${whereClause} AND ${ownerClause}`
-      : `WHERE ${ownerClause}`
     const result = await query(
       `
-        SELECT
-          COALESCE(h.id, i.id) AS id,
-          h.app_request_id,
-          i.indent_no,
-          i.created_by,
-          u.employee_name AS created_by_name,
-          i.project_code,
-          pm.project_description AS project_name,
-          h.source_warehouse,
-          wm.warehouse_description AS source_warehouse_name,
-          h.source_location,
-          COALESCE(h.delivery_location, i.delivery_location) AS delivery_location,
-          COALESCE(dm.description_1, dm.delivery_point) AS delivery_location_name,
-          COALESCE(h.requirement_type, i.requirement_type) AS requirement_type,
-          COALESCE(h.indent_type, i.requirement_type, 'Issue') AS indent_type,
-          h.to_entity_type,
-          h.to_entity_id,
-          COALESCE(h.status, i.status::text) AS status,
-          h.synced_at,
-          h.approved_by,
-          approved_user.employee_name AS approved_by_name,
-          h.approved_at,
-          h.approver_email,
-          h.approver_name,
-          COALESCE(h.attachments, '[]'::jsonb) AS attachments,
-          COALESCE(h.created_at, i.created_at) AS created_at,
-          COALESCE(h.updated_at, i.updated_at) AS updated_at,
-          COALESCE(lines.items, json_build_array(
-            json_build_object(
-              'id', i.id,
-              'line_number', 1,
-              'item_code', i.item_code,
-              'item_name', im.item_description,
-              'make', i.make,
-              'uom', i.uom,
-              'required_qty', i.required_qty,
-              'issued_qty', 0,
-              'work_type', i.requirement_type,
-              'activity_code', NULL,
-              'location_code', i.delivery_location,
-              'remarks', i.remarks,
-              'attachment_url', NULL
-            )
-          )) AS items
-        FROM indents i
-        LEFT JOIN indent_headers h ON h.indent_no = i.indent_no
-        LEFT JOIN users u ON u.login_name = i.created_by
-        LEFT JOIN users approved_user ON approved_user.login_name = h.approved_by
-        LEFT JOIN project_master pm ON pm.project_code = i.project_code
-        LEFT JOIN warehouse_master wm ON wm.warehouse_code = h.source_warehouse
-        LEFT JOIN delivery_master dm ON dm.project_code = i.project_code AND dm.delivery_point = COALESCE(h.delivery_location, i.delivery_location)
-        LEFT JOIN LATERAL (
-          SELECT item_description
-          FROM item_master item_lookup
-          WHERE item_lookup.project_site = i.project_code
-            AND item_lookup.item_code = i.item_code
-          ORDER BY item_lookup.id
-          LIMIT 1
-        ) im ON TRUE
-        LEFT JOIN LATERAL (
-          SELECT json_agg(
-            json_build_object(
-              'id', l.id,
-              'line_number', l.line_number,
-              'item_code', l.item_code,
-              'item_name', COALESCE(l.item_description, line_item.item_description),
-              'make', l.make,
-              'uom', l.uom,
-              'required_qty', l.required_qty,
-              'issued_qty', l.issued_qty,
-              'work_type', l.work_type,
-              'activity_code', l.activity_code,
-              'location_code', l.location_code,
-              'remarks', l.remarks,
-              'attachment_url', l.attachment_url
-            )
-            ORDER BY l.line_number
-          ) AS items
-          FROM indent_lines l
-          LEFT JOIN LATERAL (
-            SELECT item_description
-            FROM item_master item_lookup
-            WHERE item_lookup.project_site = i.project_code
-              AND item_lookup.item_code = l.item_code
-            ORDER BY item_lookup.id
-            LIMIT 1
-          ) line_item ON TRUE
-          WHERE l.indent_header_id = h.id
-        ) lines ON TRUE
-        ${scopedWhereClause}
-        ORDER BY COALESCE(h.created_at, i.created_at) DESC, i.indent_no DESC
+        ${INDENT_SELECT_SQL}
+        WHERE h.created_by = $1
+        ORDER BY h.created_at DESC, h.indent_no DESC
       `,
-      params,
+      [createdBy],
     )
 
     return res.json({ data: result.rows })
@@ -251,15 +130,16 @@ export async function getIndent(req, res, next) {
 
 export async function getMyIndent(req, res, next) {
   try {
-    const createdByValues = normalizeIdentityValues(req.user)
-    const indent = await fetchIndentByIdentifier(req.params.id)
+    const createdBy = req.user?.login_name ?? req.user?.employeeId ?? req.user?.employee_id
+
+    if (!createdBy) {
+      return res.status(401).json({ message: 'Authenticated user is required' })
+    }
+
+    const indent = await fetchIndentByIdForUser(req.params.id, createdBy)
 
     if (!indent) {
       return res.status(404).json({ message: 'Indent not found' })
-    }
-
-    if (!createdByValues.includes(normalizeIdentityValue(indent.created_by))) {
-      return res.status(403).json({ message: 'This indent is not available for the current user' })
     }
 
     return res.json({ data: indent })
@@ -270,50 +150,64 @@ export async function getMyIndent(req, res, next) {
 
 export async function listIndentProjectOptions(req, res, next) {
   try {
-    const loginName = req.user?.login_name
-    const role = normalizeFieldAssignmentRole(req.query?.role ?? req.user?.role ?? req.user?.primary_role)
+    const employeeId = String(req.user?.login_name ?? req.user?.employeeId ?? req.user?.employee_id ?? '').trim()
+    const requestedRole = normalizeFieldRole(req.query?.role)
+    const userRole = normalizeFieldRole(req.user?.role ?? req.user?.primary_role)
+    const fieldRole = requestedRole ?? userRole
 
-    if (!loginName) {
+    if (!employeeId) {
       return res.status(401).json({ message: 'Authenticated user is required' })
     }
 
-    if (!role) {
-      return res.json({ data: [] })
+    const params = [employeeId.toLowerCase()]
+    const clauses = [
+      'lower(btrim(rm.employee_id)) = $1',
+      "lower(COALESCE(NULLIF(btrim(rm.manual_status), ''), 'active')) <> 'inactive'",
+      '(rm.valid_from IS NULL OR rm.valid_from <= CURRENT_DATE)',
+      '(rm.valid_to IS NULL OR rm.valid_to >= CURRENT_DATE)',
+    ]
+
+    if (fieldRole === 'SIE') {
+      clauses.push(`(
+        upper(btrim(rm.responsibility)) = 'SIE'
+        OR upper(btrim(rm.responsibility)) = 'STE'
+        OR upper(btrim(rm.responsibility)) LIKE '%(SIE)%'
+        OR upper(btrim(rm.responsibility)) LIKE '%(STE)%'
+        OR upper(btrim(rm.responsibility)) LIKE '%SITE ENGINEER%'
+        OR upper(btrim(rm.responsibility)) LIKE '%STE ENGINEER%'
+        OR upper(btrim(rm.responsibility)) LIKE '%SITE INCHARGE ENGINEER%'
+        OR upper(btrim(rm.responsibility)) LIKE '%SITE IN-CHARGE ENGINEER%'
+        OR upper(btrim(rm.responsibility)) LIKE '%SITE IN CHARGE ENGINEER%'
+      )`)
+    } else if (fieldRole === 'SER') {
+      clauses.push(`(
+        upper(btrim(rm.responsibility)) IN ('SER', 'SRE')
+        OR upper(btrim(rm.responsibility)) LIKE '%(SER)%'
+        OR upper(btrim(rm.responsibility)) LIKE '%(SRE)%'
+        OR upper(btrim(rm.responsibility)) LIKE '%SITE RECEIVING%'
+        OR upper(btrim(rm.responsibility)) LIKE '%SERVICE ENGINEER%'
+      )`)
     }
 
     const result = await query(
       `
-        SELECT DISTINCT
-          assignment.project_id AS project_code,
-          COALESCE(pm.project_description, assignment.project_description, assignment.project_id) AS project_description
-        FROM user_project_assignment_master assignment
-        LEFT JOIN project_master pm ON pm.project_code = assignment.project_id
-        WHERE assignment.employee_id = $1
-          AND COALESCE(assignment.manual_status, 'Active') = 'Active'
-          AND (assignment.valid_from IS NULL OR assignment.valid_from <= CURRENT_DATE)
-          AND (assignment.valid_to IS NULL OR assignment.valid_to >= CURRENT_DATE)
-          AND (
-            ($2 = 'SIE' AND (
-              UPPER(TRIM(COALESCE(assignment.responsibility, ''))) = 'SIE'
-              OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) = 'STE'
-              OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%(SIE)%'
-              OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%(STE)%'
-              OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%SITE ENGINEER%'
-              OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%STE ENGINEER%'
-              OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%SITE INCHARGE ENGINEER%'
-              OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%SITE IN-CHARGE ENGINEER%'
-              OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%SITE IN CHARGE ENGINEER%'
-            ))
-            OR ($2 = 'SER' AND (
-              UPPER(TRIM(COALESCE(assignment.responsibility, ''))) IN ('SER', 'SRE')
-              OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%(SER)%'
-              OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%(SRE)%'
-              OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%SITE RECEIVING%'
-            ))
-          )
-        ORDER BY assignment.project_id ASC
+        SELECT DISTINCT ON (project_code)
+          project_code,
+          project_description
+        FROM (
+          SELECT
+            COALESCE(NULLIF(pm.project_code, ''), rm.project_id) AS project_code,
+            COALESCE(NULLIF(pm.project_description, ''), NULLIF(rm.project_description, ''), rm.project_id) AS project_description
+          FROM responsibility_master rm
+          LEFT JOIN project_master pm
+            ON lower(btrim(pm.project_code)) = lower(btrim(rm.project_id))
+          WHERE ${clauses.join('\n            AND ')}
+        ) assigned_projects
+        WHERE project_code IS NOT NULL
+          AND btrim(project_code) <> ''
+        ORDER BY project_code ASC, project_description ASC
       `,
-      [loginName, role],
+      params,
     )
 
     return res.json({ data: result.rows })
@@ -327,27 +221,268 @@ export async function listIndentWarehouseLocationOptions(req, res, next) {
     const projectCode = String(req.query?.projectCode ?? '').trim()
     const warehouseCode = String(req.query?.warehouseCode ?? '').trim()
 
-    if (!projectCode || !warehouseCode) {
-      return res.status(400).json({ message: 'projectCode and warehouseCode are required' })
+    if (!projectCode) {
+      return res.status(400).json({ message: 'projectCode is required' })
+    }
+
+    const params = [projectCode.toLowerCase()]
+    const clauses = [
+      'lower(btrim(project_code)) = $1',
+      'location_code IS NOT NULL',
+      "btrim(location_code) <> ''",
+    ]
+
+    if (warehouseCode) {
+      params.push(warehouseCode.toLowerCase())
+      clauses.push(`lower(btrim(warehouse_code)) = $${params.length}`)
     }
 
     const result = await query(
       `
-        SELECT
+        SELECT DISTINCT ON (location_code)
           project_code,
           warehouse_code,
           location_code,
-          location_description AS description,
-          location_category
+          COALESCE(NULLIF(location_description, ''), location_code) AS description
         FROM warehouse_location_master
-        WHERE project_code = $1
-          AND warehouse_code = $2
-        ORDER BY location_code ASC
+        WHERE ${clauses.join('\n          AND ')}
+        ORDER BY location_code ASC, location_description ASC
       `,
-      [projectCode, warehouseCode],
+      params,
     )
 
     return res.json({ data: result.rows })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function listIndentContractorOptions(req, res, next) {
+  try {
+    const projectCode = String(req.query?.projectCode ?? '').trim()
+    const locationCode = String(req.query?.locationCode ?? '').trim()
+    const activityCode = String(req.query?.activityCode ?? '').trim()
+    const search = String(req.query?.search ?? '').trim()
+    const limit = normalizeOptionLimit(req.query?.limit)
+    const offset = normalizeOptionOffset(req.query?.offset)
+
+    if (!projectCode) {
+      return res.status(400).json({ message: 'projectCode is required' })
+    }
+
+    const params = [projectCode.toLowerCase()]
+    const clauses = [
+      'lower(btrim(project_code)) = $1',
+      'business_partner_code IS NOT NULL',
+      "btrim(business_partner_code) <> ''",
+    ]
+
+    if (locationCode) {
+      params.push(locationCode.toLowerCase())
+      clauses.push(`lower(btrim(location_code)) = $${params.length}`)
+    }
+
+    if (activityCode) {
+      params.push(activityCode.toLowerCase())
+      clauses.push(`lower(btrim(activity_code)) = $${params.length}`)
+    }
+
+    if (search.length >= 2) {
+      params.push(`%${search}%`)
+      clauses.push(`(
+        business_partner_code ILIKE $${params.length}
+        OR business_partner_name ILIKE $${params.length}
+      )`)
+    }
+
+    params.push(limit + 1)
+    const limitParam = params.length
+    params.push(offset)
+    const offsetParam = params.length
+
+    const result = await query(
+      `
+        SELECT DISTINCT ON (business_partner_code)
+          business_partner_code,
+          COALESCE(NULLIF(business_partner_name, ''), business_partner_code) AS business_partner_name
+        FROM bp_activity_master
+        WHERE ${clauses.join('\n          AND ')}
+        ORDER BY business_partner_code ASC, business_partner_name ASC
+        LIMIT $${limitParam}
+        OFFSET $${offsetParam}
+      `,
+      params,
+    )
+
+    const rows = result.rows.slice(0, limit)
+
+    return res.json({
+      data: rows,
+      hasMore: result.rows.length > limit,
+      nextOffset: offset + rows.length,
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function listIndentOrderOptions(req, res, next) {
+  try {
+    const projectCode = String(req.query?.projectCode ?? '').trim()
+    const search = String(req.query?.search ?? '').trim()
+    const limit = normalizeOptionLimit(req.query?.limit)
+    const offset = normalizeOptionOffset(req.query?.offset)
+
+    if (!projectCode) {
+      return res.status(400).json({ message: 'projectCode is required' })
+    }
+
+    const params = [projectCode.toLowerCase()]
+    const serviceClauses = [
+      'lower(btrim(project_site)) = $1',
+      'service_order_no IS NOT NULL',
+      "btrim(service_order_no) <> ''",
+      "lower(COALESCE(NULLIF(btrim(status), ''), 'released')) = 'released'",
+    ]
+    const rentalClauses = [
+      'lower(btrim(project_code)) = $1',
+      'rental_order IS NOT NULL',
+      "btrim(rental_order) <> ''",
+      "lower(COALESCE(NULLIF(btrim(status), ''), 'released')) = 'released'",
+    ]
+
+    if (search.length >= 2) {
+      params.push(`%${search}%`)
+      serviceClauses.push(`(
+        service_order_no ILIKE $${params.length}
+        OR COALESCE(item_description, '') ILIKE $${params.length}
+        OR COALESCE(description, '') ILIKE $${params.length}
+        OR COALESCE(item_code, '') ILIKE $${params.length}
+        OR COALESCE(serial_number, '') ILIKE $${params.length}
+        OR COALESCE(status, '') ILIKE $${params.length}
+      )`)
+      rentalClauses.push(`(
+        rental_order ILIKE $${params.length}
+        OR COALESCE(rental_description, '') ILIKE $${params.length}
+        OR COALESCE(item_description, '') ILIKE $${params.length}
+        OR COALESCE(item_code, '') ILIKE $${params.length}
+        OR COALESCE(status, '') ILIKE $${params.length}
+      )`)
+    }
+
+    const serviceResult = await query(
+      `
+        SELECT
+          'Service_Order' AS order_type,
+          'Service Orders' AS order_group,
+          service_order_no AS order_no,
+          status,
+          item_code,
+          COALESCE(NULLIF(item_description, ''), NULLIF(description, ''), item_code) AS item_description,
+          serial_number,
+          COALESCE(NULLIF(item_description, ''), NULLIF(description, ''), service_order_no) AS description
+        FROM service_orders
+        WHERE ${serviceClauses.join('\n          AND ')}
+        ORDER BY service_order_no ASC
+      `,
+      params,
+    )
+
+    const rentalResult = await query(
+      `
+        SELECT
+          'Rental_Order' AS order_type,
+          'Rental Orders' AS order_group,
+          rental_order AS order_no,
+          status,
+          item_code,
+          COALESCE(NULLIF(item_description, ''), item_code) AS item_description,
+          NULL::text AS serial_number,
+          COALESCE(NULLIF(rental_description, ''), NULLIF(item_description, ''), rental_order) AS description
+        FROM rental_order_master
+        WHERE ${rentalClauses.join('\n          AND ')}
+        ORDER BY rental_order ASC
+      `,
+      params,
+    )
+
+    const rows = [...serviceResult.rows, ...rentalResult.rows].sort((left, right) =>
+      String(left.order_no).localeCompare(String(right.order_no)),
+    )
+    const data = rows.slice(offset, offset + limit)
+
+    return res.json({
+      data,
+      hasMore: offset + data.length < rows.length,
+      nextOffset: offset + data.length,
+    })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function listIndentDeliveryPointOptions(req, res, next) {
+  try {
+    const projectCode = String(req.query?.projectCode ?? '').trim()
+    const addressCode = String(req.query?.addressCode ?? '').trim()
+    const search = String(req.query?.search ?? '').trim()
+    const limit = normalizeOptionLimit(req.query?.limit)
+    const offset = normalizeOptionOffset(req.query?.offset)
+
+    if (!projectCode) {
+      return res.status(400).json({ message: 'projectCode is required' })
+    }
+
+    const params = [projectCode.toLowerCase()]
+    const clauses = [
+      'lower(btrim(project_code)) = $1',
+      'delivery_point IS NOT NULL',
+      "btrim(delivery_point) <> ''",
+    ]
+
+    if (addressCode) {
+      params.push(addressCode.toLowerCase())
+      clauses.push(`lower(btrim(address_code)) = $${params.length}`)
+    }
+
+    if (search.length >= 2) {
+      params.push(`%${search}%`)
+      clauses.push(`(
+        address_code ILIKE $${params.length}
+        OR address_description ILIKE $${params.length}
+        OR delivery_point ILIKE $${params.length}
+        OR COALESCE(description_1, '') ILIKE $${params.length}
+      )`)
+    }
+
+    params.push(limit + 1)
+    const limitParam = params.length
+    params.push(offset)
+    const offsetParam = params.length
+
+    const result = await query(
+      `
+        SELECT DISTINCT ON (address_code, delivery_point)
+          address_code,
+          COALESCE(NULLIF(address_description, ''), address_code) AS address_description,
+          delivery_point,
+          COALESCE(NULLIF(description_1, ''), delivery_point) AS description_1
+        FROM delivery_master
+        WHERE ${clauses.join('\n          AND ')}
+        ORDER BY address_code ASC, delivery_point ASC
+        LIMIT $${limitParam}
+        OFFSET $${offsetParam}
+      `,
+      params,
+    )
+
+    const rows = result.rows.slice(0, limit)
+
+    return res.json({
+      data: rows,
+      hasMore: result.rows.length > limit,
+      nextOffset: offset + rows.length,
+    })
   } catch (error) {
     return next(error)
   }
@@ -367,21 +502,30 @@ export async function listIndentItemOptions(req, res, next) {
     }
 
     const params = []
-    const filters = []
+    const clauses = [
+      'item_code IS NOT NULL',
+      "btrim(item_code) <> ''",
+    ]
 
     if (scope !== 'all') {
-      params.push(projectCode)
-      filters.push(`project_site = $${params.length}`)
+      params.push(projectCode.toLowerCase())
+      clauses.push(`lower(btrim(COALESCE(project_site, ''))) = $${params.length}`)
     }
 
     if (warehouseCode && scope !== 'all') {
-      params.push(warehouseCode)
-      filters.push(`(warehouse_code = $${params.length} OR warehouse_code IS NULL)`)
+      params.push(warehouseCode.toLowerCase())
+      clauses.push(`
+        (
+          warehouse_code IS NULL
+          OR btrim(warehouse_code) = ''
+          OR lower(btrim(warehouse_code)) = $${params.length}
+        )
+      `)
     }
 
-    if (search) {
+    if (search.length >= 2) {
       params.push(`%${search}%`)
-      filters.push(`(
+      clauses.push(`(
         item_code ILIKE $${params.length}
         OR item_description ILIKE $${params.length}
         OR COALESCE(item_type, '') ILIKE $${params.length}
@@ -397,24 +541,34 @@ export async function listIndentItemOptions(req, res, next) {
 
     const result = await query(
       `
-        SELECT
+        SELECT DISTINCT ON (item_code)
           item_code,
-          item_description,
-          purchase_unit AS uom,
-          item_type,
-          warehouse_code,
-          warehouse_description,
-          on_hand_qty
+          COALESCE(NULLIF(item_description, ''), item_code) AS item_description,
+          COALESCE(NULLIF(purchase_unit, ''), 'NOS') AS purchase_unit,
+          COALESCE(NULLIF(purchase_unit, ''), 'NOS') AS uom,
+          COALESCE(NULLIF(item_type, ''), 'Product') AS item_type,
+          COALESCE(on_hand_qty, 0) AS on_hand_qty,
+          COALESCE(NULLIF(project_site, ''), '') AS project_site,
+          COALESCE(NULLIF(site_description, ''), '') AS site_description,
+          COALESCE(NULLIF(warehouse_code, ''), '') AS warehouse_code,
+          COALESCE(NULLIF(warehouse_description, ''), '') AS warehouse_description
         FROM item_master
-        ${filters.length ? `WHERE ${filters.join(' AND ')}` : ''}
-        ORDER BY item_code ASC
+        WHERE ${clauses.join('\n          AND ')}
+        ORDER BY item_code ASC, warehouse_code NULLS LAST
         LIMIT $${limitParam}
         OFFSET $${offsetParam}
       `,
       params,
     )
 
-    return res.json(formatOptionRows(result.rows, limit, offset))
+    const rows = result.rows.slice(0, limit)
+    const hasMore = result.rows.length > limit
+
+    return res.json({
+      data: rows,
+      hasMore,
+      nextOffset: offset + rows.length,
+    })
   } catch (error) {
     return next(error)
   }
@@ -431,12 +585,19 @@ export async function listIndentActivityOptions(req, res, next) {
       return res.status(400).json({ message: 'projectCode is required' })
     }
 
-    const params = [projectCode]
-    const filters = ['project_code = $1']
+    const params = [projectCode.toLowerCase()]
+    const clauses = [
+      "lower(btrim(project_code)) = $1",
+      'activity_code IS NOT NULL',
+      "btrim(activity_code) <> ''",
+    ]
 
-    if (search) {
+    if (search.length >= 2) {
       params.push(`%${search}%`)
-      filters.push(`(activity_code ILIKE $${params.length} OR description ILIKE $${params.length})`)
+      clauses.push(`(
+        activity_code ILIKE $${params.length}
+        OR description ILIKE $${params.length}
+      )`)
     }
 
     params.push(limit + 1)
@@ -447,208 +608,29 @@ export async function listIndentActivityOptions(req, res, next) {
     const result = await query(
       `
         SELECT
+          project_code,
           activity_code,
-          description,
-          activity_type
+          COALESCE(NULLIF(description, ''), activity_code) AS description,
+          COALESCE(NULLIF(activity_type, ''), '') AS activity_type,
+          COALESCE(NULLIF(critical_capacity_type, ''), '') AS critical_capacity_type,
+          COALESCE(NULLIF(work_auth_status, ''), 'Released') AS work_auth_status
         FROM activity_master
-        WHERE ${filters.join(' AND ')}
-        ORDER BY activity_code ASC
+        WHERE ${clauses.join('\n          AND ')}
+        ORDER BY activity_code ASC, description ASC
         LIMIT $${limitParam}
         OFFSET $${offsetParam}
       `,
       params,
     )
 
-    return res.json(formatOptionRows(result.rows, limit, offset))
-  } catch (error) {
-    return next(error)
-  }
-}
+    const rows = result.rows.slice(0, limit)
+    const hasMore = result.rows.length > limit
 
-export async function listIndentContractorOptions(req, res, next) {
-  try {
-    const projectCode = String(req.query?.projectCode ?? '').trim()
-    const locationCode = String(req.query?.locationCode ?? '').trim()
-    const activityCode = String(req.query?.activityCode ?? '').trim()
-    const search = String(req.query?.search ?? '').trim()
-    const limit = normalizeOptionLimit(req.query?.limit)
-    const offset = normalizeOptionOffset(req.query?.offset)
-
-    if (!projectCode) {
-      return res.status(400).json({ message: 'projectCode is required' })
-    }
-
-    const params = [projectCode]
-    const filters = ['project_code = $1']
-
-    if (locationCode) {
-      params.push(locationCode)
-      filters.push(`location_code = $${params.length}`)
-    }
-
-    if (activityCode) {
-      params.push(activityCode)
-      filters.push(`(activity_code = $${params.length} OR activity_code IS NULL)`)
-    }
-
-    if (search) {
-      params.push(`%${search}%`)
-      filters.push(`(business_partner_code ILIKE $${params.length} OR business_partner_name ILIKE $${params.length})`)
-    }
-
-    params.push(limit + 1)
-    const limitParam = params.length
-    params.push(offset)
-    const offsetParam = params.length
-
-    const result = await query(
-      `
-        SELECT DISTINCT
-          business_partner_code,
-          business_partner_name
-        FROM bp_activity_master
-        WHERE ${filters.join(' AND ')}
-          AND LOWER(TRIM(COALESCE(business_partner_code, ''))) <> LOWER(TRIM(COALESCE(location_code, '')))
-          AND LOWER(TRIM(COALESCE(business_partner_name, ''))) <> LOWER(TRIM(COALESCE(location_description, '')))
-        ORDER BY business_partner_code ASC
-        LIMIT $${limitParam}
-        OFFSET $${offsetParam}
-      `,
-      params,
-    )
-
-    return res.json(formatOptionRows(result.rows, limit, offset))
-  } catch (error) {
-    return next(error)
-  }
-}
-
-export async function listIndentDeliveryPointOptions(req, res, next) {
-  try {
-    const projectCode = String(req.query?.projectCode ?? '').trim()
-    const addressCode = String(req.query?.addressCode ?? '').trim()
-    const search = String(req.query?.search ?? '').trim()
-    const limit = normalizeOptionLimit(req.query?.limit)
-    const offset = normalizeOptionOffset(req.query?.offset)
-
-    if (!projectCode) {
-      return res.status(400).json({ message: 'projectCode is required' })
-    }
-
-    const params = [projectCode]
-    const filters = ['project_code = $1']
-
-    if (addressCode) {
-      params.push(addressCode)
-      filters.push(`address_code = $${params.length}`)
-    }
-
-    if (search) {
-      params.push(`%${search}%`)
-      filters.push(`(address_code ILIKE $${params.length} OR address_description ILIKE $${params.length} OR delivery_point ILIKE $${params.length} OR description_1 ILIKE $${params.length})`)
-    }
-
-    params.push(limit + 1)
-    const limitParam = params.length
-    params.push(offset)
-    const offsetParam = params.length
-
-    const result = await query(
-      `
-        SELECT DISTINCT
-          address_code,
-          address_description,
-          delivery_point,
-          description_1
-        FROM delivery_master
-        WHERE ${filters.join(' AND ')}
-        ORDER BY address_code ASC, delivery_point ASC
-        LIMIT $${limitParam}
-        OFFSET $${offsetParam}
-      `,
-      params,
-    )
-
-    return res.json(formatOptionRows(result.rows, limit, offset))
-  } catch (error) {
-    return next(error)
-  }
-}
-
-export async function listIndentOrderOptions(req, res, next) {
-  try {
-    const projectCode = String(req.query?.projectCode ?? '').trim()
-    const search = String(req.query?.search ?? '').trim()
-    const limit = normalizeOptionLimit(req.query?.limit)
-
-    if (!projectCode) {
-      return res.status(400).json({ message: 'projectCode is required' })
-    }
-
-    const params = [projectCode]
-    const serviceFilters = ['project_site = $1']
-    const rentalFilters = ['project_code = $1']
-
-    if (search) {
-      params.push(`%${search}%`)
-      const searchParam = params.length
-      serviceFilters.push(`(
-        service_order_no ILIKE $${searchParam}
-        OR COALESCE(description, '') ILIKE $${searchParam}
-        OR COALESCE(item_code, '') ILIKE $${searchParam}
-        OR COALESCE(item_description, '') ILIKE $${searchParam}
-        OR COALESCE(status, '') ILIKE $${searchParam}
-      )`)
-      rentalFilters.push(`(
-        rental_order ILIKE $${searchParam}
-        OR COALESCE(rental_description, '') ILIKE $${searchParam}
-        OR COALESCE(item_code, '') ILIKE $${searchParam}
-        OR COALESCE(item_description, '') ILIKE $${searchParam}
-        OR COALESCE(status, '') ILIKE $${searchParam}
-      )`)
-    }
-
-    params.push(limit)
-    const limitParam = params.length
-
-    const serviceOrders = await query(
-      `
-        SELECT
-          service_order_no AS order_no,
-          'Service_Order' AS order_type,
-          'Service Orders' AS order_group,
-          COALESCE(NULLIF(item_description, ''), NULLIF(description, ''), service_order_no) AS description,
-          item_code,
-          item_description,
-          serial_number,
-          status
-        FROM service_orders
-        WHERE ${serviceFilters.join(' AND ')}
-        ORDER BY service_order_no ASC
-        LIMIT $${limitParam}
-      `,
-      params,
-    )
-    const rentalOrders = await query(
-      `
-        SELECT
-          rental_order AS order_no,
-          'Rental_Order' AS order_type,
-          'Rental Orders' AS order_group,
-          rental_description AS description,
-          item_code,
-          item_description,
-          NULL AS serial_number,
-          status
-        FROM rental_order_master
-        WHERE ${rentalFilters.join(' AND ')}
-        ORDER BY rental_order ASC
-        LIMIT $${limitParam}
-      `,
-      params,
-    )
-
-    return res.json({ data: [...serviceOrders.rows, ...rentalOrders.rows] })
+    return res.json({
+      data: rows,
+      hasMore,
+      nextOffset: offset + rows.length,
+    })
   } catch (error) {
     return next(error)
   }
@@ -666,9 +648,6 @@ export async function createIndent(req, res, next) {
 
     const indentValues = normalizeIndentPayload(req.validated.body)
     assertUniqueIndentItems(indentValues)
-    const approver = await resolveIndentApprover(indentValues)
-    indentValues.approver_email = approver.email
-    indentValues.approver_name = approver.name
 
     await client.query('BEGIN')
     await client.query('LOCK TABLE indent_headers IN EXCLUSIVE MODE')
@@ -718,12 +697,10 @@ export async function createIndent(req, res, next) {
           to_entity_id,
           status,
           synced_at,
-          approver_email,
-          approver_name,
           remarks,
           attachments
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, $13, $14, $15, $16::jsonb)
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, CURRENT_TIMESTAMP, $13, $14::jsonb)
         RETURNING id
       `,
       [
@@ -739,8 +716,6 @@ export async function createIndent(req, res, next) {
         indentValues.to_entity_type,
         indentValues.to_entity_id,
         indentValues.status,
-        indentValues.approver_email,
-        indentValues.approver_name,
         indentValues.remarks,
         JSON.stringify(indentValues.attachments),
       ],
@@ -793,45 +768,14 @@ export async function createIndent(req, res, next) {
       first_item: indentValues.items[0],
     })
 
-    await notifyIndentReviewRecipients(client, {
-      createdBy,
-      headerId,
-      indentNo,
-      requestTitle: indentValues.app_request_id || indentNo,
-    })
-
     await client.query('COMMIT')
 
     const indent = await fetchIndentById(headerId)
-    let notification = null
-    const shouldWaitForEmail = req.validated?.query?.wait_for_email === 'true'
-
-    if (shouldWaitForEmail) {
-      notification = await notifyApprover(indent)
-    } else {
-      notifyApprover(indent)
-        .then((result) => {
-          if (result?.skipped) {
-            console.warn('Indent approver notification skipped', result)
-            return
-          }
-
-          console.info('Indent approver notification sent', {
-            indent_no: indent.indent_no,
-            to: indent.approver_email,
-            messageId: result?.messageId,
-          })
-        })
-        .catch((error) => {
-          console.error('Unable to send indent approver notification', error)
-        })
-    }
 
     return res.status(201).json({
       message: `Indent ${indentNo} submitted successfully`,
       app_request_id: indentValues.app_request_id,
       indent_no: indentNo,
-      notification,
       data: indent,
     })
   } catch (error) {
@@ -840,6 +784,49 @@ export async function createIndent(req, res, next) {
   } finally {
     client.release()
   }
+}
+
+function normalizeOptionLimit(value) {
+  const parsed = Number.parseInt(String(value ?? ''), 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return 50
+  return Math.min(parsed, 500)
+}
+
+function normalizeOptionOffset(value) {
+  const parsed = Number.parseInt(String(value ?? ''), 10)
+  if (!Number.isFinite(parsed) || parsed < 0) return 0
+  return parsed
+}
+
+function normalizeFieldRole(role) {
+  const normalizedRole = String(role ?? '').trim().toUpperCase()
+
+  if (
+    normalizedRole === 'SIE' ||
+    normalizedRole === 'STE' ||
+    normalizedRole.includes('(SIE)') ||
+    normalizedRole.includes('(STE)') ||
+    normalizedRole.includes('SITE ENGINEER')
+    || normalizedRole.includes('STE ENGINEER')
+    || normalizedRole.includes('SITE INCHARGE ENGINEER')
+    || normalizedRole.includes('SITE IN-CHARGE ENGINEER')
+    || normalizedRole.includes('SITE IN CHARGE ENGINEER')
+  ) {
+    return 'SIE'
+  }
+
+  if (
+    normalizedRole === 'SRE' ||
+    normalizedRole === 'SER' ||
+    normalizedRole.includes('(SRE)') ||
+    normalizedRole.includes('(SER)') ||
+    normalizedRole.includes('SITE RECEIVING') ||
+    normalizedRole.includes('SERVICE ENGINEER')
+  ) {
+    return 'SER'
+  }
+
+  return null
 }
 
 export async function updateIndentStatus(req, res, next) {
@@ -851,37 +838,16 @@ export async function updateIndentStatus(req, res, next) {
 
     await client.query('BEGIN')
 
-    const existingStatusResult = await client.query(
-      `
-        SELECT status, created_by
-        FROM indent_headers
-        WHERE id = $1
-        LIMIT 1
-      `,
-      [id],
-    )
-
-    if (!existingStatusResult.rows[0]) {
-      await client.query('ROLLBACK')
-      return res.status(404).json({ message: 'Indent not found' })
-    }
-
-    if (isFinalIndentStatus(existingStatusResult.rows[0].status)) {
-      await client.query('ROLLBACK')
-      return res.status(400).json({ message: 'This request is already finalized and cannot be modified.' })
-    }
-
     const result = await client.query(
       `
         UPDATE indent_headers
         SET status = $2::varchar,
-            approved_by = $3,
-            approved_at = CASE WHEN $2::text IN ('Approved', 'Rejected', 'Issue', 'Issued') THEN CURRENT_TIMESTAMP ELSE approved_at END,
+            approved_at = CASE WHEN $2::text = 'Approved' THEN COALESCE(approved_at, CURRENT_TIMESTAMP) ELSE approved_at END,
             updated_at = CURRENT_TIMESTAMP
         WHERE id = $1
-        RETURNING id, indent_no, created_by, status
+        RETURNING id, indent_no
       `,
-      [id, status, req.user?.login_name ?? null],
+      [id, status],
     )
 
     if (!result.rows[0]) {
@@ -902,14 +868,6 @@ export async function updateIndentStatus(req, res, next) {
       `,
       [result.rows[0].indent_no, status],
     )
-
-    await notifyIndentRequester(client, {
-      actorLogin: req.user?.login_name ?? null,
-      indentId: result.rows[0].id,
-      indentNo: result.rows[0].indent_no,
-      recipientLogin: result.rows[0].created_by,
-      status: result.rows[0].status,
-    })
 
     await client.query('COMMIT')
 
@@ -1001,9 +959,7 @@ function normalizeIndentPayload(body) {
       requirement_type: body.requirement_type,
       indent_type: body.indent_type ?? body.requirement_type ?? 'Issue',
       to_entity_type: inferDestinationType(body),
-      to_entity_id: body.orderNo || body.equipmentDisplay || null,
-      approver_email: pickFirstValue(body.approver_email, body.approverEmail, env.indentApproverEmail),
-      approver_name: pickFirstValue(body.approver_name, body.approverName, env.indentApproverName),
+      to_entity_id: body.to_entity_id || body.orderNo || body.equipmentDisplay || null,
       status: normalizeIncomingStatus(body.status),
       remarks: body.app_request_id,
       attachments,
@@ -1013,11 +969,11 @@ function normalizeIndentPayload(body) {
         make: item.make || body.equipmentDisplay || null,
         required_qty: item.required_qty ?? item.requestedQty,
         issued_qty: item.issuedQty ?? 0,
-        uom: item.uom,
+        uom: normalizeLineUom(item.uom),
         work_type: item.workType ?? null,
-        activity_code: pickFirstValue(item.activity_code, item.activityId, item.activityCode),
-        location_code: pickFirstValue(item.location_code, item.locationId, item.locationCode, body.delivery_location),
-        to_entity_id: pickFirstValue(item.to_entity_id, item.toEntityId, item.toBusinessPartner, item.businessPartnerCode),
+        activity_code: item.activityId ?? null,
+        location_code: item.locationId ?? body.delivery_location ?? null,
+        to_entity_id: item.to_entity_id || item.toBusinessPartner || null,
         remarks: item.remarks ?? null,
         attachment_url: item.attachmentUrl ?? null,
       })),
@@ -1036,8 +992,6 @@ function normalizeIndentPayload(body) {
       indent_type: body.indent_type ?? 'Issue',
       to_entity_type: body.to_entity_type ?? null,
       to_entity_id: body.to_entity_id ?? null,
-      approver_email: pickFirstValue(body.approver_email, env.indentApproverEmail),
-      approver_name: pickFirstValue(body.approver_name, env.indentApproverName),
       status: 'Pending',
       remarks: body.remarks ?? null,
       attachments: [],
@@ -1051,7 +1005,6 @@ function normalizeIndentPayload(body) {
         work_type: body.work_type ?? null,
         activity_code: body.activity_code ?? null,
         location_code: body.delivery_location,
-        to_entity_id: body.to_entity_id ?? null,
         remarks: body.remarks ?? null,
         attachment_url: null,
       }],
@@ -1074,8 +1027,6 @@ function normalizeIndentPayload(body) {
     indent_type: body.indentType || 'Issue',
     to_entity_type: inferDestinationType(body),
     to_entity_id: body.orderNo || body.equipmentDisplay || null,
-    approver_email: pickFirstValue(body.approver_email, body.approverEmail, env.indentApproverEmail),
-    approver_name: pickFirstValue(body.approver_name, body.approverName, env.indentApproverName),
     status: normalizeIncomingStatus(body.status),
     remarks: body.requestNo ?? null,
     attachments,
@@ -1085,11 +1036,10 @@ function normalizeIndentPayload(body) {
       make: body.equipmentDisplay || null,
       required_qty: item.requestedQty,
       issued_qty: item.issuedQty ?? 0,
-      uom: item.uom,
+      uom: normalizeLineUom(item.uom),
       work_type: item.workType ?? null,
-      activity_code: pickFirstValue(item.activity_code, item.activityId, item.activityCode),
-      location_code: pickFirstValue(item.location_code, item.locationId, item.locationCode),
-      to_entity_id: pickFirstValue(item.to_entity_id, item.toEntityId, item.toBusinessPartner, item.businessPartnerCode),
+      activity_code: item.activityId ?? null,
+      location_code: item.locationId ?? null,
       remarks: item.remarks ?? null,
       attachment_url: item.attachmentUrl ?? null,
     })),
@@ -1098,16 +1048,17 @@ function normalizeIndentPayload(body) {
 
 function assertUniqueIndentItems(indentValues) {
   const seenItems = new Map()
+  const projectCode = normalizeDuplicateKey(indentValues.project_code)
 
   for (const item of indentValues.items) {
     const itemCode = normalizeDuplicateKey(item.item_code)
     const locationCode = normalizeDuplicateKey(item.location_code)
     const activityCode = normalizeDuplicateKey(item.activity_code)
-    const businessPartner = normalizeDuplicateKey(item.to_entity_id ?? indentValues.to_entity_id)
-    const duplicateKey = [itemCode, locationCode, activityCode, businessPartner].join('|')
+    const businessPartner = normalizeDuplicateKey(item.to_entity_id || indentValues.to_entity_id)
+    const duplicateKey = [projectCode, itemCode, locationCode, activityCode, businessPartner].join('|')
 
     if (seenItems.has(duplicateKey)) {
-      const error = new Error(`Item already present: ${item.item_code} is already added for the same location, activity, and business partner.`)
+      const error = new Error(`Material ${item.item_code} is already there for the same project, location, activity, and business partner.`)
       error.statusCode = 400
       throw error
     }
@@ -1117,45 +1068,12 @@ function assertUniqueIndentItems(indentValues) {
 }
 
 function normalizeDuplicateKey(value) {
-  const normalizedValue = String(value ?? '').trim()
-
-  if (!normalizedValue || normalizedValue === '-') {
-    return ''
-  }
-
-  return normalizedValue.toLowerCase()
-}
-
-function pickFirstValue(...values) {
-  for (const value of values) {
-    if (value === undefined || value === null) {
-      continue
-    }
-
-    const normalizedValue = String(value).trim()
-
-    if (normalizedValue && normalizedValue !== '-') {
-      return normalizedValue
-    }
-  }
-
-  return null
-}
-
-function normalizeIdentityValues(user = {}) {
-  return [...new Set([
-    user.login_name,
-    user.employeeId,
-    user.employee_id,
-    user.user_id,
-    user.userId,
-  ]
-    .map(normalizeIdentityValue)
-    .filter(Boolean))]
-}
-
-function normalizeIdentityValue(value) {
   return String(value ?? '').trim().toLowerCase()
+}
+
+function normalizeLineUom(value) {
+  const normalizedValue = String(value ?? '').trim()
+  return normalizedValue || 'NOS'
 }
 
 function inferDestinationType(body) {
@@ -1164,329 +1082,10 @@ function inferDestinationType(body) {
   return body.engineerType === 'SER' ? 'Service_Order' : 'Project_Location'
 }
 
-function normalizeFieldAssignmentRole(role) {
-  const normalizedRole = String(role ?? '').trim().toUpperCase()
-
-  if (
-    normalizedRole === 'SIE' ||
-    normalizedRole === 'STE' ||
-    normalizedRole.includes('(SIE)') ||
-    normalizedRole.includes('(STE)') ||
-    normalizedRole.includes('SITE ENGINEER') ||
-    normalizedRole.includes('STE ENGINEER') ||
-    normalizedRole.includes('SITE INCHARGE ENGINEER') ||
-    normalizedRole.includes('SITE IN-CHARGE ENGINEER') ||
-    normalizedRole.includes('SITE IN CHARGE ENGINEER')
-  ) {
-    return 'SIE'
-  }
-
-  if (
-    normalizedRole === 'SER' ||
-    normalizedRole === 'SRE' ||
-    normalizedRole.includes('(SER)') ||
-    normalizedRole.includes('(SRE)') ||
-    normalizedRole.includes('SITE RECEIVING')
-  ) {
-    return 'SER'
-  }
-
-  return null
-}
-
 function normalizeIncomingStatus(status) {
   if (!status) return 'Created'
   if (status === 'PendingApproval') return 'Pending'
   return status
-}
-
-function normalizeOptionLimit(value) {
-  const parsed = Number.parseInt(String(value ?? '500'), 10)
-  if (!Number.isFinite(parsed)) return 500
-  return Math.max(1, Math.min(parsed, 500))
-}
-
-function normalizeOptionOffset(value) {
-  const parsed = Number.parseInt(String(value ?? '0'), 10)
-  if (!Number.isFinite(parsed)) return 0
-  return Math.max(0, parsed)
-}
-
-function formatOptionRows(rows, limit, offset) {
-  const data = rows.slice(0, limit)
-  return {
-    data,
-    hasMore: rows.length > limit,
-    nextOffset: offset + data.length,
-  }
-}
-
-function buildIndentDateFilter(queryParams = {}) {
-  const dateFrom = normalizeDateFilter(queryParams.date_from)
-  const dateTo = normalizeDateFilter(queryParams.date_to)
-
-  if (dateFrom && dateTo && dateFrom > dateTo) {
-    const error = new Error('From date cannot be after To date.')
-    error.statusCode = 400
-    throw error
-  }
-
-  const filters = []
-  const params = []
-
-  if (dateFrom) {
-    params.push(dateFrom)
-    filters.push(`h.created_at >= $${params.length}::date`)
-  }
-
-  if (dateTo) {
-    params.push(dateTo)
-    filters.push(`h.created_at < ($${params.length}::date + INTERVAL '1 day')`)
-  }
-
-  return {
-    whereClause: filters.length ? `WHERE ${filters.join(' AND ')}` : '',
-    params,
-  }
-}
-
-function buildMyIndentDateFilter(queryParams = {}) {
-  const dateFrom = normalizeDateFilter(queryParams.date_from)
-  const dateTo = normalizeDateFilter(queryParams.date_to)
-
-  if (dateFrom && dateTo && dateFrom > dateTo) {
-    const error = new Error('From date cannot be after To date.')
-    error.statusCode = 400
-    throw error
-  }
-
-  const filters = []
-  const params = []
-
-  if (dateFrom) {
-    params.push(dateFrom)
-    filters.push(`COALESCE(h.created_at, i.created_at) >= $${params.length}::date`)
-  }
-
-  if (dateTo) {
-    params.push(dateTo)
-    filters.push(`COALESCE(h.created_at, i.created_at) < ($${params.length}::date + INTERVAL '1 day')`)
-  }
-
-  return {
-    whereClause: filters.length ? `WHERE ${filters.join(' AND ')}` : '',
-    params,
-  }
-}
-
-function normalizeDateFilter(value) {
-  const candidate = Array.isArray(value) ? value[0] : value
-  const normalized = String(candidate ?? '').trim()
-
-  if (!normalized) {
-    return ''
-  }
-
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(normalized)) {
-    const error = new Error('Date filters must be in YYYY-MM-DD format.')
-    error.statusCode = 400
-    throw error
-  }
-
-  return normalized
-}
-
-async function resolveIndentApprover(indentValues) {
-  const result = await query(
-    `
-      SELECT
-        u.login_name,
-        u.employee_name,
-        COALESCE(u.email_id, '') AS email_id,
-        assignment.responsibility
-      FROM user_project_assignment_master assignment
-      LEFT JOIN users u ON u.login_name = assignment.employee_id
-      WHERE assignment.project_id = $1
-        AND COALESCE(assignment.manual_status, 'Active') = 'Active'
-        AND (assignment.valid_from IS NULL OR assignment.valid_from <= CURRENT_DATE)
-        AND (assignment.valid_to IS NULL OR assignment.valid_to >= CURRENT_DATE)
-        AND (
-          UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%PROJECT%INCHARGE%'
-          OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%PROJECT%IN-CHARGE%'
-          OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%PROJECT%IN CHARGE%'
-          OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%PROJECT%CHARGE%'
-          OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%INCHARGE%'
-          OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%IN-CHARGE%'
-          OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) LIKE '%IN CHARGE%'
-        )
-        AND COALESCE(u.is_deleted, FALSE) = FALSE
-        AND COALESCE(u.is_active, TRUE) = TRUE
-      ORDER BY assignment.id ASC
-      LIMIT 1
-    `,
-    [indentValues.project_code],
-  )
-  const projectIncharge = result.rows[0]
-
-  return {
-    email: TEMP_INDENT_APPROVER_EMAIL,
-    name: projectIncharge?.employee_name || pickFirstValue(indentValues.approver_name, env.indentApproverName) || 'Project Incharge',
-  }
-}
-
-async function notifyIndentReviewRecipients(client, { createdBy, headerId, indentNo, requestTitle }) {
-  const recipients = await resolveIndentReviewRecipients(client, createdBy)
-
-  await createIndentNotifications(client, recipients, {
-    indentHeaderId: headerId,
-    indentNo,
-    title: 'New indent request',
-    message: `${requestTitle} is waiting for approval.`,
-    status: 'Pending',
-    targetPath: `/transactions/${headerId}`,
-  })
-}
-
-async function notifyIndentRequester(client, { actorLogin, indentId, indentNo, recipientLogin, status }) {
-  if (!recipientLogin || recipientLogin === actorLogin) {
-    return
-  }
-
-  const normalizedStatus = normalizeIndentStatusForNotification(status)
-  await createIndentNotifications(client, [recipientLogin], {
-    indentHeaderId: indentId,
-    indentNo,
-    title: `Indent ${normalizedStatus}`,
-    message: `${indentNo} has been ${normalizedStatus.toLowerCase()}.`,
-    status: normalizedStatus,
-    targetPath: `/indent-workspace/indents/${indentId}`,
-  })
-}
-
-async function resolveIndentReviewRecipients(client, createdBy) {
-  const adminResult = await client.query(
-    `
-      SELECT DISTINCT u.login_name
-      FROM users u
-      LEFT JOIN user_project_assignment_master assignment
-        ON assignment.employee_id = u.login_name
-        AND COALESCE(assignment.manual_status, 'Active') = 'Active'
-        AND (assignment.valid_from IS NULL OR assignment.valid_from <= CURRENT_DATE)
-        AND (assignment.valid_to IS NULL OR assignment.valid_to >= CURRENT_DATE)
-      WHERE COALESCE(u.is_deleted, FALSE) = FALSE
-        AND COALESCE(u.is_active, TRUE) = TRUE
-        AND (
-          UPPER(TRIM(COALESCE(u.primary_role, ''))) IN ('SUPER ADMIN', 'ADMINISTRATOR', 'ADMIN')
-          OR UPPER(TRIM(COALESCE(assignment.responsibility, ''))) IN ('SUPER ADMIN', 'ADMINISTRATOR', 'ADMIN')
-        )
-    `,
-  )
-
-  return [...new Set(adminResult.rows.map((row) => row.login_name).filter((recipient) => recipient && recipient !== createdBy))]
-}
-
-async function createIndentNotifications(client, recipients, { indentHeaderId, indentNo, title, message, status, targetPath }) {
-  const uniqueRecipients = [...new Set(recipients)].filter(Boolean)
-
-  for (const recipient of uniqueRecipients) {
-    await client.query(
-      `
-        INSERT INTO notifications (
-          recipient_login,
-          indent_header_id,
-          indent_no,
-          title,
-          message,
-          status,
-          target_path
-        )
-        VALUES ($1, $2, $3, $4, $5, $6, $7)
-      `,
-      [recipient, indentHeaderId, indentNo, title, message, status, targetPath],
-    )
-  }
-}
-
-function normalizeIndentStatusForNotification(status) {
-  const normalized = String(status ?? '').trim()
-  if (normalized === 'Issue') {
-    return 'Issued'
-  }
-  return normalized || 'Updated'
-}
-
-function isFinalIndentStatus(status) {
-  return ['APPROVED', 'REJECTED', 'ISSUE', 'ISSUED', 'PARTIALLYISSUED', 'COMPLETED'].includes(String(status ?? '').trim().toUpperCase())
-}
-
-async function notifyApprover(indent) {
-  const recipientEmail = pickFirstValue(indent.approver_email, env.indentApproverEmail)
-
-  if (!recipientEmail) {
-    return
-  }
-
-  const appBaseUrl = String(env.appBaseUrl || '').replace(/\/+$/, '')
-  const requestUrl = `${appBaseUrl}/transactions/${indent.id}`
-  const subject = `Indent approval needed: ${indent.app_request_id || indent.indent_no}`
-  const approverName = pickFirstValue(indent.approver_name, env.indentApproverName) || 'Approver'
-  const requestTitle = indent.app_request_id || indent.indent_no
-  const project = formatEmailPair(indent.project_code, indent.project_name)
-  const warehouse = formatEmailPair(indent.source_warehouse, indent.source_warehouse_name)
-
-  return sendMail({
-    to: recipientEmail,
-    subject,
-    text: [
-      `Hello ${approverName},`,
-      '',
-      `A new indent request is waiting for your action: ${requestTitle}.`,
-      `Indent: ${indent.indent_no}`,
-      `Project: ${project}`,
-      `Warehouse: ${warehouse}`,
-      `Created by: ${formatEmailPair(indent.created_by, indent.created_by_name)}`,
-      '',
-      `Open request: ${requestUrl}`,
-    ].join('\n'),
-    html: `
-      <div style="font-family: Arial, sans-serif; color: #0f172a; line-height: 1.5;">
-        <p>Hello ${escapeHtml(approverName)},</p>
-        <p>A new indent request is waiting for your action.</p>
-        <table style="border-collapse: collapse; margin: 16px 0;">
-          <tr><td style="padding: 4px 12px 4px 0; font-weight: 700;">Request</td><td>${escapeHtml(requestTitle)}</td></tr>
-          <tr><td style="padding: 4px 12px 4px 0; font-weight: 700;">Indent</td><td>${escapeHtml(indent.indent_no)}</td></tr>
-          <tr><td style="padding: 4px 12px 4px 0; font-weight: 700;">Project</td><td>${escapeHtml(project)}</td></tr>
-          <tr><td style="padding: 4px 12px 4px 0; font-weight: 700;">Warehouse</td><td>${escapeHtml(warehouse)}</td></tr>
-          <tr><td style="padding: 4px 12px 4px 0; font-weight: 700;">Created by</td><td>${escapeHtml(formatEmailPair(indent.created_by, indent.created_by_name))}</td></tr>
-        </table>
-        <p>
-          <a href="${escapeHtml(requestUrl)}" style="display:inline-block;background:#2563eb;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;font-weight:700;">
-            Open Indent Request
-          </a>
-        </p>
-      </div>
-    `,
-  })
-}
-
-function formatEmailPair(code, description) {
-  const cleanCode = String(code ?? '').trim()
-  const cleanDescription = String(description ?? '').trim()
-
-  if (cleanCode && cleanDescription) {
-    return `${cleanCode} (${cleanDescription})`
-  }
-
-  return cleanCode || cleanDescription || '-'
-}
-
-function escapeHtml(value) {
-  return String(value ?? '')
-    .replaceAll('&', '&amp;')
-    .replaceAll('<', '&lt;')
-    .replaceAll('>', '&gt;')
-    .replaceAll('"', '&quot;')
-    .replaceAll("'", '&#039;')
 }
 
 async function ensureMobileIndentReferences(client, indentValues) {
@@ -1610,104 +1209,15 @@ async function fetchIndentById(id) {
   return result.rows[0]
 }
 
-async function fetchIndentByIdentifier(identifier) {
-  if (isUuid(identifier)) {
-    const indent = await fetchIndentById(identifier)
-
-    if (indent) {
-      return indent
-    }
-  }
-
-  const headerResult = await query(
-    `
-      ${INDENT_SELECT_SQL}
-      WHERE h.indent_no = $1
-         OR h.app_request_id = $1
-      LIMIT 1
-    `,
-    [identifier],
-  )
-
-  if (headerResult.rows[0]) {
-    return headerResult.rows[0]
-  }
-
-  return fetchLegacyIndentByIdentifier(identifier)
-}
-
-function isUuid(value) {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value ?? '').trim())
-}
-
-async function fetchLegacyIndentById(id) {
-  return fetchLegacyIndentByIdentifier(id)
-}
-
-async function fetchLegacyIndentByIdentifier(identifier) {
+async function fetchIndentByIdForUser(id, createdBy) {
   const result = await query(
     `
-      SELECT
-        i.id,
-        NULL AS app_request_id,
-        i.indent_no,
-        i.created_by,
-        u.employee_name AS created_by_name,
-        i.project_code,
-        pm.project_description AS project_name,
-        NULL AS source_warehouse,
-        NULL AS source_warehouse_name,
-        NULL AS source_location,
-        i.delivery_location,
-        COALESCE(dm.description_1, dm.delivery_point) AS delivery_location_name,
-        i.requirement_type,
-        i.requirement_type AS indent_type,
-        NULL AS to_entity_type,
-        NULL AS to_entity_id,
-        i.status::text AS status,
-        NULL AS synced_at,
-        NULL AS approved_by,
-        NULL AS approved_by_name,
-        NULL AS approved_at,
-        NULL AS approver_email,
-        NULL AS approver_name,
-        '[]'::jsonb AS attachments,
-        i.created_at,
-        i.updated_at,
-        json_build_array(
-          json_build_object(
-            'id', i.id,
-            'line_number', 1,
-            'item_code', i.item_code,
-            'item_name', im.item_description,
-            'make', i.make,
-            'uom', i.uom,
-            'required_qty', i.required_qty,
-            'issued_qty', 0,
-            'work_type', i.requirement_type,
-            'activity_code', NULL,
-            'location_code', i.delivery_location,
-            'remarks', i.remarks,
-            'attachment_url', NULL
-          )
-        ) AS items
-      FROM indents i
-      LEFT JOIN users u ON u.login_name = i.created_by
-      LEFT JOIN project_master pm ON pm.project_code = i.project_code
-      LEFT JOIN delivery_master dm ON dm.project_code = i.project_code AND dm.delivery_point = i.delivery_location
-      LEFT JOIN LATERAL (
-        SELECT item_description
-        FROM item_master item_lookup
-        WHERE item_lookup.project_site = i.project_code
-          AND item_lookup.item_code = i.item_code
-        ORDER BY item_lookup.id
-        LIMIT 1
-      ) im ON TRUE
-      WHERE i.id::text = $1
-         OR i.indent_no = $1
+      ${INDENT_SELECT_SQL}
+      WHERE h.id = $1
+        AND h.created_by = $2
       LIMIT 1
     `,
-    [String(identifier ?? '').trim()],
+    [id, createdBy],
   )
 
   return result.rows[0]
@@ -1719,12 +1229,6 @@ function handleIndentError(error, res, next) {
   }
 
   if (error.code === '23505') {
-    if (error.constraint === 'idx_indent_lines_unique_item_context') {
-      return res.status(400).json({
-        message: 'Item already present for the same location and activity in this request.',
-      })
-    }
-
     return res.status(409).json({ message: 'An indent with this number already exists' })
   }
 

@@ -1,6 +1,7 @@
 using CommunityToolkit.Mvvm.ComponentModel;
 using CommunityToolkit.Mvvm.Input;
 using IndentMate.Mobile.Data;
+using IndentMate.Mobile.Services;
 using System.Collections.ObjectModel;
 
 namespace IndentMate.Mobile.ViewModels;
@@ -8,32 +9,47 @@ namespace IndentMate.Mobile.ViewModels;
 public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
 {
     private const long MaxAttachmentBytes = 5 * 1024 * 1024;
+    private const int SearchPageSize = 80;
     private readonly DatabaseService _databaseService;
+    private readonly ApiService _apiService;
     private LocalIndent? _indent;
     private LocalProject? _project;
+    private int _materialOffset;
+    private int _materialSearchVersion;
+    private string _materialSearchText = string.Empty;
 
     public ObservableCollection<LocalItem> Materials { get; } = new();
+    public List<string> Categories { get; } = new() { "Spare", "Diesel", "Other" };
 
     [ObservableProperty] private string _indentId = string.Empty;
     [ObservableProperty] private LocalItem? _selectedMaterial;
+    [ObservableProperty] private string _selectedCategory = "Spare";
     [ObservableProperty] private string _uoM = string.Empty;
     [ObservableProperty] private string _requestedQty = string.Empty;
     [ObservableProperty] private string _remarks = string.Empty;
     [ObservableProperty] private string _attachmentName = string.Empty;
     [ObservableProperty] private string _attachmentPath = string.Empty;
     [ObservableProperty] private string _validationMessage = string.Empty;
+    [ObservableProperty] private bool _isMaterialSearchLoading;
+    [ObservableProperty] private bool _hasMoreMaterials;
 
     public bool HasAttachment => !string.IsNullOrWhiteSpace(AttachmentName);
     public bool HasValidationError => !string.IsNullOrWhiteSpace(ValidationMessage);
 
     public AddItemSERViewModel()
-        : this(new DatabaseService(Path.Combine(FileSystem.AppDataDirectory, "indentmate.db")))
+        : this(new DatabaseService(Path.Combine(FileSystem.AppDataDirectory, "indentmate.db")), new ApiService())
     {
     }
 
     public AddItemSERViewModel(DatabaseService databaseService)
+        : this(databaseService, new ApiService())
+    {
+    }
+
+    public AddItemSERViewModel(DatabaseService databaseService, ApiService apiService)
     {
         _databaseService = databaseService;
+        _apiService = apiService;
     }
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
@@ -61,35 +77,33 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
     }
 
     [RelayCommand]
+    private async Task AttachCameraAsync()
+    {
+        ValidationMessage = string.Empty;
+        var photo = await MediaPicker.Default.CapturePhotoAsync();
+        if (photo is not null)
+        {
+            AttachmentName = photo.FileName;
+            AttachmentPath = photo.FullPath ?? string.Empty;
+        }
+    }
+
+    [RelayCommand]
     private async Task AttachFileAsync()
     {
         ValidationMessage = string.Empty;
+        var file = await FilePicker.Default.PickAsync();
+        if (file is null) return;
 
-        var action = await Shell.Current.DisplayActionSheet("Attachment", "Cancel", null, "Camera", "Browse File");
-        if (action == "Camera")
+        await using var stream = await file.OpenReadAsync();
+        if (stream.Length > MaxAttachmentBytes)
         {
-            var photo = await MediaPicker.Default.CapturePhotoAsync();
-            if (photo is not null)
-            {
-                AttachmentName = photo.FileName;
-                AttachmentPath = photo.FullPath ?? string.Empty;
-            }
+            ValidationMessage = "Attachment size must be 5 MB or less.";
+            return;
         }
-        else if (action == "Browse File")
-        {
-            var file = await FilePicker.Default.PickAsync();
-            if (file is null) return;
 
-            await using var stream = await file.OpenReadAsync();
-            if (stream.Length > MaxAttachmentBytes)
-            {
-                ValidationMessage = "Attachment size must be 5 MB or less.";
-                return;
-            }
-
-            AttachmentName = file.FileName;
-            AttachmentPath = file.FullPath ?? string.Empty;
-        }
+        AttachmentName = file.FileName;
+        AttachmentPath = file.FullPath ?? string.Empty;
     }
 
     [RelayCommand]
@@ -125,7 +139,13 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
         {
             if (await _databaseService.CountItemsForIndentAsync(_indent.IndentId) >= 20)
             {
-                await Shell.Current.DisplayAlert("Limit reached", "Maximum 20 items reached", "OK");
+                await Shell.Current.DisplayAlert("Limit reached", "Maximum 20 items allowed per indent.", "OK");
+                return;
+            }
+
+            if (await _databaseService.HasDuplicateSERItemAsync(_indent.IndentId, SelectedMaterial.ItemCode))
+            {
+                ValidationMessage = "This material has already been added to this indent.";
                 return;
             }
 
@@ -135,7 +155,7 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
                 IndentId = _indent.IndentId,
                 MaterialCode = SelectedMaterial.ItemCode,
                 MaterialDesc = SelectedMaterial.Description,
-                WorkType = "SER",
+                WorkType = SelectedCategory,
                 UoM = UoM,
                 RequestedQty = qty,
                 Remarks = Remarks,
@@ -154,27 +174,95 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
             if (_indent is null) return;
 
             _project = await _databaseService.GetProjectAsync(_indent.ProjectId);
-            await LoadMaterialsAsync();
+            Materials.Clear();
+            SelectedMaterial = null;
+            HasMoreMaterials = false;
+            await SearchMaterialsAsync(string.Empty);
         });
     }
 
-    private async Task LoadMaterialsAsync()
+    [RelayCommand]
+    private async Task SearchMaterialsAsync(string? search)
     {
-        Materials.Clear();
+        var query = (search ?? string.Empty).Trim();
+        _materialSearchText = query;
+        _materialOffset = 0;
+        HasMoreMaterials = false;
 
         if (_indent is null)
             return;
 
-        var siteCode = _project?.SiteCode;
-        if (string.IsNullOrWhiteSpace(siteCode))
-            siteCode = _indent.ProjectId;
+        var version = ++_materialSearchVersion;
+        await LoadMaterialPageAsync(query, reset: true, version);
+    }
 
-        var materials = await _databaseService.GetItemsForSiteAsync(siteCode);
-        foreach (var material in materials.OrderBy(material => material.ItemCode))
+    [RelayCommand]
+    private async Task LoadMoreMaterialsAsync(string? search)
+    {
+        var query = string.IsNullOrWhiteSpace(search) ? _materialSearchText : search.Trim();
+
+        if (!HasMoreMaterials || IsMaterialSearchLoading)
+            return;
+
+        var version = ++_materialSearchVersion;
+        await LoadMaterialPageAsync(query, reset: false, version);
+    }
+
+    private async Task LoadMaterialPageAsync(string query, bool reset, int version)
+    {
+        if (_indent is null)
+            return;
+
+        IsMaterialSearchLoading = true;
+        try
         {
-            Materials.Add(material);
-        }
+            var projectCode = GetPrimarySiteCode();
+            var offset = reset ? 0 : _materialOffset;
+            var result = await _apiService.SearchItemsForProjectAsync(projectCode, string.Empty, query, SearchPageSize, offset, "all");
+            if (version != _materialSearchVersion)
+                return;
 
-        SelectedMaterial ??= Materials.FirstOrDefault();
+            if (result.Data.Count != 0)
+                await _databaseService.SaveBatchAsync(result.Data);
+
+            if (version != _materialSearchVersion)
+                return;
+
+            if (reset)
+                Materials.Clear();
+
+            AddMaterials(result.Data);
+            _materialOffset = result.NextOffset;
+            HasMoreMaterials = result.HasMore;
+        }
+        catch
+        {
+            ValidationMessage = "Could not search materials. Please try again.";
+        }
+        finally
+        {
+            if (version == _materialSearchVersion)
+                IsMaterialSearchLoading = false;
+        }
+    }
+
+    private void AddMaterials(IEnumerable<LocalItem> materials)
+    {
+        foreach (var material in materials.OrderBy(m => m.ItemCode))
+        {
+            if (!Materials.Any(existing =>
+                    string.Equals(existing.ItemCode, material.ItemCode, StringComparison.OrdinalIgnoreCase)))
+            {
+                Materials.Add(material);
+            }
+        }
+    }
+
+    private string GetPrimarySiteCode()
+    {
+        return new[] { _project?.SiteCode, _project?.ProjectId, _indent?.ProjectId }
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Select(code => code!.Trim())
+            .FirstOrDefault() ?? string.Empty;
     }
 }

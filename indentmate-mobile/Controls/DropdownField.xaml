@@ -3,15 +3,16 @@
     x:Class="IndentMate.Mobile.Controls.DropdownField"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:glyphs="clr-namespace:IndentMate.Mobile.Resources"
     x:Name="Root"
-    HorizontalOptions="Fill"
-    HeightRequest="52">
+    HeightRequest="52"
+    HorizontalOptions="Fill">
 
     <Border
         x:Name="TriggerBorder"
-        Padding="16,0"
         BackgroundColor="White"
         HeightRequest="52"
+        Padding="16,0"
         Stroke="#D6DEE9"
         StrokeShape="RoundRectangle 10"
         StrokeThickness="1">
@@ -26,9 +27,12 @@
                 TextColor="#101828"
                 VerticalOptions="Center" />
             <Label
+                x:Name="ChevronLabel"
                 Grid.Column="1"
-                FontSize="18"
-                Text="&#x2304;"
+                FontAttributes="Bold"
+                FontFamily="MaterialIcons"
+                FontSize="12"
+                Text="{x:Static glyphs:IconGlyphs.ChevronDown}"
                 TextColor="#667085"
                 VerticalOptions="Center" />
         </Grid>

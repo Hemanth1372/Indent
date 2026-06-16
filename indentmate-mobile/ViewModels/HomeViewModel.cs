@@ -37,6 +37,49 @@ public partial class HomeViewModel : BaseViewModel
     [RelayCommand]
     private async Task NewIndentAsync()
     {
-        await Shell.Current.GoToAsync("indent-header");
+        var role = NormalizeRole(await SecureStorage.Default.GetAsync("user_role"));
+        var route = ResolveIndentHeaderRoute(role);
+
+        if (route is null)
+        {
+            await RedirectToLoginForInvalidRoleAsync();
+            return;
+        }
+
+        await Shell.Current.GoToAsync(route);
+    }
+
+    private static string NormalizeRole(string? role)
+    {
+        var normalizedRole = (role ?? string.Empty).Trim().ToUpperInvariant();
+
+        return normalizedRole switch
+        {
+            "SRE" => "SER",
+            _ when normalizedRole.Contains("(SER)") || normalizedRole.Contains("(SRE)") => "SER",
+            _ when normalizedRole.Contains("SERVICE ENGINEER") || normalizedRole.Contains("SITE RECEIVING") => "SER",
+            _ when normalizedRole.Contains("(SIE)") || normalizedRole.Contains("SITE ENGINEER") => "SIE",
+            _ => normalizedRole
+        };
+    }
+
+    private static string? ResolveIndentHeaderRoute(string? role)
+    {
+        return NormalizeRole(role) switch
+        {
+            "SIE" => "//sie-indent-header",
+            "SER" => "//ser-indent-header",
+            _ => null
+        };
+    }
+
+    private static async Task RedirectToLoginForInvalidRoleAsync()
+    {
+        SecureStorage.Default.Remove("session_active");
+        await Shell.Current.DisplayAlert(
+            "Role required",
+            "Access Denied: No valid SIE/SER role assigned to this user. Please login again.",
+            "OK");
+        await Shell.Current.GoToAsync("//login");
     }
 }

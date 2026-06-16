@@ -5,6 +5,7 @@ import * as XLSX from 'xlsx'
 import { NumberedPagination } from '../components/NumberedPagination'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
+import { isPortalAdminRole } from '../utils/roles'
 
 const PAGE_SIZE = 100
 const TABLE_HEADER_CELL_CLASS = 'bg-[#1b2e4b] px-5 py-[14px] text-[13px] font-semibold text-white tracking-[0.5px] normal-case border-b-2 border-[#0f1c30]'
@@ -174,7 +175,7 @@ export default function ResponsibilityMaster() {
   )
   const allVisibleRowsSelected = visibleRowKeys.length > 0 && selectedVisibleCount === visibleRowKeys.length
   const someVisibleRowsSelected = selectedVisibleCount > 0 && selectedVisibleCount < visibleRowKeys.length
-  const isSuperAdmin = currentUser?.role === 'Super Admin' || currentUser?.primary_role === 'Super Admin'
+  const isSuperAdmin = isPortalAdminRole(currentUser?.role ?? currentUser?.primary_role)
   const roleSelectOptions = useMemo(() => buildRoleSelectOptions(roles), [roles])
 
   useEffect(() => {

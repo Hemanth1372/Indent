@@ -28,11 +28,12 @@ public partial class SERIndentHeaderPage : ContentPage
     private async void OnBackClicked(object? sender, EventArgs e)
     {
         DropdownField.CloseAll();
-        await Shell.Current.GoToAsync("//home");
+        await Shell.Current.GoToAsync("//ser-dashboard");
     }
 
     private void OnFormTapped(object? sender, TappedEventArgs e)
     {
         DropdownField.CloseAllFromOutsideTap();
     }
+
 }

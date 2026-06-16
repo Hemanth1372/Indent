@@ -27,7 +27,8 @@ public class SyncService
 
     public async Task PushPendingIndentsAsync(CancellationToken ct = default)
     {
-        if (Connectivity.Current.NetworkAccess != NetworkAccess.Internet)
+        var access = Connectivity.Current.NetworkAccess;
+        if (access != NetworkAccess.Internet && access != NetworkAccess.ConstrainedInternet)
             return;
 
         if (!await _pushLock.WaitAsync(0, ct))
@@ -283,11 +284,17 @@ public class SyncService
                 return;
             }
 
-            if (result.StatusCode == HttpStatusCode.BadRequest)
+            // All non-success responses — mark with server's error message
+            if (!result.IsSuccessStatusCode)
             {
-                await _databaseService.MarkIndentSyncErrorAsync(
-                    indent.IndentId,
-                    ExtractErrorMessage(result.RawBody));
+                var errorMsg = ExtractErrorMessage(result.RawBody);
+                if (string.IsNullOrWhiteSpace(errorMsg))
+                {
+                    errorMsg = result.StatusCode == System.Net.HttpStatusCode.Unauthorized
+                        ? "Session expired. Please log out and log in again."
+                        : $"Server returned {(int)result.StatusCode}.";
+                }
+                await _databaseService.MarkIndentSyncErrorAsync(indent.IndentId, errorMsg);
             }
         }
         catch (HttpRequestException)
@@ -304,18 +311,30 @@ public class SyncService
     {
         var firstItem = items.FirstOrDefault();
 
+        // Pick the first non-empty delivery location across item, header, warehouse, project
+        var deliveryLocation = new[]
+        {
+            firstItem?.LocationId,
+            indent.FromLocationId,
+            indent.WarehouseId,
+            indent.ProjectId
+        }.FirstOrDefault(s => !string.IsNullOrWhiteSpace(s)) ?? string.Empty;
+
+        var requirementType = string.IsNullOrWhiteSpace(indent.IndentType) ? "Issue" : indent.IndentType;
+
         return new IndentSyncPayload
         {
             AppRequestId = indent.RequestNo,
             ProjectCode = indent.ProjectId,
             SourceWarehouse = indent.WarehouseId,
-            DeliveryLocation = firstItem?.LocationId ?? indent.FromLocationId,
-            RequirementType = indent.IndentType,
-            IndentType = indent.IndentType,
+            DeliveryLocation = deliveryLocation,
+            RequirementType = requirementType,
+            IndentType = requirementType,
             EngineerId = indent.EngineerId,
             EngineerType = indent.EngineerType,
             OrderNo = indent.OrderNo,
             OrderType = indent.OrderType,
+            ToEntityId = string.IsNullOrWhiteSpace(indent.ToContractorId) ? indent.OrderNo : indent.ToContractorId,
             EquipmentDisplay = indent.EquipmentDisplay,
             Status = "Created",
             Items = items.Select(item => new IndentSyncLinePayload
@@ -330,6 +349,7 @@ public class SyncService
                 Uom = item.UoM,
                 RequiredQty = item.RequestedQty,
                 RequestedQty = item.RequestedQty,
+                ToBusinessPartner = item.BusinessPartnerId,
                 Remarks = item.Remarks,
                 AttachmentUrl = item.AttachmentUrl
             }).ToList()
@@ -359,7 +379,7 @@ public class SyncService
 
     private async void HandleConnectivityChanged(object? sender, ConnectivityChangedEventArgs e)
     {
-        if (e.NetworkAccess != NetworkAccess.Internet)
+        if (e.NetworkAccess != NetworkAccess.Internet && e.NetworkAccess != NetworkAccess.ConstrainedInternet)
             return;
 
         try
@@ -405,6 +425,9 @@ public sealed class IndentSyncPayload
     [JsonProperty("orderType")]
     public string OrderType { get; set; } = string.Empty;
 
+    [JsonProperty("to_entity_id")]
+    public string ToEntityId { get; set; } = string.Empty;
+
     [JsonProperty("equipmentDisplay")]
     public string EquipmentDisplay { get; set; } = string.Empty;
 
@@ -446,6 +469,9 @@ public sealed class IndentSyncLinePayload
 
     [JsonProperty("requestedQty")]
     public decimal RequestedQty { get; set; }
+
+    [JsonProperty("toBusinessPartner")]
+    public string ToBusinessPartner { get; set; } = string.Empty;
 
     [JsonProperty("remarks")]
     public string Remarks { get; set; } = string.Empty;

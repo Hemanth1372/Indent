@@ -3,6 +3,8 @@
     x:Class="IndentMate.Mobile.Views.IndentHomePage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:controls="clr-namespace:IndentMate.Mobile.Controls"
+    xmlns:glyphs="clr-namespace:IndentMate.Mobile.Resources"
     xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
     BackgroundColor="#F4F7FB"
     Shell.NavBarIsVisible="False">
@@ -11,115 +13,566 @@
         <vm:IndentHomeViewModel />
     </ContentPage.BindingContext>
 
-    <Grid Padding="20" RowDefinitions="Auto,*">
-        <Grid ColumnDefinitions="*,Auto" Padding="0,0,0,18">
-            <Label
-                FontAttributes="Bold"
-                FontSize="24"
-                Text="{Binding DashboardTitle}"
-                TextColor="#172033"
-                VerticalOptions="Center" />
-            <Button
-                Grid.Column="1"
-                BackgroundColor="Transparent"
-                Command="{Binding LogoutCommand}"
-                FontSize="22"
-                HeightRequest="44"
+    <Grid RowDefinitions="Auto,*">
+
+        <Grid BackgroundColor="#F4F7FB" Padding="14,12,14,0">
+            <Border
+                BackgroundColor="#0E2A5C"
                 Padding="0"
-                Text="&#x23FB;"
-                TextColor="#172033"
-                WidthRequest="44" />
-        </Grid>
+                StrokeShape="RoundRectangle 14"
+                StrokeThickness="0">
+                <VerticalStackLayout Spacing="0">
 
-        <Grid Grid.Row="1">
-            <ScrollView>
-                <VerticalStackLayout Padding="0,0,0,86" Spacing="18">
-                    <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="12">
-                        <Border Grid.Row="0" Grid.Column="0" Padding="16" BackgroundColor="#1565D8" StrokeThickness="0" StrokeShape="RoundRectangle 8">
-                            <VerticalStackLayout Spacing="8">
-                                <Label FontSize="30" FontAttributes="Bold" Text="{Binding PendingApprovalCount}" TextColor="White" />
-                                <Label FontSize="13" Text="Pending for Approval" TextColor="White" />
-                            </VerticalStackLayout>
+                    <Grid ColumnDefinitions="40,*,40,40" ColumnSpacing="12" Padding="16,14,16,0">
+
+                        <Border
+                            BackgroundColor="#1AFFFFFF"
+                            HeightRequest="40"
+                            StrokeShape="RoundRectangle 12"
+                            StrokeThickness="0"
+                            VerticalOptions="Center"
+                            WidthRequest="40">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding BackCommand}" />
+                            </Border.GestureRecognizers>
+                            <controls:IconLabel
+                                Glyph="{x:Static glyphs:IconGlyphs.ArrowBack}"
+                                IconSize="20"
+                                IconColor="White"
+                                HorizontalOptions="Center"
+                                VerticalOptions="Center" />
                         </Border>
 
-                        <Border Grid.Row="0" Grid.Column="1" Padding="16" BackgroundColor="#102A43" StrokeThickness="0" StrokeShape="RoundRectangle 8">
-                            <VerticalStackLayout Spacing="8">
-                                <Label FontSize="30" FontAttributes="Bold" Text="{Binding IndentsRaisedCount}" TextColor="White" />
-                                <Label FontSize="13" Text="Indents Raised" TextColor="White" />
-                            </VerticalStackLayout>
+                        <Label
+                            Grid.Column="1"
+                            FontAttributes="Bold"
+                            FontSize="19"
+                            LineBreakMode="TailTruncation"
+                            Text="{Binding DashboardTitle}"
+                            TextColor="White"
+                            VerticalOptions="Center" />
+
+                        <Border
+                            Grid.Column="2"
+                            BackgroundColor="#1AFFFFFF"
+                            HeightRequest="40"
+                            HorizontalOptions="End"
+                            StrokeShape="Ellipse"
+                            StrokeThickness="0"
+                            VerticalOptions="Center"
+                            WidthRequest="40">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding RefreshCommand}" />
+                            </Border.GestureRecognizers>
+                            <controls:IconLabel
+                                Glyph="{x:Static glyphs:IconGlyphs.Refresh}"
+                                IconSize="18"
+                                IconColor="White"
+                                HorizontalOptions="Center"
+                                VerticalOptions="Center" />
                         </Border>
 
-                        <Border Grid.Row="1" Grid.Column="0" Padding="16" BackgroundColor="#D92D20" StrokeThickness="0" StrokeShape="RoundRectangle 8">
-                            <VerticalStackLayout Spacing="8">
-                                <Label FontSize="30" FontAttributes="Bold" Text="{Binding RejectedIndentsCount}" TextColor="White" />
-                                <Label FontSize="13" Text="Rejected Indents" TextColor="White" />
-                            </VerticalStackLayout>
-                        </Border>
-
-                        <Border Grid.Row="1" Grid.Column="1" Padding="16" BackgroundColor="#6B7280" StrokeThickness="0" StrokeShape="RoundRectangle 8">
-                            <VerticalStackLayout Spacing="8">
-                                <Label FontSize="30" FontAttributes="Bold" Text="{Binding CreatedStatusCount}" TextColor="White" />
-                                <Label FontSize="13" Text="Created Status" TextColor="White" />
-                            </VerticalStackLayout>
+                        <Border
+                            Grid.Column="3"
+                            BackgroundColor="#F7931E"
+                            HeightRequest="40"
+                            HorizontalOptions="End"
+                            StrokeShape="RoundRectangle 12"
+                            StrokeThickness="0"
+                            VerticalOptions="Center"
+                            WidthRequest="40">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding NewIndentCommand}" />
+                            </Border.GestureRecognizers>
+                            <controls:IconLabel
+                                Glyph="{x:Static glyphs:IconGlyphs.Add}"
+                                IconSize="26"
+                                IconColor="#0E2A5C"
+                                HorizontalOptions="Center"
+                                VerticalOptions="Center" />
                         </Border>
                     </Grid>
 
-                    <Label
-                        FontAttributes="Bold"
-                        FontSize="18"
-                        Text="Recent Requests"
-                        TextColor="#172033" />
+                    <BoxView
+                        BackgroundColor="#26FFFFFF"
+                        HeightRequest="1"
+                        Margin="16,14" />
 
-                    <CollectionView ItemsSource="{Binding RecentIndents}" EmptyView="No recent requests.">
+                    <Grid ColumnDefinitions="44,*,18" ColumnSpacing="12" Padding="16,0,16,16">
+                        <Border
+                            HeightRequest="44"
+                            Padding="2"
+                            StrokeShape="Ellipse"
+                            StrokeThickness="0"
+                            VerticalOptions="Center"
+                            WidthRequest="44">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#522E91" Offset="0.0" />
+                                    <GradientStop Color="#EC008C" Offset="0.35" />
+                                    <GradientStop Color="#F7931E" Offset="0.7" />
+                                    <GradientStop Color="#FDB913" Offset="1.0" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <Border
+                                BackgroundColor="#0E2A5C"
+                                StrokeShape="Ellipse"
+                                StrokeThickness="0">
+                                <Label
+                                    FontAttributes="Bold"
+                                    FontSize="14"
+                                    HorizontalOptions="Center"
+                                    Text="{Binding UserInitials}"
+                                    TextColor="White"
+                                    VerticalOptions="Center" />
+                            </Border>
+                        </Border>
+
+                        <VerticalStackLayout
+                            Grid.Column="1"
+                            Spacing="3"
+                            VerticalOptions="Center">
+                            <Label
+                                FontAttributes="Bold"
+                                FontSize="15"
+                                LineBreakMode="TailTruncation"
+                                Text="{Binding UserName}"
+                                TextColor="White" />
+                            <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="8">
+                                <Label
+                                    FontSize="12"
+                                    Text="{Binding UserId, StringFormat='ID {0}'}"
+                                    TextColor="#D9FFFFFF"
+                                    VerticalOptions="Center" />
+                                <Border
+                                    Grid.Column="1"
+                                    Padding="7,1"
+                                    Stroke="#8CFDB913"
+                                    StrokeShape="RoundRectangle 6"
+                                    StrokeThickness="1"
+                                    VerticalOptions="Center">
+                                    <Label
+                                        FontAttributes="Bold"
+                                        FontSize="11"
+                                        Text="{Binding UserEntity}"
+                                        TextColor="#FDB913" />
+                                </Border>
+                            </Grid>
+                        </VerticalStackLayout>
+
+                        <controls:IconLabel
+                            Grid.Column="2"
+                            Glyph="{x:Static glyphs:IconGlyphs.ChevronRight}"
+                            IconSize="18"
+                            IconColor="#80FFFFFF"
+                            HorizontalOptions="End"
+                            VerticalOptions="Center" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <!-- ── Header ──────────────────────────────────────────────────────── -->
+        <Grid
+            BackgroundColor="#1D2B58"
+            IsVisible="False"
+            RowDefinitions="Auto,Auto">
+
+            <!-- Title + action icon buttons -->
+            <Grid ColumnDefinitions="44,*,Auto,Auto" ColumnSpacing="10" Padding="18,40,18,16">
+
+                <!-- Back button -->
+                <Border
+                    BackgroundColor="#33FFFFFF"
+                    HeightRequest="44"
+                    StrokeShape="RoundRectangle 11"
+                    StrokeThickness="0"
+                    VerticalOptions="Center"
+                    WidthRequest="44">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding BackCommand}" />
+                    </Border.GestureRecognizers>
+                    <controls:IconLabel
+                        Glyph="{x:Static glyphs:IconGlyphs.Back}"
+                        IconColor="White"
+                        IconSize="20"
+                        HorizontalOptions="Center"
+                        VerticalOptions="Center" />
+                </Border>
+
+                <Label
+                    Grid.Column="1"
+                    FontAttributes="Bold"
+                    FontSize="22"
+                    Text="{Binding DashboardTitle}"
+                    TextColor="White"
+                    VerticalOptions="Center" />
+
+                <!-- Refresh icon button (sky-blue circle + sync arrows) -->
+                <Border
+                    Grid.Column="2"
+                    BackgroundColor="#2A3B70"
+                    HeightRequest="44"
+                    HorizontalOptions="End"
+                    StrokeShape="Ellipse"
+                    StrokeThickness="0"
+                    VerticalOptions="Center"
+                    WidthRequest="44">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding RefreshCommand}" />
+                    </Border.GestureRecognizers>
+                    <controls:IconLabel
+                        Glyph="{x:Static glyphs:IconGlyphs.Refresh}"
+                        IconSize="18"
+                        IconColor="White"
+                        HorizontalOptions="Center"
+                        VerticalOptions="Center" />
+                </Border>
+
+                <!-- New Indent icon button (white pill with blue +) -->
+                <Border
+                    Grid.Column="3"
+                    BackgroundColor="#F7931E"
+                    HeightRequest="44"
+                    HorizontalOptions="End"
+                    StrokeShape="RoundRectangle 11"
+                    StrokeThickness="0"
+                    VerticalOptions="Center"
+                    WidthRequest="44">
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding NewIndentCommand}" />
+                    </Border.GestureRecognizers>
+                    <controls:IconLabel
+                        Glyph="{x:Static glyphs:IconGlyphs.Add}"
+                        IconSize="28"
+                        IconColor="#1D2B58"
+                        HorizontalOptions="Center"
+                        VerticalOptions="Center" />
+                </Border>
+            </Grid>
+
+            <!-- User info strip with avatar initials -->
+            <Border
+                Grid.Row="1"
+                BackgroundColor="#162348"
+                Padding="18,13"
+                StrokeThickness="0">
+                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="12">
+                    <!-- User avatar circle with person silhouette -->
+                    <Border
+                        BackgroundColor="#2A3B70"
+                        HeightRequest="36"
+                        Stroke="#50608E"
+                        StrokeShape="Ellipse"
+                        StrokeThickness="1"
+                        VerticalOptions="Center"
+                        WidthRequest="36">
+                        <controls:IconLabel Glyph="{x:Static glyphs:IconGlyphs.Person}" IconSize="20" IconColor="White" />
+                    </Border>
+                    <Label
+                        Grid.Column="1"
+                        FontAttributes="Bold"
+                        FontSize="14"
+                        LineBreakMode="TailTruncation"
+                        Text="{Binding UserInfo}"
+                        TextColor="White"
+                        VerticalOptions="Center" />
+                </Grid>
+            </Border>
+        </Grid>
+
+        <!-- ── Content ─────────────────────────────────────────────────────── -->
+        <Grid Grid.Row="1">
+            <RefreshView
+                Command="{Binding RefreshCommand}"
+                RefreshColor="#F7931E">
+                <ScrollView>
+                <VerticalStackLayout Padding="22,22,22,32" Spacing="18">
+
+                    <!-- 2×2 stat cards (background + accent strip changes with count) -->
+                    <Grid
+                        ColumnDefinitions="*,*"
+                        ColumnSpacing="12"
+                        RowDefinitions="Auto,Auto"
+                        RowSpacing="12">
+
+                        <!-- Pending for Approval (amber) -->
+                        <Border
+                            Grid.Row="0" Grid.Column="0"
+                            BackgroundColor="{Binding PendingCardBg}"
+                            Padding="0"
+                            Stroke="#E5EAF2"
+                            StrokeShape="RoundRectangle 14"
+                            StrokeThickness="1">
+                            <Grid ColumnDefinitions="5,*">
+                                <BoxView BackgroundColor="{Binding PendingAccentColor}" />
+                                <VerticalStackLayout Grid.Column="1" Padding="13,15,13,14" Spacing="5">
+                                    <Label FontAttributes="Bold" FontSize="34" Text="{Binding PendingApprovalCount}" TextColor="{Binding PendingNumColor}" />
+                                    <Label FontSize="12" LineBreakMode="WordWrap" Text="Pending for Approval" TextColor="#6B7280" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </Border>
+
+                        <!-- Indents Raised (blue) -->
+                        <Border
+                            Grid.Row="0" Grid.Column="1"
+                            BackgroundColor="{Binding RaisedCardBg}"
+                            Padding="0"
+                            Stroke="#E5EAF2"
+                            StrokeShape="RoundRectangle 14"
+                            StrokeThickness="1">
+                            <Grid ColumnDefinitions="5,*">
+                                <BoxView BackgroundColor="{Binding RaisedAccentColor}" />
+                                <VerticalStackLayout Grid.Column="1" Padding="13,15,13,14" Spacing="5">
+                                    <Label FontAttributes="Bold" FontSize="34" Text="{Binding IndentsRaisedCount}" TextColor="{Binding RaisedNumColor}" />
+                                    <Label FontSize="12" LineBreakMode="WordWrap" Text="Indents Raised" TextColor="#6B7280" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </Border>
+
+                        <!-- Rejected Indents (red) -->
+                        <Border
+                            Grid.Row="1" Grid.Column="0"
+                            BackgroundColor="{Binding RejectedCardBg}"
+                            Padding="0"
+                            Stroke="#E5EAF2"
+                            StrokeShape="RoundRectangle 14"
+                            StrokeThickness="1">
+                            <Grid ColumnDefinitions="5,*">
+                                <BoxView BackgroundColor="{Binding RejectedAccentColor}" />
+                                <VerticalStackLayout Grid.Column="1" Padding="13,15,13,14" Spacing="5">
+                                    <Label FontAttributes="Bold" FontSize="34" Text="{Binding RejectedIndentsCount}" TextColor="{Binding RejectedNumColor}" />
+                                    <Label FontSize="12" LineBreakMode="WordWrap" Text="Rejected Indents" TextColor="#6B7280" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </Border>
+
+                        <!-- Created Status (green) -->
+                        <Border
+                            Grid.Row="1" Grid.Column="1"
+                            BackgroundColor="{Binding CreatedCardBg}"
+                            Padding="0"
+                            Stroke="#E5EAF2"
+                            StrokeShape="RoundRectangle 14"
+                            StrokeThickness="1">
+                            <Grid ColumnDefinitions="5,*">
+                                <BoxView BackgroundColor="{Binding CreatedAccentColor}" />
+                                <VerticalStackLayout Grid.Column="1" Padding="13,15,13,14" Spacing="5">
+                                    <Label FontAttributes="Bold" FontSize="34" Text="{Binding CreatedStatusCount}" TextColor="{Binding CreatedNumColor}" />
+                                    <Label FontSize="12" LineBreakMode="WordWrap" Text="Created Status" TextColor="#6B7280" />
+                                </VerticalStackLayout>
+                            </Grid>
+                        </Border>
+                    </Grid>
+
+                    <!-- Status filter chips -->
+                    <CollectionView
+                        HeightRequest="46"
+                        ItemsLayout="HorizontalList"
+                        ItemsSource="{Binding StatusFilters}"
+                        SelectionMode="None">
+                        <CollectionView.ItemTemplate>
+                            <DataTemplate x:DataType="vm:StatusFilterViewModel">
+                                <Button
+                                    Margin="0,0,8,0"
+                                    Padding="18,0"
+                                    BackgroundColor="{Binding BackgroundColor}"
+                                    BorderColor="{Binding BorderColor}"
+                                    BorderWidth="1.5"
+                                    Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectStatusFilterCommand}"
+                                    CommandParameter="{Binding Label}"
+                                    CornerRadius="22"
+                                    FontAttributes="Bold"
+                                    HeightRequest="42"
+                                    Text="{Binding Label}"
+                                    TextColor="{Binding TextColor}" />
+                            </DataTemplate>
+                        </CollectionView.ItemTemplate>
+                    </CollectionView>
+
+                    <!-- Section header -->
+                    <Grid ColumnDefinitions="*,Auto" Padding="0,2,0,0">
+                        <Label
+                            FontAttributes="Bold"
+                            FontSize="18"
+                            Text="RECENT REQUESTS"
+                            TextColor="#172033"
+                            VerticalOptions="Center" />
+                        <Button
+                            Grid.Column="1"
+                            BackgroundColor="Transparent"
+                            Command="{Binding ToggleSeeAllCommand}"
+                            FontAttributes="Bold"
+                            FontSize="14"
+                            IsVisible="{Binding HasSeeAllAction}"
+                            Padding="8,0"
+                            Text="{Binding SeeAllText}"
+                            TextColor="#1D2B58" />
+                    </Grid>
+
+                    <!-- Recent request cards -->
+                    <CollectionView EmptyView="No recent requests." ItemsSource="{Binding RecentIndents}">
+                        <CollectionView.ItemsLayout>
+                            <LinearItemsLayout ItemSpacing="16" Orientation="Vertical" />
+                        </CollectionView.ItemsLayout>
                         <CollectionView.ItemTemplate>
                             <DataTemplate x:DataType="vm:RecentIndentViewModel">
                                 <Border
-                                    Margin="0,0,0,10"
-                                    Padding="14"
-                                    BackgroundColor="White"
-                                    Stroke="#E5EAF2"
-                                    StrokeShape="RoundRectangle 8"
+                                    BackgroundColor="{Binding CardBg}"
+                                    Padding="0"
+                                    Stroke="{Binding CardAccentColor}"
+                                    StrokeShape="RoundRectangle 14"
                                     StrokeThickness="1">
+                                    <Border.Shadow>
+                                        <Shadow Brush="#26000000" Offset="0,4" Opacity="0.14" Radius="12" />
+                                    </Border.Shadow>
                                     <Border.GestureRecognizers>
                                         <TapGestureRecognizer
-                                            Command="{Binding Source={RelativeSource AncestorType={x:Type vm:IndentHomeViewModel}}, Path=OpenIndentCommand}"
+                                            Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.OpenIndentCommand}"
                                             CommandParameter="{Binding .}" />
                                     </Border.GestureRecognizers>
-                                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                                        <VerticalStackLayout Spacing="4">
-                                            <Label FontAttributes="Bold" FontSize="15" Text="{Binding RequestNo}" TextColor="#172033" />
-                                            <Label FontSize="12" Text="{Binding DateText}" TextColor="#8A94A6" />
-                                        </VerticalStackLayout>
 
-                                        <Border
-                                            Grid.Column="1"
-                                            Padding="10,5"
-                                            BackgroundColor="{Binding StatusColor}"
-                                            StrokeThickness="0"
-                                            StrokeShape="RoundRectangle 8"
-                                            VerticalOptions="Center">
-                                            <Label FontAttributes="Bold" FontSize="11" Text="{Binding Status}" TextColor="White" />
-                                        </Border>
+                                    <!-- Accent strip + content -->
+                                    <Grid ColumnDefinitions="6,*">
+                                        <BoxView BackgroundColor="{Binding CardAccentColor}" />
+
+                                        <VerticalStackLayout Grid.Column="1" Spacing="0">
+
+                                            <!-- Card header: IndentNo + status badge -->
+                                            <Grid
+                                                ColumnDefinitions="*,Auto"
+                                                ColumnSpacing="8"
+                                                Padding="14,14,14,12">
+                                                <Label
+                                                    FontAttributes="Bold"
+                                                    FontSize="15"
+                                                    LineBreakMode="TailTruncation"
+                                                    Text="{Binding IndentNo}"
+                                                    TextColor="#111827"
+                                                    VerticalOptions="Center" />
+                                                <Border
+                                                    Grid.Column="1"
+                                                    BackgroundColor="{Binding StatusColor}"
+                                                    Padding="10,5"
+                                                    StrokeShape="RoundRectangle 10"
+                                                    StrokeThickness="0"
+                                                    VerticalOptions="Center">
+                                                    <Label
+                                                        FontAttributes="Bold"
+                                                        FontSize="11"
+                                                        Text="{Binding Status}"
+                                                        TextColor="{Binding StatusTextColor}" />
+                                                </Border>
+                                            </Grid>
+
+                                            <!-- Divider -->
+                                            <BoxView BackgroundColor="{Binding CardAccentColor}" HeightRequest="1" Opacity="0.35" />
+
+                                            <!-- Info rows -->
+                                            <VerticalStackLayout Padding="14,12,14,15" Spacing="11">
+
+                                                <!-- Request No -->
+                                                <Grid ColumnDefinitions="22,*" ColumnSpacing="10">
+                                                    <controls:IconLabel
+                                                        Glyph="{x:Static glyphs:IconGlyphs.Hash}"
+                                                        IconSize="13"
+                                                        IconColor="#4B5563"
+                                                        HorizontalOptions="Center"
+                                                        VerticalOptions="Center" />
+                                                    <Label
+                                                        Grid.Column="1"
+                                                        FontAttributes="Bold"
+                                                        FontSize="13"
+                                                        Text="{Binding RequestNo}"
+                                                        TextColor="#065F46"
+                                                        VerticalOptions="Center" />
+                                                </Grid>
+
+                                                <!-- Date -->
+                                                <Grid ColumnDefinitions="22,*" ColumnSpacing="10">
+                                                    <controls:IconLabel
+                                                        Glyph="{x:Static glyphs:IconGlyphs.Calendar}"
+                                                        IconSize="14"
+                                                        HorizontalOptions="Center"
+                                                        VerticalOptions="Center" />
+                                                    <Label
+                                                        Grid.Column="1"
+                                                        FontSize="13"
+                                                        Text="{Binding DateText}"
+                                                        TextColor="#1F2937"
+                                                        VerticalOptions="Center" />
+                                                </Grid>
+
+                                                <!-- Project -->
+                                                <Grid
+                                                    ColumnDefinitions="22,*"
+                                                    ColumnSpacing="10"
+                                                    IsVisible="{Binding HasProject}">
+                                                    <controls:IconLabel
+                                                        Glyph="{x:Static glyphs:IconGlyphs.Location}"
+                                                        IconSize="14"
+                                                        HorizontalOptions="Center"
+                                                        VerticalOptions="Center" />
+                                                    <Label
+                                                        Grid.Column="1"
+                                                        FontSize="13"
+                                                        LineBreakMode="TailTruncation"
+                                                        Text="{Binding ProjectDisplay}"
+                                                        TextColor="#1F2937"
+                                                        VerticalOptions="Center" />
+                                                </Grid>
+
+                                                <!-- Warehouse -->
+                                                <Grid
+                                                    ColumnDefinitions="22,*"
+                                                    ColumnSpacing="10"
+                                                    IsVisible="{Binding HasWarehouse}">
+                                                    <controls:IconLabel
+                                                        Glyph="{x:Static glyphs:IconGlyphs.Warehouse}"
+                                                        IconSize="14"
+                                                        HorizontalOptions="Center"
+                                                        VerticalOptions="Center" />
+                                                    <Label
+                                                        Grid.Column="1"
+                                                        FontSize="13"
+                                                        LineBreakMode="TailTruncation"
+                                                        Text="{Binding WarehouseDisplay}"
+                                                        TextColor="#1F2937"
+                                                        VerticalOptions="Center" />
+                                                </Grid>
+
+                                                <!-- Indent Type -->
+                                                <Grid
+                                                    ColumnDefinitions="22,*"
+                                                    ColumnSpacing="10"
+                                                    IsVisible="{Binding HasIndentType}">
+                                                    <controls:IconLabel
+                                                        Glyph="{x:Static glyphs:IconGlyphs.NorthEast}"
+                                                        IconSize="14"
+                                                        IconColor="#4B5563"
+                                                        HorizontalOptions="Center"
+                                                        VerticalOptions="Center" />
+                                                    <Label
+                                                        Grid.Column="1"
+                                                        FontAttributes="Bold"
+                                                        FontSize="13"
+                                                        Text="{Binding IndentTypeDisplay}"
+                                                        TextColor="#1F2937"
+                                                        VerticalOptions="Center" />
+                                                </Grid>
+
+                                            </VerticalStackLayout>
+                                        </VerticalStackLayout>
                                     </Grid>
                                 </Border>
                             </DataTemplate>
                         </CollectionView.ItemTemplate>
                     </CollectionView>
-                </VerticalStackLayout>
-            </ScrollView>
 
-            <Button
-                BackgroundColor="#1565D8"
-                Command="{Binding NewIndentCommand}"
-                CornerRadius="28"
-                FontAttributes="Bold"
-                FontSize="28"
-                HeightRequest="56"
-                HorizontalOptions="End"
-                Text="+"
-                TextColor="White"
-                VerticalOptions="End"
-                WidthRequest="56" />
+                </VerticalStackLayout>
+                </ScrollView>
+            </RefreshView>
+
         </Grid>
     </Grid>
 </ContentPage>

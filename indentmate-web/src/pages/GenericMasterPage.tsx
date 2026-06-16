@@ -6,6 +6,7 @@ import * as XLSX from 'xlsx'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
 import { NumberedPagination } from '../components/NumberedPagination'
+import { isPortalAdminRole } from '../utils/roles'
 
 const PAGE_SIZE = 100
 const TABLE_HEADER_CELL_CLASS = 'bg-[#1b2e4b] px-3 py-[14px] text-[13px] font-semibold text-white tracking-[0.5px] normal-case border-b-2 border-[#0f1c30]'
@@ -1068,7 +1069,7 @@ export default function GenericMasterPage() {
   const isPaginated = isPaginatedMaster(masterKey)
   const importMetadata = MASTER_IMPORT_METADATA[masterKey]
   const supportsImportExport = Boolean(importMetadata)
-  const isSuperAdmin = String(currentUser?.role ?? currentUser?.primary_role ?? '').trim() === 'Super Admin'
+  const isSuperAdmin = isPortalAdminRole(currentUser?.role ?? currentUser?.primary_role)
   const fileInputRef = useRef<HTMLInputElement | null>(null)
   const [form] = Form.useForm()
   const [editForm] = Form.useForm()
@@ -1276,12 +1277,12 @@ export default function GenericMasterPage() {
       const { data } = await api.get<MasterListResponse>('/api/master-data/project-master', {
         params: { limit: 500 },
       })
-      const options = data.data
+      const options = dedupeProjectOptions(data.data
         .map((project) => ({
           code: String(project.project_code ?? '').trim(),
           description: String(project.project_description ?? '').trim(),
         }))
-        .filter((project) => project.code || project.description)
+        .filter((project) => project.code || project.description))
 
       setProjectOptions(options)
     } catch (requestError) {
@@ -1290,6 +1291,26 @@ export default function GenericMasterPage() {
     } finally {
       setProjectOptionsLoading(false)
     }
+  }
+
+  function dedupeProjectOptions(options: ProjectOption[]) {
+    const byCode = new Map<string, ProjectOption>()
+    const codeLessOptions: ProjectOption[] = []
+
+    for (const option of options) {
+      if (!option.code) {
+        codeLessOptions.push(option)
+        continue
+      }
+
+      const existing = byCode.get(option.code)
+      if (!existing || (!existing.description && option.description)) {
+        byCode.set(option.code, option)
+      }
+    }
+
+    return [...byCode.values(), ...codeLessOptions]
+      .sort((left, right) => left.code.localeCompare(right.code))
   }
 
   async function loadLocationOptions(projectCode?: string) {

@@ -13,13 +13,18 @@ namespace IndentMate.Mobile.ViewModels;
 public partial class LoginViewModel : BaseViewModel
 {
     private const int PinLength = 6;
-    private const string ApiBaseUrl = "https://indentmate.onrender.com";
+    private const int MaxFailedLoginAttempts = 4;
+    private const int LoginLockoutSeconds = 30;
+    private const string BackendConnectionErrorMessage = "Connection error. Is the backend running?";
     private const string HiddenRecentEngineersKey = "indentmate_hidden_recent_engineers";
     private static readonly TimeSpan InactivityTimeout = TimeSpan.FromMinutes(5);
     private readonly DatabaseService _databaseService;
     private readonly HttpClient _httpClient;
     private readonly System.Timers.Timer _inactivityTimer;
     private readonly SemaphoreSlim _loadLock = new(1, 1);
+    private int _failedLoginAttempts;
+    private bool _isAutoLoginQueued;
+    private CancellationTokenSource? _lockoutCancellationTokenSource;
 
     [ObservableProperty] private string _engineerId = "Not configured";
     [ObservableProperty] private string _engineerName = "Engineer";
@@ -27,6 +32,9 @@ public partial class LoginViewModel : BaseViewModel
     [ObservableProperty] private LocalEngineer? _selectedEngineer;
     [ObservableProperty] private string _manualEngineerId = string.Empty;
     [ObservableProperty] private string _pinInput = string.Empty;
+    [ObservableProperty] private bool _isPinVisible;
+    [ObservableProperty] private bool _isLoginLockedOut;
+    [ObservableProperty] private int _lockoutSecondsRemaining;
     [ObservableProperty] private bool _pinDot1;
     [ObservableProperty] private bool _pinDot2;
     [ObservableProperty] private bool _pinDot3;
@@ -40,14 +48,22 @@ public partial class LoginViewModel : BaseViewModel
     public bool HasSelectedEngineer => SelectedEngineer is not null;
     public bool ShowManualEngineerEntry => SelectedEngineer is null;
     public string SelectedInitials => BuildInitials(EngineerName);
+    public bool IsPinHidden => !IsPinVisible;
+    public bool IsPinEntryEnabled => !IsLoginLockedOut;
+    public string PinChar1 => GetPinCharacter(0);
+    public string PinChar2 => GetPinCharacter(1);
+    public string PinChar3 => GetPinCharacter(2);
+    public string PinChar4 => GetPinCharacter(3);
+    public string PinChar5 => GetPinCharacter(4);
+    public string PinChar6 => GetPinCharacter(5);
 
     public LoginViewModel()
     {
         _databaseService = new DatabaseService(Path.Combine(FileSystem.AppDataDirectory, "indentmate.db"));
         _httpClient = new HttpClient
         {
-            BaseAddress = new Uri(ApiBaseUrl),
-            Timeout = TimeSpan.FromSeconds(60)
+            BaseAddress = new Uri(ApiEndpoints.BaseUrl),
+            Timeout = TimeSpan.FromSeconds(15)
         };
         _inactivityTimer = new System.Timers.Timer(InactivityTimeout.TotalMilliseconds)
         {
@@ -63,14 +79,27 @@ public partial class LoginViewModel : BaseViewModel
         {
             Company = await SecureStorage.Default.GetAsync("company") ?? "Company";
             var configuredEngineerId = NormalizeEngineerId(await SecureStorage.Default.GetAsync("engineer_id"));
-            SelectedEngineer = null;
-            EngineerId = string.IsNullOrWhiteSpace(configuredEngineerId) ? "Not configured" : configuredEngineerId;
-            EngineerName = await SecureStorage.Default.GetAsync("engineer_name") ?? EngineerId;
-            ManualEngineerId = configuredEngineerId ?? string.Empty;
+            var storedEngineerName = await SecureStorage.Default.GetAsync("engineer_name");
+
             RecentEngineers.Clear();
+            ManualEngineerId = string.Empty;
+            EngineerId = string.IsNullOrWhiteSpace(configuredEngineerId) ? "Not configured" : configuredEngineerId;
+            SelectedEngineer = string.IsNullOrWhiteSpace(configuredEngineerId)
+                ? null
+                : await _databaseService.GetEngineerAsync(configuredEngineerId);
+
+            if (SelectedEngineer is null)
+            {
+                EngineerName = string.IsNullOrWhiteSpace(storedEngineerName) ? EngineerId : storedEngineerName.Trim();
+                OnPropertyChanged(nameof(SelectedInitials));
+                OnPropertyChanged(nameof(HasRecentEngineers));
+                OnPropertyChanged(nameof(HasNoRecentEngineers));
+                return;
+            }
+
+            ApplySelectedEngineer(SelectedEngineer);
             OnPropertyChanged(nameof(HasRecentEngineers));
             OnPropertyChanged(nameof(HasNoRecentEngineers));
-            OnPropertyChanged(nameof(SelectedInitials));
         }
         finally
         {
@@ -94,11 +123,19 @@ public partial class LoginViewModel : BaseViewModel
     {
         await RunBusyAsync(async () =>
         {
-            var activeEngineerId = NormalizeEngineerId(SelectedEngineer?.EngineerId ?? ManualEngineerId);
+            _isAutoLoginQueued = false;
+
+            if (IsLoginLockedOut)
+            {
+                return;
+            }
+
+            var configuredEngineerId = NormalizeEngineerId(await SecureStorage.Default.GetAsync("engineer_id"));
+            var activeEngineerId = NormalizeEngineerId(string.IsNullOrWhiteSpace(configuredEngineerId) ? EngineerId : configuredEngineerId);
             if (string.IsNullOrWhiteSpace(activeEngineerId))
             {
                 HasError = true;
-                StatusMessage = "Please select or enter an Employee ID.";
+                StatusMessage = "Employee ID is not configured. Please complete setup.";
                 return;
             }
 
@@ -114,7 +151,6 @@ public partial class LoginViewModel : BaseViewModel
             var manualEngineer = selectedEngineer is null
                 ? await _databaseService.GetEngineerAsync(activeEngineerId)
                 : null;
-            var configuredEngineerId = NormalizeEngineerId(await SecureStorage.Default.GetAsync("engineer_id"));
             var isLocalLoginCandidate = selectedEngineer is not null || manualEngineer is not null;
 
             if (selectedEngineer is not null)
@@ -138,18 +174,36 @@ public partial class LoginViewModel : BaseViewModel
             {
                 var authenticatedEngineer = await AuthenticateManualUserAsync(activeEngineerId, PinInput);
 
-                if (authenticatedEngineer is null)
+                if (authenticatedEngineer is not null)
                 {
-                    if (HasError)
+                    await CompleteLoginAsync(authenticatedEngineer);
+                    return;
+                }
+
+                if (HasError)
+                {
+                    if (!string.Equals(StatusMessage, BackendConnectionErrorMessage, StringComparison.Ordinal))
                     {
                         return;
                     }
 
-                    await ShowIncorrectPinAsync(activeEngineerId);
+                    var offlineEngineer = selectedEngineer ??
+                        manualEngineer ??
+                        await BuildEngineerFromSecureStorageAsync(activeEngineerId, storedHash);
+
+                    if (offlineEngineer is not null)
+                    {
+                        await CompleteLoginAsync(offlineEngineer);
+                        return;
+                    }
+
+                    HasError = true;
+                    StatusMessage = "Access Denied: No valid SIE/SER role assigned to this user.";
+                    PinInput = string.Empty;
                     return;
                 }
 
-                await CompleteLoginAsync(authenticatedEngineer);
+                await ShowIncorrectPinAsync(activeEngineerId);
                 return;
             }
 
@@ -172,7 +226,7 @@ public partial class LoginViewModel : BaseViewModel
     [RelayCommand]
     private void AddDigit(string? digit)
     {
-        if (string.IsNullOrWhiteSpace(digit) || PinInput.Length >= PinLength)
+        if (IsLoginLockedOut || string.IsNullOrWhiteSpace(digit) || PinInput.Length >= PinLength)
         {
             return;
         }
@@ -184,12 +238,32 @@ public partial class LoginViewModel : BaseViewModel
     [RelayCommand]
     private void Backspace()
     {
-        if (PinInput.Length == 0)
+        if (IsLoginLockedOut || PinInput.Length == 0)
         {
             return;
         }
 
         PinInput = PinInput[..^1];
+        ResetInactivityTimer();
+    }
+
+    [RelayCommand]
+    private void ClearPin()
+    {
+        if (IsLoginLockedOut || PinInput.Length == 0)
+        {
+            return;
+        }
+
+        _isAutoLoginQueued = false;
+        PinInput = string.Empty;
+        ResetInactivityTimer();
+    }
+
+    [RelayCommand]
+    private void TogglePinVisibility()
+    {
+        IsPinVisible = !IsPinVisible;
         ResetInactivityTimer();
     }
 
@@ -292,6 +366,7 @@ public partial class LoginViewModel : BaseViewModel
     public async Task LogoutAsync()
     {
         _inactivityTimer.Stop();
+        _lockoutCancellationTokenSource?.Cancel();
         SecureStorage.Default.Remove("session_active");
         PinInput = string.Empty;
         await Shell.Current.GoToAsync("//login");
@@ -312,20 +387,113 @@ public partial class LoginViewModel : BaseViewModel
         PinDot4 = cleaned.Length >= 4;
         PinDot5 = cleaned.Length >= 5;
         PinDot6 = cleaned.Length >= 6;
+        NotifyPinCharactersChanged();
 
-        if (HasError)
+        if (HasError && !IsLoginLockedOut)
         {
             HasError = false;
             StatusMessage = string.Empty;
+        }
+
+        if (cleaned.Length == PinLength && !IsLoginLockedOut && !_isAutoLoginQueued)
+        {
+            _isAutoLoginQueued = true;
+            MainThread.BeginInvokeOnMainThread(async () => await LoginAsync());
+        }
+    }
+
+    partial void OnIsPinVisibleChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsPinHidden));
+        NotifyPinCharactersChanged();
+    }
+
+    partial void OnIsLoginLockedOutChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsPinEntryEnabled));
+    }
+
+    partial void OnLockoutSecondsRemainingChanged(int value)
+    {
+        if (IsLoginLockedOut)
+        {
+            StatusMessage = $"Too many wrong attempts. Try again in {LockoutSecondsRemaining} sec.";
         }
     }
 
     private async Task ShowIncorrectPinAsync(string engineerId)
     {
-        HasError = true;
-        StatusMessage = $"Incorrect credentials for Employee ID: {engineerId}";
-        await Task.Delay(1000);
+        _failedLoginAttempts++;
+        _isAutoLoginQueued = false;
         PinInput = string.Empty;
+
+        if (_failedLoginAttempts >= MaxFailedLoginAttempts)
+        {
+            await StartLoginLockoutAsync();
+            return;
+        }
+
+        var attemptsLeft = MaxFailedLoginAttempts - _failedLoginAttempts;
+        HasError = true;
+        StatusMessage = $"Incorrect PIN for Employee ID: {engineerId}. {attemptsLeft} attempt(s) left.";
+        await Task.Delay(1000);
+    }
+
+    private async Task StartLoginLockoutAsync()
+    {
+        _lockoutCancellationTokenSource?.Cancel();
+        _lockoutCancellationTokenSource = new CancellationTokenSource();
+        var token = _lockoutCancellationTokenSource.Token;
+
+        IsLoginLockedOut = true;
+        HasError = true;
+        LockoutSecondsRemaining = LoginLockoutSeconds;
+        PinInput = string.Empty;
+        _isAutoLoginQueued = false;
+
+        try
+        {
+            while (LockoutSecondsRemaining > 0)
+            {
+                await Task.Delay(1000, token);
+                LockoutSecondsRemaining--;
+            }
+        }
+        catch (TaskCanceledException)
+        {
+            return;
+        }
+        finally
+        {
+            if (!token.IsCancellationRequested)
+            {
+                _failedLoginAttempts = 0;
+                IsLoginLockedOut = false;
+                LockoutSecondsRemaining = 0;
+                HasError = false;
+                StatusMessage = string.Empty;
+            }
+        }
+    }
+
+    private string GetPinCharacter(int index)
+    {
+        if (PinInput.Length <= index)
+        {
+            return string.Empty;
+        }
+
+        return IsPinVisible ? PinInput[index].ToString() : "\u25CF";
+    }
+
+    private void NotifyPinCharactersChanged()
+    {
+        OnPropertyChanged(nameof(PinChar1));
+        OnPropertyChanged(nameof(PinChar2));
+        OnPropertyChanged(nameof(PinChar3));
+        OnPropertyChanged(nameof(PinChar4));
+        OnPropertyChanged(nameof(PinChar5));
+        OnPropertyChanged(nameof(PinChar6));
     }
 
     private async Task<LocalEngineer?> AuthenticateManualUserAsync(string engineerId, string password)
@@ -373,7 +541,7 @@ public partial class LoginViewModel : BaseViewModel
         catch
         {
             HasError = true;
-            StatusMessage = "Connection error. Is the backend running?";
+            StatusMessage = BackendConnectionErrorMessage;
             return null;
         }
     }
@@ -406,7 +574,7 @@ public partial class LoginViewModel : BaseViewModel
             string.Equals(loginError?.ErrorCode, "UNAUTHORIZED_FIELD_ROLE", StringComparison.OrdinalIgnoreCase))
         {
             HasError = true;
-            StatusMessage = "Access Denied: This application is restricted to field personnel (SIE/SRE) only.";
+            StatusMessage = "Access Denied: This application is restricted to field personnel (SIE/SER) only.";
             PinInput = string.Empty;
             return;
         }
@@ -490,6 +658,13 @@ public partial class LoginViewModel : BaseViewModel
             return null;
         }
 
+        var storedRole = await SecureStorage.Default.GetAsync("user_role");
+        var responsibilityCode = NormalizeRole(storedRole);
+        if (responsibilityCode is not ("SER" or "SIE"))
+        {
+            return null;
+        }
+
         return new LocalEngineer
         {
             EngineerId = engineerId,
@@ -497,9 +672,7 @@ public partial class LoginViewModel : BaseViewModel
             Company = await SecureStorage.Default.GetAsync("company") ?? Company,
             PinHash = pinHash,
             LNEnvironment = await SecureStorage.Default.GetAsync("ln_environment") ?? string.Empty,
-            ResponsibilityCode = engineerId.StartsWith("SER", StringComparison.OrdinalIgnoreCase)
-                ? "SER"
-                : "SIE",
+            ResponsibilityCode = responsibilityCode,
             LastSyncAt = DateTime.UtcNow
         };
     }
@@ -511,7 +684,7 @@ public partial class LoginViewModel : BaseViewModel
         {
             SecureStorage.Default.Remove("session_active");
             HasError = true;
-            StatusMessage = "Access Denied: No valid role assigned to this user.";
+            StatusMessage = "Access Denied: No valid SIE/SER role assigned to this user.";
             PinInput = string.Empty;
             return;
         }
@@ -534,10 +707,13 @@ public partial class LoginViewModel : BaseViewModel
 
         HasError = false;
         StatusMessage = string.Empty;
+        _failedLoginAttempts = 0;
+        IsLoginLockedOut = false;
+        LockoutSecondsRemaining = 0;
         await SecureStorage.Default.SetAsync("session_active", "true");
         _inactivityTimer.Start();
 
-        await Shell.Current.GoToAsync(dashboardRoute);
+        await Shell.Current.GoToAsync("//login-success");
     }
 
     private async Task LoadRecentEngineersAsync()
@@ -607,6 +783,9 @@ public partial class LoginViewModel : BaseViewModel
         return normalizedRole switch
         {
             "SRE" => "SER",
+            _ when normalizedRole.Contains("(SER)") || normalizedRole.Contains("(SRE)") => "SER",
+            _ when normalizedRole.Contains("SERVICE ENGINEER") || normalizedRole.Contains("SITE RECEIVING") => "SER",
+            _ when normalizedRole.Contains("(SIE)") || normalizedRole.Contains("SITE ENGINEER") => "SIE",
             _ => normalizedRole
         };
     }
@@ -616,7 +795,7 @@ public partial class LoginViewModel : BaseViewModel
         return NormalizeRole(role) switch
         {
             "SIE" => "//sie-dashboard",
-            "SER" => "//sre-dashboard",
+            "SER" => "//ser-dashboard",
             _ => null
         };
     }

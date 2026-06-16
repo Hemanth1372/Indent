@@ -3,6 +3,8 @@
     x:Class="IndentMate.Mobile.Views.IndentDetailsPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:controls="clr-namespace:IndentMate.Mobile.Controls"
+    xmlns:glyphs="clr-namespace:IndentMate.Mobile.Resources"
     xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
     BackgroundColor="#F4F7FB"
     Shell.NavBarIsVisible="False">
@@ -11,94 +13,484 @@
         <vm:IndentDetailsViewModel />
     </ContentPage.BindingContext>
 
-    <Grid Padding="20" RowDefinitions="Auto,*,Auto">
-        <Border Padding="16" BackgroundColor="White" Stroke="#E5EAF2" StrokeShape="RoundRectangle 8" StrokeThickness="1">
-            <Grid RowDefinitions="Auto,Auto,Auto,Auto" ColumnDefinitions="*,Auto" RowSpacing="8">
-                <VerticalStackLayout Spacing="2">
-                    <Label FontAttributes="Bold" FontSize="18" Text="{Binding IndentNo}" TextColor="#172033" />
-                    <Label FontSize="12" Text="{Binding IndentDate, StringFormat='Date: {0:dd MMM yyyy}'}" TextColor="#667085" />
-                </VerticalStackLayout>
+    <Grid RowDefinitions="Auto,*,Auto">
 
-                <Border Grid.Column="1" Padding="10,5" BackgroundColor="{Binding StatusColor}" StrokeThickness="0" StrokeShape="RoundRectangle 8" VerticalOptions="Start">
-                    <Label FontAttributes="Bold" FontSize="11" Text="{Binding Status}" TextColor="White" />
+        <!-- ── Blue Header ──────────────────────────────────────────────────── -->
+        <Grid BackgroundColor="#0E2A5C" ColumnDefinitions="44,*,44" Padding="18,48,18,16">
+            <Border
+                BackgroundColor="#33FFFFFF"
+                HeightRequest="40"
+                StrokeShape="RoundRectangle 10"
+                StrokeThickness="0"
+                VerticalOptions="Center"
+                WidthRequest="40">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnBackClicked" />
+                </Border.GestureRecognizers>
+                <controls:IconLabel
+                    Glyph="{x:Static glyphs:IconGlyphs.Back}"
+                    IconColor="White"
+                    IconSize="20"
+                    HorizontalOptions="Center"
+                    VerticalOptions="Center" />
+            </Border>
+            <Label
+                Grid.Column="1"
+                FontAttributes="Bold"
+                FontSize="20"
+                HorizontalOptions="Center"
+                Text="Indent Details"
+                TextColor="White"
+                VerticalOptions="Center" />
+            <BoxView Grid.Column="2" Color="Transparent" />
+        </Grid>
+
+        <!-- ── Scrollable content ──────────────────────────────────────────── -->
+        <ScrollView Grid.Row="1">
+            <VerticalStackLayout Padding="18,18,18,16" Spacing="14">
+
+                <!-- ── Header info card with accent strip ──────────────────── -->
+                <Border
+                    BackgroundColor="{Binding CardBg}"
+                    Padding="0"
+                    Stroke="#E5EAF2"
+                    StrokeShape="RoundRectangle 14"
+                    StrokeThickness="1">
+                    <Border.Shadow>
+                        <Shadow Brush="#14000000" Offset="0,2" Opacity="0.10" Radius="10" />
+                    </Border.Shadow>
+
+                    <Grid ColumnDefinitions="6,*">
+                        <!-- Status accent strip -->
+                        <Border
+                            BackgroundColor="{Binding CardAccentColor}"
+                            StrokeShape="RoundRectangle 14,0,0,14"
+                            StrokeThickness="0" />
+
+                        <VerticalStackLayout Grid.Column="1" Padding="16,15,16,15" Spacing="12">
+
+                            <!-- REQUEST ID row -->
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="10">
+                                <VerticalStackLayout Spacing="3">
+                                    <Label
+                                        CharacterSpacing="1.2"
+                                        FontSize="10"
+                                        Text="REQUEST ID"
+                                        TextColor="#94A3B8" />
+                                    <Label
+                                        FontAttributes="Bold"
+                                        FontSize="17"
+                                        Text="{Binding RequestNo}"
+                                        TextColor="#172033" />
+                                </VerticalStackLayout>
+                                <!-- Ticket icon -->
+                                <Border
+                                    Grid.Column="1"
+                                    BackgroundColor="#FEE2E2"
+                                    HeightRequest="36"
+                                    StrokeShape="RoundRectangle 8"
+                                    StrokeThickness="0"
+                                    VerticalOptions="Center"
+                                    WidthRequest="36">
+                                    <controls:IconLabel Glyph="{x:Static glyphs:IconGlyphs.Locked}" IconSize="18" IconColor="#DC2626" />
+                                </Border>
+                            </Grid>
+
+                            <BoxView BackgroundColor="#E5EAF2" HeightRequest="1" />
+
+                            <!-- INDENT No + status badge -->
+                            <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                <Label
+                                    FontAttributes="Bold"
+                                    FontSize="14"
+                                    LineBreakMode="TailTruncation"
+                                    TextColor="#172033"
+                                    VerticalOptions="Center">
+                                    <Label.FormattedText>
+                                        <FormattedString>
+                                            <Span FontAttributes="Bold" Text="INDENT : " TextColor="#475467" />
+                                            <Span FontAttributes="Bold" Text="{Binding IndentNoDisplay}" TextColor="{Binding IndentNoColor}" />
+                                        </FormattedString>
+                                    </Label.FormattedText>
+                                </Label>
+                                <Border
+                                    Grid.Column="1"
+                                    BackgroundColor="{Binding StatusColor}"
+                                    Padding="10,5"
+                                    StrokeShape="RoundRectangle 10"
+                                    StrokeThickness="0"
+                                    VerticalOptions="Center">
+                                    <Label
+                                        FontAttributes="Bold"
+                                        FontSize="11"
+                                        Text="{Binding Status}"
+                                        TextColor="{Binding StatusTextColor}" />
+                                </Border>
+                            </Grid>
+
+                            <!-- ERP sync info banner -->
+                            <Border
+                                BackgroundColor="#FEF9EC"
+                                IsVisible="{Binding HasSyncInfo}"
+                                Padding="12,8"
+                                Stroke="#FDE68A"
+                                StrokeShape="RoundRectangle 8"
+                                StrokeThickness="1">
+                                <Grid ColumnDefinitions="Auto,*" ColumnSpacing="8">
+                                    <controls:IconLabel Glyph="{x:Static glyphs:IconGlyphs.Warning}" IconSize="18" IconColor="#D97706" />
+                                    <Label
+                                        Grid.Column="1"
+                                        FontSize="12"
+                                        Text="{Binding SyncStatusDisplay}"
+                                        TextColor="#B45309"
+                                        VerticalOptions="Center" />
+                                </Grid>
+                            </Border>
+
+                            <BoxView BackgroundColor="#E5EAF2" HeightRequest="1" />
+
+                            <!-- Info rows with SVG icons -->
+                            <VerticalStackLayout Spacing="10">
+
+                                <!-- Date -->
+                                <Grid ColumnDefinitions="22,*" ColumnSpacing="10">
+                                    <controls:IconLabel
+                                        Glyph="{x:Static glyphs:IconGlyphs.Calendar}"
+                                        IconSize="18"
+                                        IconColor="#0E2A5C"
+                                        HorizontalOptions="Center"
+                                        VerticalOptions="Center" />
+                                    <Label
+                                        Grid.Column="1"
+                                        FontSize="13"
+                                        Text="{Binding IndentDate, StringFormat='{0:dd-MM-yyyy}'}"
+                                        TextColor="#344054"
+                                        VerticalOptions="Center" />
+                                </Grid>
+
+                                <!-- Project -->
+                                <Grid ColumnDefinitions="22,*" ColumnSpacing="10">
+                                    <controls:IconLabel Glyph="{x:Static glyphs:IconGlyphs.Folder}" IconSize="18" IconColor="#F59E0B" />
+                                    <Label
+                                        Grid.Column="1"
+                                        FontSize="13"
+                                        LineBreakMode="TailTruncation"
+                                        Text="{Binding ProjectDisplay}"
+                                        TextColor="#344054"
+                                        VerticalOptions="Center" />
+                                </Grid>
+
+                                <!-- SIE: Warehouse -->
+                                <Grid
+                                    ColumnDefinitions="22,*"
+                                    ColumnSpacing="10"
+                                    IsVisible="{Binding IsSieIndent}">
+                                    <controls:IconLabel
+                                        Glyph="{x:Static glyphs:IconGlyphs.Warehouse}"
+                                        IconSize="18"
+                                        IconColor="#8B5CF6"
+                                        HorizontalOptions="Center"
+                                        VerticalOptions="Center" />
+                                    <Label
+                                        Grid.Column="1"
+                                        FontSize="13"
+                                        LineBreakMode="TailTruncation"
+                                        Text="{Binding WarehouseDisplay}"
+                                        TextColor="#344054"
+                                        VerticalOptions="Center" />
+                                </Grid>
+
+                                <!-- SIE: From location -->
+                                <Grid
+                                    ColumnDefinitions="22,*"
+                                    ColumnSpacing="10"
+                                    IsVisible="{Binding IsSieIndent}">
+                                    <controls:IconLabel
+                                        Glyph="{x:Static glyphs:IconGlyphs.Location}"
+                                        IconSize="18"
+                                        IconColor="#10B981"
+                                        HorizontalOptions="Center"
+                                        VerticalOptions="Center" />
+                                    <Label
+                                        Grid.Column="1"
+                                        FontSize="13"
+                                        LineBreakMode="TailTruncation"
+                                        Text="{Binding FromLocation}"
+                                        TextColor="#344054"
+                                        VerticalOptions="Center" />
+                                </Grid>
+
+                                <!-- SER: Order -->
+                                <Grid
+                                    ColumnDefinitions="22,*"
+                                    ColumnSpacing="10"
+                                    IsVisible="{Binding IsSerIndent}">
+                                    <controls:IconLabel
+                                        Glyph="{x:Static glyphs:IconGlyphs.Spares}"
+                                        IconSize="18"
+                                        IconColor="#6366F1"
+                                        HorizontalOptions="Center"
+                                        VerticalOptions="Center" />
+                                    <Label
+                                        Grid.Column="1"
+                                        FontSize="13"
+                                        LineBreakMode="TailTruncation"
+                                        Text="{Binding OrderDisplay}"
+                                        TextColor="#344054"
+                                        VerticalOptions="Center" />
+                                </Grid>
+
+                                <!-- SER: Equipment -->
+                                <Grid
+                                    ColumnDefinitions="22,*"
+                                    ColumnSpacing="10"
+                                    IsVisible="{Binding IsSerIndent}">
+                                    <controls:IconLabel Glyph="{x:Static glyphs:IconGlyphs.Equipment}" IconSize="18" IconColor="#F97316" />
+                                    <Label
+                                        Grid.Column="1"
+                                        FontSize="13"
+                                        LineBreakMode="TailTruncation"
+                                        Text="{Binding EquipmentDisplay}"
+                                        TextColor="#344054"
+                                        VerticalOptions="Center" />
+                                </Grid>
+
+                                <!-- Indent Type -->
+                                <Grid ColumnDefinitions="22,*" ColumnSpacing="10">
+                                    <controls:IconLabel
+                                        Glyph="{x:Static glyphs:IconGlyphs.IndentType}"
+                                        IconSize="18"
+                                        IconColor="#EC4899"
+                                        HorizontalOptions="Center"
+                                        VerticalOptions="Center" />
+                                    <Label
+                                        Grid.Column="1"
+                                        FontAttributes="Bold"
+                                        FontSize="13"
+                                        Text="{Binding IndentType}"
+                                        TextColor="#344054"
+                                        VerticalOptions="Center" />
+                                </Grid>
+
+                            </VerticalStackLayout>
+                        </VerticalStackLayout>
+                    </Grid>
                 </Border>
 
-                <Grid Grid.Row="1" Grid.ColumnSpan="2" ColumnDefinitions="*,*" ColumnSpacing="12">
-                    <Label FontSize="12" Text="{Binding ProjectDisplay, StringFormat='Project: {0}'}" TextColor="#475467" />
-                    <Label Grid.Column="1" FontSize="12" Text="{Binding IndentType, StringFormat='Type: {0}'}" TextColor="#475467" />
-                </Grid>
-
-                <Grid
-                    Grid.Row="2"
-                    Grid.ColumnSpan="2"
-                    ColumnDefinitions="*,*"
-                    ColumnSpacing="12"
-                    IsVisible="{Binding IsSieIndent}">
-                    <Label FontSize="12" Text="{Binding FromLocation, StringFormat='From: {0}'}" TextColor="#475467" />
-                    <Label Grid.Column="1" FontSize="12" Text="{Binding ToContractor, StringFormat='To: {0}'}" TextColor="#475467" />
-                </Grid>
-
-                <Grid
-                    Grid.Row="2"
-                    Grid.ColumnSpan="2"
-                    ColumnDefinitions="*,*"
-                    ColumnSpacing="12"
-                    IsVisible="{Binding IsSerIndent}">
-                    <Label FontSize="12" Text="{Binding OrderDisplay, StringFormat='Order: {0}'}" TextColor="#475467" />
-                    <Label Grid.Column="1" FontSize="12" Text="{Binding EquipmentDisplay, StringFormat='Equipment: {0}'}" TextColor="#475467" />
-                </Grid>
-            </Grid>
-        </Border>
-
-        <CollectionView Grid.Row="1" ItemsSource="{Binding Items}" Margin="0,16" EmptyView="No items added yet.">
-            <CollectionView.ItemTemplate>
-                <DataTemplate>
-                    <Border Margin="0,0,0,10" Padding="14" BackgroundColor="White" Stroke="#E5EAF2" StrokeShape="RoundRectangle 8" StrokeThickness="1">
-                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="12">
-                            <VerticalStackLayout Spacing="4">
-                                <Label FontAttributes="Bold" Text="{Binding MaterialCode}" TextColor="#172033" />
-                                <Label FontSize="12" Text="{Binding MaterialDesc}" TextColor="#667085" />
-                                <Label FontSize="12" Text="{Binding RequestedQty, StringFormat='Qty: {0}'}" TextColor="#667085" />
-                            </VerticalStackLayout>
-                            <Border Grid.Column="1" Padding="10,5" BackgroundColor="#EEF2F7" StrokeThickness="0" StrokeShape="RoundRectangle 8" VerticalOptions="Center">
-                                <Label FontAttributes="Bold" FontSize="11" Text="{Binding WorkType}" TextColor="#1565D8" />
-                            </Border>
-                        </Grid>
+                <!-- ── Items section header ──────────────────────────────────── -->
+                <Grid ColumnDefinitions="*,Auto" Margin="2,4,2,0">
+                    <Label
+                        FontAttributes="Bold"
+                        FontSize="17"
+                        Text="ITEMS"
+                        TextColor="#172033"
+                        VerticalOptions="Center" />
+                    <Border
+                        Grid.Column="1"
+                        BackgroundColor="#0E2A5C"
+                        HeightRequest="40"
+                        IsVisible="{Binding CanEdit}"
+                        StrokeShape="RoundRectangle 12"
+                        StrokeThickness="0"
+                        VerticalOptions="Center"
+                        WidthRequest="40">
+                        <Border.Shadow>
+                            <Shadow Brush="#441565D8" Offset="0,3" Opacity="0.30" Radius="8" />
+                        </Border.Shadow>
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding AddItemCommand}" />
+                        </Border.GestureRecognizers>
+                        <controls:IconLabel
+                            Glyph="{x:Static glyphs:IconGlyphs.Add}"
+                            IconSize="22"
+                            IconColor="White"
+                            HorizontalOptions="Center"
+                            VerticalOptions="Center" />
                     </Border>
-                </DataTemplate>
-            </CollectionView.ItemTemplate>
-        </CollectionView>
+                </Grid>
 
-        <Grid Grid.Row="2" RowDefinitions="Auto,Auto" ColumnDefinitions="*,*" ColumnSpacing="12" RowSpacing="10">
-            <Button
-                Grid.ColumnSpan="2"
-                BackgroundColor="#1565D8"
-                Command="{Binding AddItemCommand}"
-                CornerRadius="8"
-                FontAttributes="Bold"
-                HeightRequest="50"
+                <!-- Item count hint -->
+                <Label
+                    FontSize="12"
+                    Margin="2,-8,0,0"
+                    Text="{Binding ItemCountDisplay}"
+                    TextColor="#94A3B8" />
+
+                <!-- Empty state -->
+                <Border
+                    BackgroundColor="White"
+                    IsVisible="{Binding HasNoItems}"
+                    Padding="24,20"
+                    Stroke="#E5EAF2"
+                    StrokeShape="RoundRectangle 12"
+                    StrokeThickness="1">
+                    <Label
+                        FontSize="14"
+                        HorizontalTextAlignment="Center"
+                        Text="No items added yet. Tap + to add an item."
+                        TextColor="#94A3B8" />
+                </Border>
+
+                <!-- Item cards -->
+                <VerticalStackLayout BindableLayout.ItemsSource="{Binding Items}" Spacing="10">
+                    <BindableLayout.ItemTemplate>
+                        <DataTemplate>
+                            <Border
+                                BackgroundColor="White"
+                                Padding="0"
+                                Stroke="#E5EAF2"
+                                StrokeShape="RoundRectangle 12"
+                                StrokeThickness="1">
+                                <Border.Shadow>
+                                    <Shadow Brush="#0A000000" Offset="0,2" Opacity="0.06" Radius="6" />
+                                </Border.Shadow>
+                                <Grid ColumnDefinitions="5,*">
+                                    <BoxView BackgroundColor="#0E2A5C" />
+                                    <VerticalStackLayout Grid.Column="1" Padding="14,12,14,12" Spacing="6">
+                                        <!-- Material code + type badge -->
+                                        <Grid ColumnDefinitions="*,Auto" ColumnSpacing="8">
+                                            <Label
+                                                FontAttributes="Bold"
+                                                FontSize="14"
+                                                LineBreakMode="TailTruncation"
+                                                Text="{Binding MaterialCode}"
+                                                TextColor="#172033"
+                                                VerticalOptions="Center" />
+                                            <Border
+                                                Grid.Column="1"
+                                                BackgroundColor="#EEF2FF"
+                                                Padding="8,4"
+                                                StrokeShape="RoundRectangle 8"
+                                                StrokeThickness="0"
+                                                VerticalOptions="Center">
+                                                <Label
+                                                    FontAttributes="Bold"
+                                                    FontSize="11"
+                                                    Text="{Binding WorkType}"
+                                                    TextColor="#4F46E5" />
+                                            </Border>
+                                        </Grid>
+                                        <!-- Material description -->
+                                        <Grid ColumnDefinitions="16,*" ColumnSpacing="6">
+                                            <controls:IconLabel
+                                                Glyph="{x:Static glyphs:IconGlyphs.Material}"
+                                                IconSize="14"
+                                                IconColor="#94A3B8"
+                                                HorizontalOptions="Center"
+                                                VerticalOptions="Center" />
+                                            <Label
+                                                Grid.Column="1"
+                                                FontSize="12"
+                                                LineBreakMode="TailTruncation"
+                                                Text="{Binding MaterialDesc}"
+                                                TextColor="#667085"
+                                                VerticalOptions="Center" />
+                                        </Grid>
+                                        <!-- UOM + Qty -->
+                                         <Grid ColumnDefinitions="16,*" ColumnSpacing="6">
+                                             <controls:IconLabel Glyph="{x:Static glyphs:IconGlyphs.Clipboard}" IconSize="14" IconColor="#94A3B8" />
+                                             <Label
+                                                 Grid.Column="1"
+                                                 FontSize="12"
+                                                TextColor="#475467"
+                                                VerticalOptions="Center">
+                                                <Label.FormattedText>
+                                                    <FormattedString>
+                                                        <Span FontAttributes="Bold" Text="UOM: " TextColor="#475467" />
+                                                        <Span Text="{Binding UoM}" TextColor="#475467" />
+                                                        <Span Text="  ·  Qty: " TextColor="#94A3B8" />
+                                                        <Span FontAttributes="Bold" Text="{Binding RequestedQty}" TextColor="#172033" />
+                                                    </FormattedString>
+                                                 </Label.FormattedText>
+                                             </Label>
+                                         </Grid>
+                                         <Button
+                                             Margin="0,6,0,0"
+                                             Padding="12,0"
+                                             BackgroundColor="#FFF5F5"
+                                             BorderColor="#FECACA"
+                                             BorderWidth="1"
+                                             Command="{Binding BindingContext.RemoveItemCommand, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                             CommandParameter="{Binding .}"
+                                             CornerRadius="8"
+                                             FontAttributes="Bold"
+                                             FontSize="12"
+                                             HeightRequest="38"
+                                             HorizontalOptions="End"
+                                             IsVisible="{Binding BindingContext.CanEdit, Source={RelativeSource AncestorType={x:Type ContentPage}}}"
+                                             Text="Remove"
+                                             TextColor="#DC2626" />
+                                     </VerticalStackLayout>
+                                 </Grid>
+                             </Border>
+                        </DataTemplate>
+                    </BindableLayout.ItemTemplate>
+                </VerticalStackLayout>
+
+                <BoxView BackgroundColor="Transparent" HeightRequest="4" />
+            </VerticalStackLayout>
+        </ScrollView>
+
+        <!-- ── Fixed bottom action buttons ──────────────────────────────────── -->
+        <Grid
+            Grid.Row="2"
+            BackgroundColor="White"
+            Padding="18,12,18,24"
+            RowDefinitions="Auto,Auto"
+            RowSpacing="10">
+
+            <!-- Submit for Approval -->
+            <Border
+                BackgroundColor="#0E2A5C"
+                HeightRequest="54"
+                IsEnabled="{Binding IsNotBusy}"
                 IsVisible="{Binding CanEdit}"
-                Text="+"
-                TextColor="White" />
-            <Button
+                StrokeShape="RoundRectangle 12"
+                StrokeThickness="0">
+                <Border.Shadow>
+                    <Shadow Brush="#441565D8" Offset="0,4" Opacity="0.30" Radius="10" />
+                </Border.Shadow>
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding SubmitCommand}" />
+                </Border.GestureRecognizers>
+                <HorizontalStackLayout HorizontalOptions="Center" Spacing="10" VerticalOptions="Center">
+                    <controls:IconLabel
+                        Glyph="{x:Static glyphs:IconGlyphs.Check}"
+                        IconSize="20"
+                        IconColor="White"
+                        VerticalOptions="Center" />
+                    <Label
+                        FontAttributes="Bold"
+                        FontSize="16"
+                        Text="Submit for Approval"
+                        TextColor="White"
+                        VerticalOptions="Center" />
+                </HorizontalStackLayout>
+            </Border>
+
+            <!-- Save as Draft -->
+            <Border
                 Grid.Row="1"
-                BackgroundColor="#EEF2F7"
-                Command="{Binding SaveDraftCommand}"
-                CornerRadius="8"
+                BackgroundColor="White"
                 HeightRequest="50"
-                Text="Save as Draft"
-                TextColor="#1565D8" />
-            <Button
-                Grid.Row="1"
-                Grid.Column="1"
-                BackgroundColor="#1565D8"
-                Command="{Binding SubmitCommand}"
-                CornerRadius="8"
-                FontAttributes="Bold"
-                HeightRequest="50"
-                IsVisible="{Binding CanEdit}"
-                Text="Submit for Approval"
-                TextColor="White" />
+                IsEnabled="{Binding IsNotBusy}"
+                Stroke="#0E2A5C"
+                StrokeShape="RoundRectangle 12"
+                StrokeThickness="1.5">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding SaveDraftCommand}" />
+                </Border.GestureRecognizers>
+                <HorizontalStackLayout HorizontalOptions="Center" Spacing="10" VerticalOptions="Center">
+                    <controls:IconLabel Glyph="{x:Static glyphs:IconGlyphs.SaveDisk}" IconSize="20" IconColor="#0E2A5C" />
+                    <Label
+                        FontAttributes="Bold"
+                        FontSize="15"
+                        Text="Save as Draft"
+                        TextColor="#0E2A5C"
+                        VerticalOptions="Center" />
+                </HorizontalStackLayout>
+            </Border>
         </Grid>
+
     </Grid>
 </ContentPage>

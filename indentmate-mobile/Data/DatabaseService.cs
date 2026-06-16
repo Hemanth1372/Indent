@@ -56,6 +56,7 @@ public class DatabaseService
             await _db.CreateTableAsync<LocalOfflineQueue>();
             await EnsureLocalIndentSyncColumnsAsync(_db);
             await EnsureLocalBusinessPartnerColumnsAsync(_db);
+            await EnsureLocalIndentItemColumnsAsync(_db);
 
             _initialized = true;
         }
@@ -133,6 +134,32 @@ public class DatabaseService
             .ToListAsync();
     }
 
+    public async Task RemoveSyncedIndentsMissingFromServerAsync(
+        string engineerId,
+        IReadOnlyCollection<string> serverRequestNumbers,
+        IReadOnlyCollection<string> serverIndentNumbers)
+    {
+        var db = await GetDbAsync();
+        var localIndents = await db.Table<LocalIndent>()
+            .Where(i => i.EngineerId == engineerId && i.IsSynced)
+            .ToListAsync();
+
+        var staleIndents = localIndents
+            .Where(indent =>
+                !serverRequestNumbers.Contains(NormalizeLookupKey(indent.RequestNo)) &&
+                !serverIndentNumbers.Contains(NormalizeLookupKey(indent.OfficialIndentNo)))
+            .ToList();
+
+        if (staleIndents.Count == 0)
+            return;
+
+        foreach (var indent in staleIndents)
+        {
+            await db.ExecuteAsync("DELETE FROM LocalIndentItems WHERE IndentId = ?", indent.IndentId);
+            await db.DeleteAsync(indent);
+        }
+    }
+
     /// <summary>Indents by status (e.g. "Created", "PendingApproval").</summary>
     public async Task<List<LocalIndent>> GetIndentsByStatusAsync(string engineerId, string status)
     {
@@ -142,11 +169,16 @@ public class DatabaseService
             .ToListAsync();
     }
 
+    private static string NormalizeLookupKey(string? value)
+    {
+        return (value ?? string.Empty).Trim().ToUpperInvariant();
+    }
+
     public async Task<List<LocalIndent>> GetPendingSyncIndentsAsync()
     {
         var db = await GetDbAsync();
         return await db.Table<LocalIndent>()
-            .Where(i => i.Status == "PendingSync" && !i.IsSynced)
+            .Where(i => (i.Status == "PendingSync" || i.Status == "SyncError") && !i.IsSynced)
             .OrderBy(i => i.SubmittedAt)
             .ToListAsync();
     }
@@ -225,6 +257,18 @@ public class DatabaseService
             .CountAsync();
     }
 
+    public async Task<int> DeleteIndentItemAsync(string itemLineId)
+    {
+        var db = await GetDbAsync();
+        var item = await db.Table<LocalIndentItem>()
+            .Where(i => i.ItemLineId == itemLineId)
+            .FirstOrDefaultAsync();
+
+        return item is null
+            ? 0
+            : await db.DeleteAsync(item);
+    }
+
     // ─────────────────────────────────────────────────────────────────────────
     // Master data queries
     // ─────────────────────────────────────────────────────────────────────────
@@ -240,18 +284,30 @@ public class DatabaseService
 
     public async Task<List<LocalProject>> GetSieProjectsForEngineerAsync(string engineerId)
     {
-        var db = await GetDbAsync();
-        return await db.Table<LocalProject>()
-            .Where(p => p.EngineerId == engineerId && p.ResponsibilityCode == "SIE")
-            .ToListAsync();
+        return (await GetProjectsForEngineerAsync(engineerId))
+            .Where(p => NormalizeRole(p.ResponsibilityCode) == "SIE")
+            .ToList();
     }
 
     public async Task<List<LocalProject>> GetSerProjectsForEngineerAsync(string engineerId)
     {
-        var db = await GetDbAsync();
-        return await db.Table<LocalProject>()
-            .Where(p => p.EngineerId == engineerId && p.ResponsibilityCode == "SER")
-            .ToListAsync();
+        return (await GetProjectsForEngineerAsync(engineerId))
+            .Where(p => NormalizeRole(p.ResponsibilityCode) == "SER")
+            .ToList();
+    }
+
+    private static string NormalizeRole(string? role)
+    {
+        var normalizedRole = (role ?? string.Empty).Trim().ToUpperInvariant();
+
+        return normalizedRole switch
+        {
+            "SRE" => "SER",
+            _ when normalizedRole.Contains("(SER)") || normalizedRole.Contains("(SRE)") => "SER",
+            _ when normalizedRole.Contains("SERVICE ENGINEER") || normalizedRole.Contains("SITE RECEIVING") => "SER",
+            _ when normalizedRole.Contains("(SIE)") || normalizedRole.Contains("SITE ENGINEER") => "SIE",
+            _ => normalizedRole
+        };
     }
 
     /// <summary>
@@ -471,11 +527,42 @@ public class DatabaseService
     {
         await AddColumnIfMissingAsync(db, "LocalIndents", "OfficialIndentNo", "TEXT NOT NULL DEFAULT ''");
         await AddColumnIfMissingAsync(db, "LocalIndents", "SyncErrorMessage", "TEXT NOT NULL DEFAULT ''");
+        await AddColumnIfMissingAsync(db, "LocalIndents", "ProjectName", "TEXT NOT NULL DEFAULT ''");
+        await AddColumnIfMissingAsync(db, "LocalIndents", "WarehouseName", "TEXT NOT NULL DEFAULT ''");
+        await AddColumnIfMissingAsync(db, "LocalIndents", "FromLocationName", "TEXT NOT NULL DEFAULT ''");
+        await AddColumnIfMissingAsync(db, "LocalIndents", "ToContractorName", "TEXT NOT NULL DEFAULT ''");
     }
 
     private static async Task EnsureLocalBusinessPartnerColumnsAsync(SQLiteAsyncConnection db)
     {
         await AddColumnIfMissingAsync(db, "LocalBusinessPartners", "LocationCode", "TEXT NOT NULL DEFAULT ''");
+    }
+
+    private static async Task EnsureLocalIndentItemColumnsAsync(SQLiteAsyncConnection db)
+    {
+        await AddColumnIfMissingAsync(db, "LocalIndentItems", "BusinessPartnerId", "TEXT NOT NULL DEFAULT ''");
+        await AddColumnIfMissingAsync(db, "LocalIndentItems", "BusinessPartnerName", "TEXT NOT NULL DEFAULT ''");
+    }
+
+    public async Task<bool> HasDuplicateSIEItemAsync(
+        string indentId, string materialCode, string locationId, string activityId, string businessPartnerId)
+    {
+        var db = await GetDbAsync();
+        return await db.Table<LocalIndentItem>()
+            .Where(i => i.IndentId == indentId
+                        && i.MaterialCode == materialCode
+                        && i.LocationId == locationId
+                        && i.ActivityId == activityId
+                        && i.BusinessPartnerId == businessPartnerId)
+            .CountAsync() > 0;
+    }
+
+    public async Task<bool> HasDuplicateSERItemAsync(string indentId, string materialCode)
+    {
+        var db = await GetDbAsync();
+        return await db.Table<LocalIndentItem>()
+            .Where(i => i.IndentId == indentId && i.MaterialCode == materialCode)
+            .CountAsync() > 0;
     }
 
     private static async Task AddColumnIfMissingAsync(

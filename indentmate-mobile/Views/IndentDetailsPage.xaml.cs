@@ -6,4 +6,12 @@ public partial class IndentDetailsPage : ContentPage
     {
         InitializeComponent();
     }
+
+    private async void OnBackClicked(object sender, EventArgs e)
+    {
+        var route = BindingContext is ViewModels.IndentDetailsViewModel viewModel && viewModel.IsSerIndent
+            ? "//ser-dashboard"
+            : "//sie-dashboard";
+        await Shell.Current.GoToAsync(route);
+    }
 }

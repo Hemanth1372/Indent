@@ -8,8 +8,13 @@ namespace IndentMate.Mobile.ViewModels;
 
 public partial class SERIndentHeaderViewModel : BaseViewModel
 {
+    private const int SearchPageSize = 80;
     private readonly DatabaseService _databaseService;
     private readonly ApiService _apiService;
+    private int _orderOffset;
+    private int _orderSearchVersion;
+    private bool _lastOrderHasMore;
+    private string _orderSearchText = string.Empty;
 
     public ObservableCollection<LocalProject> Projects { get; } = new();
     public ObservableCollection<SEROrderOption> Orders { get; } = new();
@@ -19,6 +24,9 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
     [ObservableProperty] private SEROrderOption? _selectedOrder;
     [ObservableProperty] private string _equipment = string.Empty;
     [ObservableProperty] private string _selectedIndentType = "Issue";
+    [ObservableProperty] private string _userInfo = string.Empty;
+    [ObservableProperty] private bool _isOrderSearchLoading;
+    [ObservableProperty] private bool _hasMoreOrders;
 
     public SERIndentHeaderViewModel()
         : this(new DatabaseService(Path.Combine(FileSystem.AppDataDirectory, "indentmate.db")), new ApiService())
@@ -68,6 +76,7 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
                 RequestNo = $"REQ-{DateTime.UtcNow:yyyyMMddHHmmss}",
                 EngineerId = engineerId,
                 ProjectId = SelectedProject.ProjectId,
+                ProjectName = DisplayOrId(SelectedProject.DisplayName, SelectedProject.ProjectId),
                 IndentType = SelectedIndentType == "Issue Return" ? "IssueReturn" : "Issue",
                 EngineerType = "SER",
                 OrderNo = SelectedOrder.OrderNo,
@@ -84,7 +93,11 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
 
     partial void OnSelectedProjectChanged(LocalProject? value)
     {
-        _ = LoadOrdersAsync();
+        Orders.Clear();
+        SelectedOrder = null;
+        Equipment = string.Empty;
+        HasMoreOrders = false;
+        _ = SearchOrdersAsync(string.Empty);
     }
 
     partial void OnSelectedOrderChanged(SEROrderOption? value)
@@ -97,6 +110,11 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
         await RunBusyAsync(async () =>
         {
             var engineerId = await SecureStorage.Default.GetAsync("engineer_id") ?? string.Empty;
+            var engineerName = await SecureStorage.Default.GetAsync("engineer_name") ?? string.Empty;
+            var environment = await SecureStorage.Default.GetAsync("ln_environment") ?? string.Empty;
+            var company = await SecureStorage.Default.GetAsync("company") ?? string.Empty;
+            UserInfo = BuildUserInfo(engineerId, engineerName, environment, company);
+
             Projects.Clear();
 
             if (string.IsNullOrWhiteSpace(engineerId))
@@ -110,7 +128,11 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
                 Projects.Add(project);
             }
 
-            SelectedProject ??= Projects.FirstOrDefault();
+            if (SelectedProject is null || !Projects.Any(project =>
+                    string.Equals(project.ProjectId, SelectedProject.ProjectId, StringComparison.OrdinalIgnoreCase)))
+            {
+                SelectedProject = Projects.FirstOrDefault();
+            }
         });
     }
 
@@ -123,8 +145,22 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
         }
 
         return (await _databaseService.GetProjectsForEngineerAsync(engineerId))
-            .Where(project => string.IsNullOrWhiteSpace(project.ResponsibilityCode) || project.ResponsibilityCode == "SER")
+            .Where(project => string.IsNullOrWhiteSpace(project.ResponsibilityCode) || NormalizeRole(project.ResponsibilityCode) == "SER")
             .ToList();
+    }
+
+    private static string NormalizeRole(string? role)
+    {
+        var normalizedRole = (role ?? string.Empty).Trim().ToUpperInvariant();
+
+        return normalizedRole switch
+        {
+            "SRE" => "SER",
+            _ when normalizedRole.Contains("(SER)") || normalizedRole.Contains("(SRE)") => "SER",
+            _ when normalizedRole.Contains("SERVICE ENGINEER") || normalizedRole.Contains("SITE RECEIVING") => "SER",
+            _ when normalizedRole.Contains("(SIE)") || normalizedRole.Contains("SITE ENGINEER") => "SIE",
+            _ => normalizedRole
+        };
     }
 
     private async Task<List<LocalProject>> GetMergedCurrentProjectsAsync(
@@ -179,6 +215,104 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
         }
     }
 
+    [RelayCommand]
+    private async Task SearchOrdersAsync(string? search)
+    {
+        var query = (search ?? string.Empty).Trim();
+        _orderSearchText = query;
+        _orderOffset = 0;
+        HasMoreOrders = false;
+
+        if (SelectedProject is null)
+            return;
+
+        var version = ++_orderSearchVersion;
+        await LoadOrderPageAsync(query, reset: true, version);
+    }
+
+    [RelayCommand]
+    private async Task LoadMoreOrdersAsync(string? search)
+    {
+        var query = string.IsNullOrWhiteSpace(search) ? _orderSearchText : search.Trim();
+
+        if (!HasMoreOrders || IsOrderSearchLoading)
+            return;
+
+        var version = ++_orderSearchVersion;
+        await LoadOrderPageAsync(query, reset: false, version);
+    }
+
+    private async Task LoadOrderPageAsync(string query, bool reset, int version)
+    {
+        if (SelectedProject is null)
+            return;
+
+        IsOrderSearchLoading = true;
+        try
+        {
+            var projectCodes = BuildProjectCodes();
+            var offset = reset ? 0 : _orderOffset;
+            var orderOptions = await GetCurrentOrderOptionsAsync(projectCodes, query, SearchPageSize, offset);
+
+            if (version != _orderSearchVersion)
+                return;
+
+            if (reset)
+                Orders.Clear();
+
+            AddOrders(orderOptions);
+            _orderOffset = offset + orderOptions.Count;
+            HasMoreOrders = _lastOrderHasMore;
+
+            if (reset && string.IsNullOrWhiteSpace(query) && (SelectedOrder is null || !Orders.Any(order =>
+                    string.Equals(order.OrderNo, SelectedOrder.OrderNo, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(order.OrderType, SelectedOrder.OrderType, StringComparison.OrdinalIgnoreCase))))
+            {
+                SelectedOrder = Orders.FirstOrDefault();
+            }
+        }
+        catch
+        {
+            StatusMessage = "Could not search service/rental orders. Please try again.";
+            HasError = true;
+        }
+        finally
+        {
+            if (version == _orderSearchVersion)
+                IsOrderSearchLoading = false;
+        }
+    }
+
+    private List<string> BuildProjectCodes()
+    {
+        if (SelectedProject is null)
+        {
+            return new List<string>();
+        }
+
+        return new[] { SelectedProject.ProjectId, SelectedProject.SiteCode }
+            .Where(code => !string.IsNullOrWhiteSpace(code))
+            .Select(code => code!.Trim())
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    private void AddOrders(IEnumerable<SEROrderOption> orderOptions)
+    {
+        foreach (var order in orderOptions
+            .GroupBy(order => $"{order.OrderType}:{order.OrderNo}", StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(order => order.OrderNo))
+        {
+            if (!Orders.Any(existing =>
+                    string.Equals(existing.OrderNo, order.OrderNo, StringComparison.OrdinalIgnoreCase) &&
+                    string.Equals(existing.OrderType, order.OrderType, StringComparison.OrdinalIgnoreCase)))
+            {
+                Orders.Add(order);
+            }
+        }
+    }
+
     private async Task LoadOrdersAsync()
     {
         Orders.Clear();
@@ -193,6 +327,47 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
             .Distinct()
             .ToList();
 
+        var orderOptions = await GetCurrentOrderOptionsAsync(projectCodes);
+
+        foreach (var order in orderOptions
+            .GroupBy(order => $"{order.OrderType}:{order.OrderNo}", StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(order => order.OrderNo))
+        {
+            Orders.Add(order);
+        }
+
+        SelectedOrder = Orders.FirstOrDefault();
+    }
+
+    private async Task<List<SEROrderOption>> GetCurrentOrderOptionsAsync(
+        List<string> projectCodes,
+        string search = "",
+        int limit = 500,
+        int offset = 0)
+    {
+        _lastOrderHasMore = false;
+
+        try
+        {
+            var apiResult = await _apiService.SearchOrderOptionsForProjectAsync(projectCodes, search, limit, offset);
+            if (apiResult.Data.Count != 0)
+            {
+                await CacheApiOrdersAsync(apiResult.Data);
+                _lastOrderHasMore = apiResult.HasMore;
+                return apiResult.Data.Select(SEROrderOption.FromApiOrder).ToList();
+            }
+
+            if (offset > 0)
+            {
+                _lastOrderHasMore = false;
+                return new List<SEROrderOption>();
+            }
+        }
+        catch
+        {
+        }
+
         var orderOptions = new List<SEROrderOption>();
         foreach (var code in projectCodes)
         {
@@ -203,15 +378,87 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
             orderOptions.AddRange(rentalOrders.Select(SEROrderOption.FromRentalOrder));
         }
 
-        foreach (var order in orderOptions
-            .GroupBy(order => $"{order.OrderType}:{order.OrderNo}")
+        var localRows = orderOptions
+            .GroupBy(order => $"{order.OrderType}:{order.OrderNo}", StringComparer.OrdinalIgnoreCase)
             .Select(group => group.First())
-            .OrderBy(order => order.OrderNo))
+            .Where(order => MatchesSearch(order, search))
+            .OrderBy(order => order.OrderNo)
+            .Skip(offset)
+            .Take(limit + 1)
+            .ToList();
+
+        _lastOrderHasMore = localRows.Count > limit;
+        return localRows.Take(limit).ToList();
+    }
+
+    private static bool MatchesSearch(SEROrderOption order, string search)
+    {
+        if (string.IsNullOrWhiteSpace(search))
+            return true;
+
+        return order.OrderNo.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               order.OrderType.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               order.EquipmentDisplay.Contains(search, StringComparison.OrdinalIgnoreCase) ||
+               order.DisplayName.Contains(search, StringComparison.OrdinalIgnoreCase);
+    }
+
+    private async Task CacheApiOrdersAsync(List<ApiOrderOption> apiOrders)
+    {
+        var serviceOrders = apiOrders
+            .Where(order => string.Equals(order.OrderType, "Service", StringComparison.OrdinalIgnoreCase))
+            .Select(order => new LocalServiceOrder
+            {
+                OrderNo = order.OrderNo,
+                Status = string.IsNullOrWhiteSpace(order.Status) ? "Released" : order.Status,
+                SiteCode = order.ProjectCode,
+                SerialNumber = order.SerialNumber,
+                Equipment = order.ItemCode,
+                Description = DisplayOrId(order.OrderDescription, order.ItemDescription)
+            })
+            .ToList();
+
+        var rentalOrders = apiOrders
+            .Where(order => string.Equals(order.OrderType, "Rental", StringComparison.OrdinalIgnoreCase))
+            .Select(order => new LocalRentalOrder
+            {
+                OrderNo = order.OrderNo,
+                Status = string.IsNullOrWhiteSpace(order.Status) ? "Released" : order.Status,
+                SiteCode = order.ProjectCode,
+                ProjectCode = order.ProjectCode,
+                SerialNumber = order.SerialNumber,
+                Equipment = order.ItemCode,
+                Description = DisplayOrId(order.OrderDescription, order.ItemDescription)
+            })
+            .ToList();
+
+        if (serviceOrders.Count != 0)
         {
-            Orders.Add(order);
+            await _databaseService.SaveBatchAsync(serviceOrders);
         }
 
-        SelectedOrder ??= Orders.FirstOrDefault();
+        if (rentalOrders.Count != 0)
+        {
+            await _databaseService.SaveBatchAsync(rentalOrders);
+        }
+    }
+
+    private static string DisplayOrId(string? displayName, string id)
+    {
+        return string.IsNullOrWhiteSpace(displayName)
+            ? id
+            : displayName.Trim();
+    }
+
+    private static string BuildUserInfo(string engineerId, string engineerName, string environment, string company)
+    {
+        var userPart = string.IsNullOrWhiteSpace(engineerName)
+            ? engineerId
+            : $"{engineerId} — {engineerName}";
+        var envPart = string.Join(" - ", new[] { environment, company }
+            .Where(v => !string.IsNullOrWhiteSpace(v)));
+
+        if (string.IsNullOrWhiteSpace(userPart)) userPart = "Not configured";
+        return string.IsNullOrWhiteSpace(envPart) ? userPart : $"{userPart} | {envPart}";
     }
 
 }
@@ -231,6 +478,17 @@ public class SEROrderOption
     public static SEROrderOption FromRentalOrder(LocalRentalOrder order)
     {
         return Create(order.OrderNo, "Rental", order.Description, order.Equipment, order.SerialNumber, order.Status);
+    }
+
+    public static SEROrderOption FromApiOrder(ApiOrderOption order)
+    {
+        return Create(
+            order.OrderNo,
+            order.OrderType,
+            string.IsNullOrWhiteSpace(order.OrderDescription) ? order.ItemDescription : order.OrderDescription,
+            order.ItemCode,
+            order.SerialNumber,
+            string.IsNullOrWhiteSpace(order.Status) ? "Released" : order.Status);
     }
 
     private static SEROrderOption Create(

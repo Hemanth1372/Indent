@@ -20,10 +20,6 @@ const responsibilityBodySchema = z.object({
 const userMasterBodySchema = z.object({
   employee_id: z.string().trim().min(1).max(50),
   employee_name: z.string().trim().min(1).max(150),
-  email_id: z.preprocess(
-    (value) => value == null || value === '' ? '' : value,
-    z.union([z.literal(''), z.string().trim().email().max(255)]).optional(),
-  ),
   password_hash: z.string().trim().regex(/^\d{6}$/, 'PIN must be exactly 6 digits').optional(),
   password: z.string().trim().regex(/^\d{6}$/, 'PIN must be exactly 6 digits').optional(),
 })

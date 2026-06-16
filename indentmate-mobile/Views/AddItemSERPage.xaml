@@ -3,6 +3,8 @@
     x:Class="IndentMate.Mobile.Views.AddItemSERPage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:controls="clr-namespace:IndentMate.Mobile.Controls"
+    xmlns:glyphs="clr-namespace:IndentMate.Mobile.Resources"
     xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
     BackgroundColor="#F4F7FB"
     Shell.NavBarIsVisible="False">
@@ -11,89 +13,331 @@
         <vm:AddItemSERViewModel />
     </ContentPage.BindingContext>
 
-    <Grid Padding="20" RowDefinitions="Auto,*">
-        <Grid ColumnDefinitions="Auto,*" Padding="0,0,0,18">
-            <Button
-                BackgroundColor="Transparent"
-                Clicked="OnBackClicked"
-                FontSize="24"
-                HeightRequest="42"
-                Padding="0"
-                Text="&#x2039;"
-                TextColor="#172033"
-                WidthRequest="42" />
+    <Grid RowDefinitions="Auto,*">
+
+        <!-- ── Blue Header ──────────────────────────────────────────────────── -->
+        <Grid BackgroundColor="#0E2A5C" ColumnDefinitions="44,*,44" Padding="18,48,18,16" VerticalOptions="Fill">
+            <Border
+                BackgroundColor="#33FFFFFF"
+                HeightRequest="40"
+                StrokeShape="RoundRectangle 10"
+                StrokeThickness="0"
+                VerticalOptions="Center"
+                WidthRequest="40">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnBackClicked" />
+                </Border.GestureRecognizers>
+                <controls:IconLabel
+                    Glyph="{x:Static glyphs:IconGlyphs.Back}"
+                    IconColor="White"
+                    IconSize="20"
+                    HorizontalOptions="Center"
+                    VerticalOptions="Center" />
+            </Border>
+
             <Label
                 Grid.Column="1"
                 FontAttributes="Bold"
-                FontSize="22"
+                FontSize="20"
+                HorizontalOptions="Center"
                 Text="Add SER Item"
-                TextColor="#172033"
+                TextColor="White"
                 VerticalOptions="Center" />
+
+            <BoxView Grid.Column="2" Color="Transparent" />
         </Grid>
 
+        <!-- ── Scrollable content ──────────────────────────────────────────── -->
         <ScrollView Grid.Row="1">
-            <VerticalStackLayout Spacing="14">
-                <Label FontAttributes="Bold" FontSize="13" Text="Material" TextColor="#475467" />
-                <Picker
-                    Title="Select material"
-                    BackgroundColor="White"
-                    ItemDisplayBinding="{Binding ItemCode}"
-                    ItemsSource="{Binding Materials}"
-                    SelectedItem="{Binding SelectedMaterial}" />
+            <VerticalStackLayout
+                HorizontalOptions="Fill"
+                MaximumWidthRequest="540"
+                Padding="22,22,22,32"
+                Spacing="18">
+                <VerticalStackLayout.GestureRecognizers>
+                    <TapGestureRecognizer Tapped="OnFormTapped" />
+                </VerticalStackLayout.GestureRecognizers>
 
-                <Label FontAttributes="Bold" FontSize="13" Text="UoM" TextColor="#475467" />
+                <!-- ── Form card ────────────────────────────────────────────── -->
                 <Border
-                    Padding="12"
-                    BackgroundColor="#EEF2F7"
-                    Stroke="#D6DEE9"
-                    StrokeShape="RoundRectangle 8"
+                    BackgroundColor="White"
+                    Padding="20"
+                    Stroke="#E3EAF3"
+                    StrokeShape="RoundRectangle 14"
                     StrokeThickness="1">
-                    <Label Text="{Binding UoM}" TextColor="#172033" />
+                    <Border.Shadow>
+                        <Shadow Brush="#22000000" Offset="0,3" Opacity="0.12" Radius="12" />
+                    </Border.Shadow>
+
+                    <VerticalStackLayout Spacing="16">
+
+                        <!-- Card title with tool icon -->
+                        <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                            <Border
+                                BackgroundColor="#FFF0E6"
+                                HeightRequest="36"
+                                StrokeShape="RoundRectangle 8"
+                                StrokeThickness="0"
+                                VerticalOptions="Center"
+                                WidthRequest="36">
+                                <controls:IconLabel
+                                    Glyph="{x:Static glyphs:IconGlyphs.Spares}"
+                                    IconSize="18"
+                                    HorizontalOptions="Center"
+                                    VerticalOptions="Center" />
+                            </Border>
+                            <Label
+                                Grid.Column="1"
+                                FontAttributes="Bold"
+                                FontSize="18"
+                                Text="Item Details"
+                                TextColor="#172033"
+                                VerticalOptions="Center" />
+                        </Grid>
+
+                        <BoxView BackgroundColor="#EFF2F7" HeightRequest="1" />
+
+                        <!-- Category -->
+                        <VerticalStackLayout Spacing="7">
+                            <Label FontAttributes="Bold" FontSize="13" TextColor="#475467">
+                                <Label.FormattedText>
+                                    <FormattedString>
+                                        <Span FontAttributes="Bold" FontSize="13" Text="Category " TextColor="#475467" />
+                                        <Span FontSize="12" Text="*" TextColor="#D92D20" />
+                                    </FormattedString>
+                                </Label.FormattedText>
+                            </Label>
+                            <controls:DropdownField
+                                HorizontalOptions="Fill"
+                                ItemsSource="{Binding Categories}"
+                                Placeholder="Diesel / Spare / Other"
+                                SelectedItem="{Binding SelectedCategory}" />
+                        </VerticalStackLayout>
+
+                        <!-- Material -->
+                        <VerticalStackLayout Spacing="7">
+                            <Label FontAttributes="Bold" FontSize="13" TextColor="#475467">
+                                <Label.FormattedText>
+                                    <FormattedString>
+                                        <Span FontAttributes="Bold" FontSize="13" Text="Material " TextColor="#475467" />
+                                        <Span FontSize="12" Text="*" TextColor="#D92D20" />
+                                    </FormattedString>
+                                </Label.FormattedText>
+                            </Label>
+                            <controls:DropdownField
+                                DisplayMemberPath="DisplayName"
+                                HasMore="{Binding HasMoreMaterials}"
+                                HorizontalOptions="Fill"
+                                IsLoading="{Binding IsMaterialSearchLoading}"
+                                ItemsSource="{Binding Materials}"
+                                LoadMoreCommand="{Binding LoadMoreMaterialsCommand}"
+                                Placeholder="Select Material"
+                                SearchCommand="{Binding SearchMaterialsCommand}"
+                                SelectedItem="{Binding SelectedMaterial}" />
+                        </VerticalStackLayout>
+
+                        <!-- UOM (auto-filled, read-only) -->
+                        <VerticalStackLayout Spacing="7">
+                            <Label FontAttributes="Bold" FontSize="13" TextColor="#475467">
+                                <Label.FormattedText>
+                                    <FormattedString>
+                                        <Span FontAttributes="Bold" FontSize="13" Text="UOM " TextColor="#475467" />
+                                        <Span FontSize="12" Text="(Auto-filled)" TextColor="#94A3B8" />
+                                    </FormattedString>
+                                </Label.FormattedText>
+                            </Label>
+                            <Border
+                                BackgroundColor="#F1F5F9"
+                                HeightRequest="54"
+                                Padding="16,0"
+                                Stroke="#D6DEE9"
+                                StrokeShape="RoundRectangle 10"
+                                StrokeThickness="1">
+                                <Label
+                                    FontSize="15"
+                                    Text="{Binding UoM}"
+                                    TextColor="#475467"
+                                    VerticalOptions="Center" />
+                            </Border>
+                        </VerticalStackLayout>
+
+                        <!-- Requested Qty -->
+                        <VerticalStackLayout Spacing="7">
+                            <Label FontAttributes="Bold" FontSize="13" TextColor="#475467">
+                                <Label.FormattedText>
+                                    <FormattedString>
+                                        <Span FontAttributes="Bold" FontSize="13" Text="Requested Qty " TextColor="#475467" />
+                                        <Span FontSize="12" Text="*" TextColor="#D92D20" />
+                                    </FormattedString>
+                                </Label.FormattedText>
+                            </Label>
+                            <Border
+                                BackgroundColor="#F8FAFC"
+                                HeightRequest="54"
+                                Padding="14,0"
+                                Stroke="#D6DEE9"
+                                StrokeShape="RoundRectangle 10"
+                                StrokeThickness="1">
+                                <Entry
+                                    BackgroundColor="Transparent"
+                                    FontSize="15"
+                                    Keyboard="Numeric"
+                                    Placeholder="Enter quantity"
+                                    PlaceholderColor="#94A3B8"
+                                    Text="{Binding RequestedQty}"
+                                    TextColor="#172033"
+                                    VerticalOptions="Center" />
+                            </Border>
+                        </VerticalStackLayout>
+
+                        <!-- Remarks -->
+                        <VerticalStackLayout Spacing="7">
+                            <Label
+                                FontAttributes="Bold"
+                                FontSize="13"
+                                Text="Remarks"
+                                TextColor="#475467" />
+                            <Border
+                                BackgroundColor="#F8FAFC"
+                                MinimumHeightRequest="88"
+                                Padding="14,10"
+                                Stroke="#D6DEE9"
+                                StrokeShape="RoundRectangle 10"
+                                StrokeThickness="1">
+                                <Editor
+                                    AutoSize="TextChanges"
+                                    BackgroundColor="Transparent"
+                                    FontSize="15"
+                                    MinimumHeightRequest="68"
+                                    Placeholder="Enter remarks"
+                                    PlaceholderColor="#94A3B8"
+                                    Text="{Binding Remarks}"
+                                    TextColor="#172033" />
+                            </Border>
+                        </VerticalStackLayout>
+
+                        <!-- Attachment -->
+                        <VerticalStackLayout Spacing="8">
+                            <Label
+                                FontAttributes="Bold"
+                                FontSize="13"
+                                Text="Attachment"
+                                TextColor="#475467" />
+                            <Grid ColumnDefinitions="*,*" ColumnSpacing="10">
+                                <!-- Camera button -->
+                                <Border
+                                    BackgroundColor="#F1F5F9"
+                                    HeightRequest="48"
+                                    Stroke="#D6DEE9"
+                                    StrokeShape="RoundRectangle 10"
+                                    StrokeThickness="1">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding AttachCameraCommand}" />
+                                    </Border.GestureRecognizers>
+                                    <HorizontalStackLayout HorizontalOptions="Center" Spacing="7" VerticalOptions="Center">
+                                        <controls:IconLabel Glyph="{x:Static glyphs:IconGlyphs.Camera}" IconSize="16" VerticalOptions="Center" />
+                                        <Label
+                                            FontAttributes="Bold"
+                                            FontSize="14"
+                                            Text="Camera"
+                                            TextColor="#0E2A5C"
+                                            VerticalOptions="Center" />
+                                    </HorizontalStackLayout>
+                                </Border>
+                                <!-- File button -->
+                                <Border
+                                    Grid.Column="1"
+                                    BackgroundColor="#F1F5F9"
+                                    HeightRequest="48"
+                                    Stroke="#D6DEE9"
+                                    StrokeShape="RoundRectangle 10"
+                                    StrokeThickness="1">
+                                    <Border.GestureRecognizers>
+                                        <TapGestureRecognizer Command="{Binding AttachFileCommand}" />
+                                    </Border.GestureRecognizers>
+                                    <HorizontalStackLayout HorizontalOptions="Center" Spacing="7" VerticalOptions="Center">
+                                        <controls:IconLabel Glyph="{x:Static glyphs:IconGlyphs.Attach}" IconSize="16" VerticalOptions="Center" />
+                                        <Label
+                                            FontAttributes="Bold"
+                                            FontSize="14"
+                                            Text="File"
+                                            TextColor="#0E2A5C"
+                                            VerticalOptions="Center" />
+                                    </HorizontalStackLayout>
+                                </Border>
+                            </Grid>
+                            <Label
+                                FontSize="12"
+                                Text="Max attachment size: 5 MB"
+                                TextColor="#94A3B8" />
+                            <Border
+                                BackgroundColor="#EFF6FF"
+                                IsVisible="{Binding HasAttachment}"
+                                Padding="12,8"
+                                Stroke="#BFDBFE"
+                                StrokeShape="RoundRectangle 8"
+                                StrokeThickness="1">
+                                <Label
+                                    FontSize="13"
+                                    LineBreakMode="TailTruncation"
+                                    Text="{Binding AttachmentName}"
+                                    TextColor="#0E2A5C" />
+                            </Border>
+                        </VerticalStackLayout>
+
+                        <!-- Validation error -->
+                        <Border
+                            BackgroundColor="#FEF2F2"
+                            IsVisible="{Binding HasValidationError}"
+                            Padding="12,10"
+                            Stroke="#FECACA"
+                            StrokeShape="RoundRectangle 8"
+                            StrokeThickness="1">
+                            <Label
+                                FontSize="13"
+                                Text="{Binding ValidationMessage}"
+                                TextColor="#D92D20" />
+                        </Border>
+
+                    </VerticalStackLayout>
                 </Border>
 
-                <Label FontAttributes="Bold" FontSize="13" Text="Requested Qty" TextColor="#475467" />
-                <Entry
-                    BackgroundColor="White"
-                    Keyboard="Numeric"
-                    Placeholder="0"
-                    Text="{Binding RequestedQty}" />
+                <!-- ── Save Item button ──────────────────────────────────────── -->
+                <Border
+                    BackgroundColor="#0E2A5C"
+                    HeightRequest="56"
+                    StrokeShape="RoundRectangle 12"
+                    StrokeThickness="0">
+                    <Border.Shadow>
+                        <Shadow Brush="#441565D8" Offset="0,4" Opacity="0.35" Radius="10" />
+                    </Border.Shadow>
+                    <Border.GestureRecognizers>
+                        <TapGestureRecognizer Command="{Binding SaveItemCommand}" />
+                    </Border.GestureRecognizers>
+                    <HorizontalStackLayout HorizontalOptions="Center" Spacing="10" VerticalOptions="Center">
+                        <Border
+                            BackgroundColor="#33FFFFFF"
+                            HeightRequest="28"
+                            StrokeShape="RoundRectangle 6"
+                            StrokeThickness="0"
+                            VerticalOptions="Center"
+                            WidthRequest="28">
+                            <controls:IconLabel
+                                Glyph="{x:Static glyphs:IconGlyphs.Save}"
+                                IconSize="14"
+                                IconColor="White"
+                                HorizontalOptions="Center"
+                                VerticalOptions="Center" />
+                        </Border>
+                        <Label
+                            FontAttributes="Bold"
+                            FontSize="16"
+                            Text="Save Item"
+                            TextColor="White"
+                            VerticalOptions="Center" />
+                    </HorizontalStackLayout>
+                </Border>
 
-                <Label FontAttributes="Bold" FontSize="13" Text="Remarks" TextColor="#475467" />
-                <Editor
-                    AutoSize="TextChanges"
-                    BackgroundColor="White"
-                    HeightRequest="96"
-                    Placeholder="Optional"
-                    Text="{Binding Remarks}" />
-
-                <Button
-                    BackgroundColor="#EEF2F7"
-                    Command="{Binding AttachFileCommand}"
-                    CornerRadius="8"
-                    HeightRequest="48"
-                    Text="Attachment"
-                    TextColor="#1565D8" />
-                <Label
-                    FontSize="12"
-                    IsVisible="{Binding HasAttachment}"
-                    Text="{Binding AttachmentName}"
-                    TextColor="#667085" />
-
-                <Label
-                    FontSize="13"
-                    IsVisible="{Binding HasValidationError}"
-                    Text="{Binding ValidationMessage}"
-                    TextColor="#D92D20" />
-
-                <Button
-                    Margin="0,8,0,0"
-                    BackgroundColor="#1565D8"
-                    Command="{Binding SaveItemCommand}"
-                    CornerRadius="8"
-                    FontAttributes="Bold"
-                    HeightRequest="52"
-                    Text="Save Item"
-                    TextColor="White" />
             </VerticalStackLayout>
         </ScrollView>
     </Grid>

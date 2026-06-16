@@ -17,6 +17,7 @@ public static class MauiProgram
             {
                 fonts.AddFont("OpenSans-Regular.ttf", "OpenSansRegular");
                 fonts.AddFont("OpenSans-Semibold.ttf", "OpenSansSemibold");
+                fonts.AddFont("MaterialIcons-Regular.ttf", "MaterialIcons");
             });
 
         // ─── Register SQLite DatabaseService ──────────────────────────────────
@@ -36,6 +37,7 @@ public static class MauiProgram
         // ─── Register Views ───────────────────────────────────────────────────
         builder.Services.AddTransient<Views.SetupPage>();
         builder.Services.AddTransient<Views.LoginPage>();
+        builder.Services.AddTransient<Views.LoginSuccessPage>();
         builder.Services.AddTransient<Views.HomePage>();
         builder.Services.AddTransient<Views.IndentHomePage>();
         builder.Services.AddTransient<Views.IndentHeaderPage>();
@@ -48,6 +50,7 @@ public static class MauiProgram
         // ─── Register ViewModels ──────────────────────────────────────────────
         builder.Services.AddTransient<ViewModels.SetupViewModel>();
         builder.Services.AddTransient<ViewModels.LoginViewModel>();
+        builder.Services.AddTransient<ViewModels.LoginSuccessViewModel>();
         builder.Services.AddTransient<ViewModels.HomeViewModel>();
         builder.Services.AddTransient<ViewModels.IndentHomeViewModel>();
         builder.Services.AddTransient<ViewModels.IndentHeaderViewModel>();

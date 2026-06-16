@@ -78,7 +78,7 @@
 
             <Button Text="Create Request"
                     Command="{Binding CreateRequestCommand}"
-                    BackgroundColor="#6C63FF"
+                    BackgroundColor="#0E2A5C"
                     TextColor="White"
                     CornerRadius="8"
                     Margin="0,8,0,0" />

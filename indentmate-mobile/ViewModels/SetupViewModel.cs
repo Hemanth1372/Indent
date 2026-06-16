@@ -6,7 +6,6 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Security.Cryptography;
 using System.Text;
-using System.Text.Json;
 using System.Text.Json.Serialization;
 
 namespace IndentMate.Mobile.ViewModels;
@@ -25,8 +24,11 @@ public partial class SetupViewModel : BaseViewModel
     [ObservableProperty] private string _company = string.Empty;
     [ObservableProperty] private string _engineerId = string.Empty;
     [ObservableProperty] private string _pin = string.Empty;
+    [ObservableProperty] private bool _isPinVisible;
     [ObservableProperty] private string _errorMessage = string.Empty;
     [ObservableProperty] private LNEnvironmentOption? _selectedLNEnvironmentOption;
+
+    public bool IsPinHidden => !IsPinVisible;
 
     public List<LNEnvironmentOption> LNEnvironmentOptions { get; } = new()
     {
@@ -40,19 +42,26 @@ public partial class SetupViewModel : BaseViewModel
         _databaseService = new DatabaseService(Path.Combine(FileSystem.AppDataDirectory, "indentmate.db"));
         _httpClient = new HttpClient
         {
-            BaseAddress = new Uri("https://indentmate.onrender.com"),
-            Timeout = TimeSpan.FromSeconds(60)
+            BaseAddress = new Uri(ApiEndpoints.BaseUrl),
+            Timeout = TimeSpan.FromSeconds(10)
         };
-        _httpClient.DefaultRequestHeaders.ConnectionClose = true;
         SelectedLNEnvironmentOption = LNEnvironmentOptions.First(option => option.Code == LnEnvironment);
     }
 
     [RelayCommand]
     private async Task SaveAndSyncAsync()
     {
-        await RunBusyAsync(async () =>
+        if (IsBusy)
         {
+            return;
+        }
+
+        try
+        {
+            IsBusy = true;
+            HasError = false;
             ErrorMessage = string.Empty;
+            StatusMessage = string.Empty;
 
             // Validate inputs
             if (string.IsNullOrWhiteSpace(LnEnvironment))
@@ -84,12 +93,9 @@ public partial class SetupViewModel : BaseViewModel
 
             var responsibilityCode = NormalizeRole(adminUser.PrimaryRole);
 
-            if (string.IsNullOrWhiteSpace(responsibilityCode))
+            if (responsibilityCode is not ("SER" or "SIE"))
             {
-                responsibilityCode = normalizedEngineerId.StartsWith("SER", StringComparison.OrdinalIgnoreCase) ||
-                    normalizedEngineerId.StartsWith("SRE", StringComparison.OrdinalIgnoreCase)
-                        ? "SER"
-                        : "SIE";
+                throw new InvalidOperationException("Access Denied: No valid SIE/SER role assigned to this user.");
             }
 
             var engineer = new LocalEngineer
@@ -109,11 +115,16 @@ public partial class SetupViewModel : BaseViewModel
             await SeedLocalDataAsync(normalizedEngineerId);
 
             await Shell.Current.GoToAsync("//login");
-        });
-
-        if (HasError)
+        }
+        catch (Exception ex)
         {
-            ErrorMessage = StatusMessage;
+            HasError = true;
+            ErrorMessage = ex.Message;
+            StatusMessage = string.Empty;
+        }
+        finally
+        {
+            IsBusy = false;
         }
     }
 
@@ -122,18 +133,13 @@ public partial class SetupViewModel : BaseViewModel
         try
         {
             StatusMessage = "Syncing PIN to admin portal...";
-            var payload = JsonSerializer.Serialize(new
+            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+            var response = await _httpClient.PostAsJsonAsync("/api/users/sync-pin", new
             {
                 login_name = engineerId,
                 employee_name = engineerId,
                 current_pin = pin
-            });
-            using var request = new HttpRequestMessage(HttpMethod.Post, "/api/users/sync-pin")
-            {
-                Content = new StringContent(payload, Encoding.UTF8, "application/json")
-            };
-            request.Headers.ConnectionClose = true;
-            var response = await _httpClient.SendAsync(request, HttpCompletionOption.ResponseContentRead);
+            }, timeout.Token);
 
             if (response.StatusCode == HttpStatusCode.NotFound)
             {
@@ -163,6 +169,14 @@ public partial class SetupViewModel : BaseViewModel
         {
             throw;
         }
+        catch (TaskCanceledException)
+        {
+            throw new InvalidOperationException("Could not connect to User Master within 12 seconds. Please check the admin API URL and network.");
+        }
+        catch (HttpRequestException)
+        {
+            throw new InvalidOperationException("Could not connect to User Master. Please check the admin API URL and network.");
+        }
         catch
         {
             throw new InvalidOperationException("Could not connect to User Master. Please check the admin API.");
@@ -175,6 +189,17 @@ public partial class SetupViewModel : BaseViewModel
         {
             LnEnvironment = value.Code;
         }
+    }
+
+    [RelayCommand]
+    private void TogglePinVisibility()
+    {
+        IsPinVisible = !IsPinVisible;
+    }
+
+    partial void OnIsPinVisibleChanged(bool value)
+    {
+        OnPropertyChanged(nameof(IsPinHidden));
     }
 
     private async Task SeedLocalDataAsync(string engineerId)
@@ -310,13 +335,25 @@ public partial class SetupViewModel : BaseViewModel
     {
         var normalizedRole = (role ?? string.Empty).Trim().ToUpperInvariant();
 
-        return normalizedRole switch
+        if (
+            normalizedRole is "SER" or "SRE" ||
+            normalizedRole.Contains("(SER)") ||
+            normalizedRole.Contains("(SRE)") ||
+            normalizedRole.Contains("SERVICE ENGINEER") ||
+            normalizedRole.Contains("SITE RECEIVING"))
         {
-            "SRE" => "SER",
-            "SIE" => "SIE",
-            "SER" => "SER",
-            _ => string.Empty
-        };
+            return "SER";
+        }
+
+        if (
+            normalizedRole is "SIE" ||
+            normalizedRole.Contains("(SIE)") ||
+            normalizedRole.Contains("SITE ENGINEER"))
+        {
+            return "SIE";
+        }
+
+        return string.Empty;
     }
 }
 

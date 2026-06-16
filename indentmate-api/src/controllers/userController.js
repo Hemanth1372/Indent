@@ -19,7 +19,7 @@ const USER_MASTER_SELECT_SQL = `
     u.current_pin,
     rm.created_at,
     rm.updated_at
-  FROM user_project_assignment_master rm
+  FROM responsibility_master rm
   LEFT JOIN users u ON u.login_name = rm.employee_id
   ORDER BY rm.employee_id ASC, rm.project_id ASC, rm.responsibility ASC
 `
@@ -42,7 +42,7 @@ const USER_MASTER_RETURNING_SQL = `
 `
 
 const CREATE_USER_MASTER_SQL = `
-  INSERT INTO user_project_assignment_master (
+  INSERT INTO responsibility_master (
     employee_id,
     employee_name,
     project_id,
@@ -57,7 +57,7 @@ const CREATE_USER_MASTER_SQL = `
 `
 
 const UPDATE_USER_MASTER_STATUS_SQL = `
-  UPDATE user_project_assignment_master
+  UPDATE responsibility_master
   SET manual_status = $1,
       updated_at = CURRENT_TIMESTAMP
   WHERE employee_id = $2
@@ -65,7 +65,7 @@ const UPDATE_USER_MASTER_STATUS_SQL = `
 `
 
 const UPDATE_USER_MASTER_ROLE_SQL = `
-  UPDATE user_project_assignment_master
+  UPDATE responsibility_master
   SET responsibility = $1,
       updated_at = CURRENT_TIMESTAMP
   WHERE id = $2
@@ -74,12 +74,12 @@ const UPDATE_USER_MASTER_ROLE_SQL = `
 
 const CHANGE_USER_MASTER_PASSWORD_SQL = `
   SELECT ${USER_MASTER_RETURNING_SQL}
-  FROM user_project_assignment_master
+  FROM responsibility_master
   WHERE id = $1
 `
 
 const DELETE_USER_MASTER_SQL = `
-  DELETE FROM user_project_assignment_master
+  DELETE FROM responsibility_master
   WHERE id = $1
   RETURNING id, employee_id, employee_name, responsibility
 `
@@ -151,6 +151,7 @@ function currentPinFromPassword(password) {
 async function upsertLoginUser({ employee_id, employee_name, responsibility, password }) {
   const pin = currentPinFromPassword(password)
   const passwordHash = await bcrypt.hash(pin, 12)
+  const primaryRole = normalizeFieldRole(responsibility) ?? responsibility
 
   await query(
     `
@@ -163,7 +164,7 @@ async function upsertLoginUser({ employee_id, employee_name, responsibility, pas
         password_hash = EXCLUDED.password_hash,
         current_pin = EXCLUDED.current_pin
     `,
-    [employee_id, employee_name, responsibility, passwordHash, pin],
+    [employee_id, employee_name, primaryRole, passwordHash, pin],
   )
 }
 
@@ -212,7 +213,7 @@ export async function listUsers(req, res, next) {
           u.current_pin,
           rm.created_at,
           rm.updated_at
-        FROM user_project_assignment_master rm
+        FROM responsibility_master rm
         LEFT JOIN users u ON u.login_name = rm.employee_id
         WHERE rm.${columnName} ILIKE $1
         ORDER BY rm.employee_id ASC, rm.project_id ASC, rm.responsibility ASC
@@ -311,9 +312,10 @@ export async function updateUserRole(req, res, next) {
     }
 
     const user = normalizeUser(result.rows[0])
+    const primaryRole = normalizeFieldRole(responsibility) ?? responsibility
     await query(
       'UPDATE users SET primary_role = $1 WHERE login_name = $2',
-      [responsibility, user.employee_id],
+      [primaryRole, user.employee_id],
     )
 
     return res.json({
@@ -354,6 +356,24 @@ export async function changeUserPassword(req, res, next) {
   }
 }
 
+function normalizeFieldRole(role) {
+  const normalizedRole = String(role ?? '').trim().toUpperCase()
+  if (
+    normalizedRole === 'SIE' ||
+    normalizedRole.includes('(SIE)') ||
+    normalizedRole.includes('SITE ENGINEER')
+  ) return 'SIE'
+  if (
+    normalizedRole === 'SRE' ||
+    normalizedRole === 'SER' ||
+    normalizedRole.includes('(SRE)') ||
+    normalizedRole.includes('(SER)') ||
+    normalizedRole.includes('SITE RECEIVING') ||
+    normalizedRole.includes('SERVICE ENGINEER')
+  ) return 'SER'
+  return null
+}
+
 export async function syncUserPin(req, res, next) {
   try {
     const { login_name, current_pin } = req.validated.body
@@ -377,10 +397,40 @@ export async function syncUserPin(req, res, next) {
       })
     }
 
+    const user = { ...userResult.rows[0] }
+
+    const roleResult = await query(
+      `
+        SELECT responsibility, manual_status, valid_from, valid_to
+        FROM responsibility_master
+        WHERE lower(btrim(employee_id)) = lower(btrim($1))
+        ORDER BY updated_at DESC NULLS LAST, created_at DESC NULLS LAST, project_id ASC, responsibility ASC
+      `,
+      [normalizedLoginName],
+    )
+
+    const currentPrimaryRole = normalizeFieldRole(user.primary_role)
+    const activeFieldAssignments = roleResult.rows.filter((row) =>
+      computeStatus(row) === 'Active' && normalizeFieldRole(row.responsibility)
+    )
+    const fieldAssignment = currentPrimaryRole
+      ? activeFieldAssignments.find((row) => normalizeFieldRole(row.responsibility) === currentPrimaryRole)
+        ?? activeFieldAssignments[0]
+      : activeFieldAssignments[0]
+    const normalizedRole = normalizeFieldRole(fieldAssignment?.responsibility)
+
+    if (normalizedRole && normalizedRole !== currentPrimaryRole) {
+      await query(
+        'UPDATE users SET primary_role = $2 WHERE login_name = $1',
+        [normalizedLoginName, normalizedRole],
+      )
+      user.primary_role = normalizedRole
+    }
+
     return res.json({
       message: 'PIN synchronized successfully',
-      data: userResult.rows[0],
-      user: userResult.rows[0],
+      data: user,
+      user,
     })
   } catch (error) {
     return next(error)
@@ -397,7 +447,7 @@ export async function deleteUser(req, res, next) {
     }
 
     const remaining = await query(
-      'SELECT 1 FROM user_project_assignment_master WHERE employee_id = $1 LIMIT 1',
+      'SELECT 1 FROM responsibility_master WHERE employee_id = $1 LIMIT 1',
       [result.rows[0].employee_id],
     )
 

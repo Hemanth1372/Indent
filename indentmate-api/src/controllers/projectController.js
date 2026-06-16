@@ -22,20 +22,88 @@ export async function listProjects(_req, res, next) {
   }
 }
 
-export async function listProjectOptions(_req, res, next) {
+export async function listProjectOptions(req, res, next) {
   try {
-    const result = await query(
-      `
-        SELECT project_code, project_description
-        FROM project_master
-        ORDER BY project_code ASC
-      `,
-    )
+    const employeeId = String(req.user?.login_name ?? req.user?.employeeId ?? '').trim()
+    const fieldRole = normalizeFieldRole(req.user?.role ?? req.user?.primary_role)
+    const roleConditionSql = fieldRole === 'SIE'
+      ? `
+              (
+                upper(btrim(rm.responsibility)) = 'SIE'
+                OR upper(btrim(rm.responsibility)) LIKE '%(SIE)%'
+                OR upper(btrim(rm.responsibility)) LIKE '%SITE ENGINEER%'
+              )`
+      : `
+              (
+                upper(btrim(rm.responsibility)) IN ('SER', 'SRE')
+                OR upper(btrim(rm.responsibility)) LIKE '%(SER)%'
+                OR upper(btrim(rm.responsibility)) LIKE '%(SRE)%'
+                OR upper(btrim(rm.responsibility)) LIKE '%SITE RECEIVING%'
+                OR upper(btrim(rm.responsibility)) LIKE '%SERVICE ENGINEER%'
+              )`
+
+    const result = employeeId && fieldRole
+      ? await query(
+        `
+          SELECT DISTINCT ON (project_code)
+            project_code,
+            project_description
+          FROM (
+            SELECT
+              COALESCE(NULLIF(pm.project_code, ''), rm.project_id) AS project_code,
+              COALESCE(NULLIF(pm.project_description, ''), NULLIF(rm.project_description, ''), rm.project_id) AS project_description
+            FROM responsibility_master rm
+            LEFT JOIN project_master pm
+              ON lower(btrim(pm.project_code)) = lower(btrim(rm.project_id))
+            WHERE lower(btrim(rm.employee_id)) = lower(btrim($1))
+              AND ${roleConditionSql}
+              AND lower(COALESCE(NULLIF(btrim(rm.manual_status), ''), 'active')) <> 'inactive'
+              AND (rm.valid_from IS NULL OR rm.valid_from <= CURRENT_DATE)
+              AND (rm.valid_to IS NULL OR rm.valid_to >= CURRENT_DATE)
+          ) assigned_projects
+          WHERE project_code IS NOT NULL
+            AND btrim(project_code) <> ''
+          ORDER BY project_code ASC, project_description ASC
+        `,
+        [employeeId],
+      )
+      : await query(
+        `
+          SELECT project_code, project_description
+          FROM project_master
+          ORDER BY project_code ASC
+        `,
+      )
 
     return res.json({ data: result.rows })
   } catch (error) {
     return next(error)
   }
+}
+
+function normalizeFieldRole(role) {
+  const normalizedRole = String(role ?? '').trim().toUpperCase()
+
+  if (
+    normalizedRole === 'SIE' ||
+    normalizedRole.includes('(SIE)') ||
+    normalizedRole.includes('SITE ENGINEER')
+  ) {
+    return 'SIE'
+  }
+
+  if (
+    normalizedRole === 'SRE' ||
+    normalizedRole === 'SER' ||
+    normalizedRole.includes('(SRE)') ||
+    normalizedRole.includes('(SER)') ||
+    normalizedRole.includes('SITE RECEIVING') ||
+    normalizedRole.includes('SERVICE ENGINEER')
+  ) {
+    return 'SER'
+  }
+
+  return null
 }
 
 const PROJECT_MASTER_COLUMNS = [

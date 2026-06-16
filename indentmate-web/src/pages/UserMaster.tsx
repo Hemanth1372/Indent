@@ -3,6 +3,7 @@ import { Eye, EyeOff, Lock, MoreVertical, Plus, ShieldCheck, ToggleLeft } from '
 import { useEffect, useRef, useState } from 'react'
 import { useAuth } from '../context/AuthContext'
 import { api } from '../services/api'
+import { isPortalAdminRole } from '../utils/roles'
 
 type UserRow = {
   id: number
@@ -134,13 +135,12 @@ export default function UserMaster() {
   const [isFilterActive, setIsFilterActive] = useState(false)
   const menuRef = useRef<HTMLDivElement | null>(null)
   const currentUserRoles = [
+    currentUser?.role,
     currentUser?.primary_role,
     ...(currentUser?.assigned_projects?.map((project) => project.role_name) ?? []),
     ...(currentUser?.assignedProjects?.map((project) => project.role_name) ?? []),
-  ].map((role) => String(role ?? '').toLowerCase())
-  const isAdministrator = currentUserRoles.some((role) =>
-    ['super admin', 'administrator', 'admin'].includes(role),
-  )
+  ]
+  const isAdministrator = currentUserRoles.some(isPortalAdminRole)
 
   function togglePinVisibility(employeeId: string) {
     setVisiblePins((currentVisiblePins) => {

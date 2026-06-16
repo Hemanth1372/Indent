@@ -1,3 +1,4 @@
+using IndentMate.Mobile.Services;
 using IndentMate.Mobile.ViewModels;
 
 namespace IndentMate.Mobile.Views;
@@ -17,5 +18,9 @@ public partial class IndentHomePage : ContentPage
         {
             viewModel.RefreshCommand.Execute(null);
         }
+
+        var syncService = IPlatformApplication.Current?.Services?.GetService<SyncService>();
+        if (syncService != null)
+            _ = syncService.PushPendingIndentsAsync();
     }
 }

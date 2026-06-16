@@ -18,6 +18,12 @@
         ContentTemplate="{DataTemplate views:LoginPage}"
         Shell.NavBarIsVisible="False" />
 
+    <!-- Login success route -->
+    <ShellContent
+        Route="login-success"
+        ContentTemplate="{DataTemplate views:LoginSuccessPage}"
+        Shell.NavBarIsVisible="False" />
+
     <!-- Home route -->
     <ShellContent
         Route="home"
@@ -30,15 +36,15 @@
         Title="SIE Dashboard" />
 
     <ShellContent
-        Route="sre-dashboard"
+        Route="ser-dashboard"
         ContentTemplate="{DataTemplate views:IndentHomePage}"
-        Title="SRE Dashboard" />
+        Title="SER Dashboard" />
 
     <!-- Indent Header (SIE / SER selection) -->
     <ShellContent
-        Route="indent-header"
+        Route="sie-indent-header"
         ContentTemplate="{DataTemplate views:SIEIndentHeaderPage}"
-        Title="New Indent" />
+        Title="New SIE Indent" />
 
     <ShellContent
         Route="ser-indent-header"

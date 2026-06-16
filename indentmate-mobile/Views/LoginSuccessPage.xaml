@@ -1,0 +1,142 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="IndentMate.Mobile.Views.LoginSuccessPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
+    BackgroundColor="#F4F7FB"
+    Shell.NavBarIsVisible="False">
+
+    <ContentPage.BindingContext>
+        <vm:LoginSuccessViewModel />
+    </ContentPage.BindingContext>
+
+    <ScrollView>
+        <VerticalStackLayout
+            HorizontalOptions="Center"
+            MaximumWidthRequest="360"
+            Padding="24,42"
+            Spacing="18">
+
+            <Border
+                BackgroundColor="#D1FAE5"
+                HeightRequest="72"
+                StrokeShape="Ellipse"
+                StrokeThickness="0"
+                WidthRequest="72">
+                <Label
+                    FontSize="34"
+                    HorizontalOptions="Center"
+                    Text="&#x2713;"
+                    TextColor="#092759"
+                    VerticalOptions="Center" />
+            </Border>
+
+            <VerticalStackLayout Spacing="5">
+                <Label
+                    FontAttributes="Bold"
+                    FontSize="21"
+                    HorizontalOptions="Center"
+                    Text="Login Successful!"
+                    TextColor="#111827" />
+                <Label
+                    FontSize="13"
+                    HorizontalOptions="Center"
+                    HorizontalTextAlignment="Center"
+                    LineBreakMode="TailTruncation"
+                    Text="{Binding WelcomeText}"
+                    TextColor="#667085" />
+            </VerticalStackLayout>
+
+            <Border
+                BackgroundColor="White"
+                Padding="18"
+                Stroke="#E5EAF2"
+                StrokeShape="RoundRectangle 14"
+                StrokeThickness="1">
+                <Border.Shadow>
+                    <Shadow Brush="#26000000" Offset="0,4" Opacity="0.14" Radius="12" />
+                </Border.Shadow>
+
+                <VerticalStackLayout Spacing="13">
+                    <Grid ColumnDefinitions="Auto,*" ColumnSpacing="10">
+                        <Button
+                            BackgroundColor="#EAF2FF"
+                            Command="{Binding GoHomeCommand}"
+                            CornerRadius="11"
+                            FontAttributes="Bold"
+                            FontSize="12"
+                            HeightRequest="32"
+                            Padding="12,0"
+                            Text="Indent Home"
+                            TextColor="#0E2A5C" />
+                        <Label
+                            Grid.Column="1"
+                            FontSize="12"
+                            HorizontalTextAlignment="End"
+                            LineBreakMode="TailTruncation"
+                            Text="{Binding EngineerId}"
+                            TextColor="#98A2B3"
+                            VerticalOptions="Center" />
+                    </Grid>
+
+                    <VerticalStackLayout Padding="0,2" Spacing="4">
+                        <Label FontSize="12" Text="Engineer" TextColor="#667085" />
+                        <Label
+                            FontAttributes="Bold"
+                            FontSize="14"
+                            LineBreakMode="TailTruncation"
+                            Text="{Binding EngineerName}"
+                            TextColor="#111827" />
+                    </VerticalStackLayout>
+                    <BoxView BackgroundColor="#EEF2F7" HeightRequest="1" />
+
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16" Padding="0,2">
+                        <Label Text="Environment" TextColor="#667085" VerticalOptions="Center" />
+                        <Label Grid.Column="1" FontAttributes="Bold" Text="{Binding Environment}" TextColor="#111827" VerticalOptions="Center" />
+                    </Grid>
+                    <BoxView BackgroundColor="#EEF2F7" HeightRequest="1" />
+
+                    <Grid ColumnDefinitions="90,*" ColumnSpacing="16" Padding="0,2">
+                        <Label Text="Role" TextColor="#667085" VerticalOptions="Center" />
+                        <Label
+                            Grid.Column="1"
+                            FontAttributes="Bold"
+                            HorizontalTextAlignment="End"
+                            LineBreakMode="TailTruncation"
+                            Text="{Binding RoleDisplay}"
+                            TextColor="#111827"
+                            VerticalOptions="Center" />
+                    </Grid>
+                    <BoxView BackgroundColor="#EEF2F7" HeightRequest="1" />
+
+                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16" Padding="0,2">
+                        <Grid.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding OpenPendingIndentsCommand}" />
+                        </Grid.GestureRecognizers>
+                        <Label Text="Pending Indents" TextColor="#667085" VerticalOptions="Center" />
+                        <Label Grid.Column="1" FontAttributes="Bold" Text="{Binding PendingIndentCount}" TextColor="#F7931E" VerticalOptions="Center" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <Button
+                BackgroundColor="#F7931E"
+                Command="{Binding CreateIndentCommand}"
+                CornerRadius="12"
+                FontAttributes="Bold"
+                HeightRequest="50"
+                Margin="0,6,0,0"
+                Text="Create Indent"
+                TextColor="#092759" />
+
+            <Button
+                BackgroundColor="Transparent"
+                Command="{Binding LogoutCommand}"
+                FontAttributes="Bold"
+                FontSize="13"
+                Text="Logout"
+                TextColor="#0E2A5C" />
+        </VerticalStackLayout>
+    </ScrollView>
+</ContentPage>
