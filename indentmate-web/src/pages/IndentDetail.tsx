@@ -1,4 +1,4 @@
-import { AlertCircle, ArrowLeft, Building2, CalendarDays, ClipboardList, Factory, MapPin, Paperclip, Printer, RefreshCw, Send, X, Zap } from 'lucide-react'
+import { AlertCircle, ArrowLeft, Building2, CalendarDays, ClipboardList, Factory, MapPin, Paperclip, Printer, Send, X, Zap } from 'lucide-react'
 import type { ReactNode } from 'react'
 import { useEffect, useState } from 'react'
 import { useNavigate, useParams } from 'react-router-dom'
@@ -213,14 +213,6 @@ export default function IndentDetail({ approvalMode = false, endpoint = '/api/in
           >
             <Printer size={15} />
             PDF
-          </button>
-          <button
-            className="inline-flex h-9 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-3 text-xs font-bold text-slate-700 shadow-sm transition hover:bg-slate-50"
-            onClick={fetchIndent}
-            type="button"
-          >
-            <RefreshCw size={15} />
-            Refresh
           </button>
         </div>
       </div>
