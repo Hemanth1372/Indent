@@ -3,6 +3,7 @@ using CommunityToolkit.Mvvm.Input;
 using IndentMate.Mobile.Data;
 using IndentMate.Mobile.Services;
 using System.Collections.ObjectModel;
+using System.Text.Json;
 
 namespace IndentMate.Mobile.ViewModels;
 
@@ -90,8 +91,7 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
         var photo = await MediaPicker.Default.CapturePhotoAsync();
         if (photo is not null)
         {
-            AttachmentName = photo.FileName;
-            AttachmentPath = photo.FullPath ?? string.Empty;
+            AppendAttachment(photo.FileName, photo.FullPath ?? string.Empty);
         }
     }
 
@@ -109,8 +109,7 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
             return;
         }
 
-        AttachmentName = file.FileName;
-        AttachmentPath = file.FullPath ?? string.Empty;
+        AppendAttachment(file.FileName, file.FullPath ?? string.Empty);
     }
 
     [RelayCommand]
@@ -150,12 +149,6 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
 
         await RunBusyAsync(async () =>
         {
-            if (_editingItem is null && await _databaseService.CountItemsForIndentAsync(_indent.IndentId) >= 20)
-            {
-                await Shell.Current.DisplayAlert("Limit reached", "Maximum 20 items allowed per indent.", "OK");
-                return;
-            }
-
             if (await _databaseService.HasDuplicateSERItemAsync(_indent.IndentId, SelectedMaterial.ItemCode, ItemLineId))
             {
                 ValidationMessage = "This material has already been added to this indent.";
@@ -289,10 +282,60 @@ public partial class AddItemSERViewModel : BaseViewModel, IQueryAttributable
         RequestedQty = _editingItem.RequestedQty.ToString("0.##");
         Remarks = _editingItem.Remarks;
         AttachmentPath = _editingItem.AttachmentUrl;
-        AttachmentName = string.IsNullOrWhiteSpace(_editingItem.AttachmentUrl)
-            ? string.Empty
-            : Path.GetFileName(_editingItem.AttachmentUrl);
+        AttachmentName = FormatAttachmentNames(ParseAttachments(_editingItem.AttachmentUrl));
     }
+
+    [RelayCommand]
+    private async Task OpenAttachmentAsync()
+    {
+        var attachment = ParseAttachments(AttachmentPath).FirstOrDefault();
+        if (attachment is null || string.IsNullOrWhiteSpace(attachment.Path))
+            return;
+
+        await Launcher.Default.OpenAsync(new OpenFileRequest
+        {
+            File = new ReadOnlyFile(attachment.Path)
+        });
+    }
+
+    private void AppendAttachment(string name, string path)
+    {
+        if (string.IsNullOrWhiteSpace(path))
+            return;
+
+        var attachments = ParseAttachments(AttachmentPath);
+        attachments.Add(new AttachmentSelection(name, path));
+        AttachmentPath = JsonSerializer.Serialize(attachments);
+        AttachmentName = FormatAttachmentNames(attachments);
+    }
+
+    private static List<AttachmentSelection> ParseAttachments(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return new List<AttachmentSelection>();
+
+        try
+        {
+            var attachments = JsonSerializer.Deserialize<List<AttachmentSelection>>(value);
+            if (attachments is not null)
+                return attachments.Where(attachment => !string.IsNullOrWhiteSpace(attachment.Path)).ToList();
+        }
+        catch
+        {
+        }
+
+        return new List<AttachmentSelection>
+        {
+            new(Path.GetFileName(value), value)
+        };
+    }
+
+    private static string FormatAttachmentNames(IEnumerable<AttachmentSelection> attachments)
+    {
+        return string.Join(", ", attachments.Select(attachment => attachment.Name).Where(name => !string.IsNullOrWhiteSpace(name)));
+    }
+
+    private sealed record AttachmentSelection(string Name, string Path);
 
     private string GetPrimarySiteCode()
     {

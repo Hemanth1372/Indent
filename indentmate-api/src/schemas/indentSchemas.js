@@ -1,18 +1,10 @@
 import { z } from 'zod'
 
 const indentStatusSchema = z.enum([
-  'Draft',
-  'PendingSync',
-  'Created',
   'Pending',
-  'PendingApproval',
-  'ApprovalPending',
   'Approved',
-  'Issue',
-  'PartiallyIssued',
-  'Issued',
-  'Completed',
   'Rejected',
+  'PendingSync',
 ])
 
 const adminIndentBodySchema = z.object({
@@ -66,7 +58,7 @@ const syncIndentBodySchema = z.object({
     to_entity_id: z.string().trim().max(120).optional().nullable(),
     remarks: z.string().trim().max(2000).optional().nullable(),
     attachmentUrl: z.string().trim().max(2000).optional().nullable(),
-  }).passthrough()).min(1).max(20),
+  }).passthrough()).min(1),
 }).passthrough()
 
 const mobileIndentBodySchema = z.object({
@@ -89,7 +81,7 @@ const mobileIndentBodySchema = z.object({
     issuedQty: z.coerce.number().nonnegative().optional(),
     remarks: z.string().trim().max(2000).optional().nullable(),
     attachmentUrl: z.string().trim().max(2000).optional().nullable(),
-  }).passthrough()).min(1).max(20),
+  }).passthrough()).min(1),
 }).passthrough()
 
 export const createIndentSchema = z.object({
@@ -101,6 +93,11 @@ export const createIndentSchema = z.object({
 export const updateIndentStatusSchema = z.object({
   body: z.object({
     status: indentStatusSchema,
+    items: z.array(z.object({
+      id: z.string().uuid().optional(),
+      line_number: z.coerce.number().int().positive().optional(),
+      approved_qty: z.coerce.number().nonnegative(),
+    })).optional(),
   }),
   params: z.object({
     id: z.string().uuid(),

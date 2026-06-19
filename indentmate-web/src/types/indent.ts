@@ -1,4 +1,4 @@
-export type IndentStatus = 'Created' | 'PendingApproval' | 'Approved' | 'Rejected'
+export type IndentStatus = 'Pending' | 'PendingSync' | 'Approved' | 'Rejected'
 
 export type Indent = {
   indentId: string

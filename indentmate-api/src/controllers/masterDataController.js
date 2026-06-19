@@ -518,6 +518,7 @@ function parseFilterQuery(rawFilters) {
     return parsedFilters
       .map((filter) => ({
         field: String(filter?.field ?? '').trim(),
+        operator: String(filter?.operator ?? 'contains').trim(),
         value: String(filter?.value ?? '').trim(),
       }))
       .filter((filter) => filter.field && filter.value)
@@ -543,9 +544,29 @@ function buildFilterClause(filters, searchableFields, aliasMap = {}) {
       throw error
     }
 
-    params.push(`%${filter.value}%`)
-    const expression = isDateOnlyField(filter.field) ? `${dbField}::DATE::TEXT` : `${dbField}::TEXT`
-    whereConditions.push(`${expression} ILIKE $${params.length}`)
+    if (filter.field === 'on_hand_qty') {
+      const numericValue = Number(filter.value)
+      if (!Number.isFinite(numericValue)) {
+        const error = new Error('Invalid numeric filter value')
+        error.statusCode = 400
+        throw error
+      }
+
+      const operatorMap = {
+        eq: '=',
+        gt: '>',
+        lt: '<',
+        gte: '>=',
+        lte: '<=',
+      }
+      const sqlOperator = operatorMap[filter.operator] ?? '='
+      params.push(numericValue)
+      whereConditions.push(`COALESCE(${dbField}, 0) ${sqlOperator} $${params.length}`)
+    } else {
+      params.push(`%${filter.value}%`)
+      const expression = isDateOnlyField(filter.field) ? `${dbField}::DATE::TEXT` : `${dbField}::TEXT`
+      whereConditions.push(`${expression} ILIKE $${params.length}`)
+    }
   }
 
   return {
@@ -554,19 +575,123 @@ function buildFilterClause(filters, searchableFields, aliasMap = {}) {
   }
 }
 
+function uniqueFilterOptions(options) {
+  const seen = new Set()
+  const uniqueOptions = []
+
+  for (const option of options) {
+    const value = String(option.value ?? '').trim()
+    const label = String(option.label ?? value).trim()
+
+    if (!value || !label) {
+      continue
+    }
+
+    const key = `${value.toLowerCase()}::${label.toLowerCase()}`
+    if (seen.has(key)) {
+      continue
+    }
+
+    seen.add(key)
+    uniqueOptions.push({ value, label })
+  }
+
+  return uniqueOptions
+}
+
+function roleFilterKey(option) {
+  const text = `${option.value ?? ''} ${option.label ?? ''}`.toLowerCase()
+
+  if (/\bsie\b/.test(text) || text.includes('site engineer')) {
+    return 'sie'
+  }
+
+  if (/\bser\b/.test(text) || /\bsre\b/.test(text) || text.includes('service engineer') || text.includes('site receiving')) {
+    return 'ser'
+  }
+
+  if (/\bspl\b/.test(text) || text.includes('site procurement')) {
+    return 'spl'
+  }
+
+  return String(option.label || option.value || '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function uniqueRoleFilterOptions(options) {
+  const bestByRole = new Map()
+
+  for (const option of uniqueFilterOptions(options)) {
+    const key = roleFilterKey(option)
+    const current = bestByRole.get(key)
+    const currentScore = current ? roleOptionScore(current) : -1
+    const nextScore = roleOptionScore(option)
+
+    if (!current || nextScore > currentScore) {
+      bestByRole.set(key, option)
+    }
+  }
+
+  return [...bestByRole.values()].sort((left, right) => left.label.localeCompare(right.label))
+}
+
+function roleOptionScore(option) {
+  const label = String(option.label ?? '')
+  let score = label.length
+
+  if (label.includes('(')) {
+    score += 20
+  }
+
+  if (/site engineer|service engineer|site procurement/i.test(label)) {
+    score += 30
+  }
+
+  return score
+}
+
 function descriptionExpressionForFilter(definition, field) {
+  if (field === 'project_code') {
+    const availableFields = new Set([...(definition.fields ?? []), ...(definition.searchableFields ?? [])])
+
+    if (availableFields.has('project_description')) {
+      return `COALESCE(NULLIF(${definition.table}.project_description, ''), (SELECT project_description FROM project_master WHERE project_code = ${definition.table}.project_code LIMIT 1))`
+    }
+
+    if (availableFields.has('project_name')) {
+      return `COALESCE(NULLIF(${definition.table}.project_name, ''), (SELECT project_description FROM project_master WHERE project_code = ${definition.table}.project_code LIMIT 1))`
+    }
+
+    if (availableFields.has('site_description')) {
+      return `COALESCE(NULLIF(${definition.table}.site_description, ''), (SELECT project_description FROM project_master WHERE project_code = ${definition.table}.project_code LIMIT 1))`
+    }
+
+    return `(SELECT project_description FROM project_master WHERE project_code = ${definition.table}.project_code LIMIT 1)`
+  }
+
+  if (field === 'project_site') {
+    const availableFields = new Set([...(definition.fields ?? []), ...(definition.searchableFields ?? [])])
+
+    if (availableFields.has('project_description')) {
+      return `COALESCE(NULLIF(${definition.table}.project_description, ''), (SELECT project_description FROM project_master WHERE project_code = ${definition.table}.project_site LIMIT 1))`
+    }
+
+    if (availableFields.has('site_description')) {
+      return `COALESCE(NULLIF(${definition.table}.site_description, ''), (SELECT project_description FROM project_master WHERE project_code = ${definition.table}.project_site LIMIT 1))`
+    }
+  }
+
   const pairings = {
-    project_code: definition.table === 'activity_master'
-      ? `(SELECT project_description FROM project_master WHERE project_code = ${definition.table}.project_code LIMIT 1)`
-      : 'project_description',
     project_id: 'project_description',
-    project_site: 'site_description',
     warehouse_code: definition.table === 'warehouse_location_master' ? 'warehouse_name' : 'warehouse_description',
     location_code: definition.table === 'location_master' ? 'description' : 'location_description',
     business_partner_code: definition.table === 'purchase_office_master' ? 'bp_description' : 'business_partner_name',
     buy_from_business_partner: 'bp_description',
     activity_code: definition.table === 'activity_master' ? 'description' : 'activity_description',
-    item_code: 'item_description',
+    item_code: definition.table === 'service_orders' ? `COALESCE(NULLIF(${definition.table}.item_description, ''), ${definition.table}.description)` : 'item_description',
     address_code: 'address_description',
     delivery_point: 'description_1',
     employee_id: 'employee_name',
@@ -581,7 +706,7 @@ function descriptionExpressionForFilter(definition, field) {
   }
 
   const availableFields = new Set([...(definition.fields ?? []), ...(definition.searchableFields ?? [])])
-  if (expression.includes('SELECT') || availableFields.has(expression)) {
+  if (expression.includes('SELECT') || expression.includes('COALESCE') || availableFields.has(expression)) {
     return expression
   }
 
@@ -827,23 +952,93 @@ export async function listMasterFilterOptions(req, res, next) {
       return res.status(400).json({ message: 'Invalid filter field' })
     }
 
+    if (req.params.masterKey === 'responsibility-master' && (field === 'project_id' || field === 'project_description')) {
+      const result = await query(`
+        SELECT
+          project_code AS value,
+          NULLIF(TRIM(project_description), '') AS description
+        FROM project_master
+        WHERE project_code IS NOT NULL
+          AND TRIM(project_code::TEXT) <> ''
+        ORDER BY project_code ASC
+        LIMIT 500
+      `)
+
+      const options = result.rows.map((row) => ({
+        value: field === 'project_description' ? row.description || row.value : row.value,
+        label: row.description && row.description !== row.value ? `${row.value} (${row.description})` : row.value,
+      }))
+
+      return res.json({ data: uniqueFilterOptions(options) })
+    }
+
+    if (
+      (req.params.masterKey === 'responsibility-master' && field === 'responsibility') ||
+      (req.params.masterKey === 'role-master' && (field === 'role_name' || field === 'description'))
+    ) {
+      const result = await query(`
+        SELECT
+          role_name AS value,
+          COALESCE(NULLIF(description, ''), role_name) AS description
+        FROM role_master
+        WHERE role_name IS NOT NULL
+          AND TRIM(role_name::TEXT) <> ''
+        ORDER BY role_name ASC
+        LIMIT 500
+      `)
+
+      const options = result.rows.map((row) => ({
+        value: field === 'description' ? row.description : row.value,
+        label: row.description && row.description !== row.value ? `${row.description} (${row.value})` : row.value,
+      }))
+
+      return res.json({ data: uniqueRoleFilterOptions(options) })
+    }
+
     const descriptionExpression = descriptionExpressionForFilter(definition, field)
     const valueExpression = isDateOnlyField(field) ? `${field}::DATE::TEXT` : `${field}::TEXT`
     const result = await query(
-      `
-        SELECT DISTINCT ${valueExpression} AS value${descriptionExpression ? `, ${descriptionExpression}::TEXT AS description` : ''}
-        FROM ${definition.table}
-        WHERE ${field} IS NOT NULL AND TRIM(${field}::TEXT) <> ''
-        ORDER BY value ASC
-        LIMIT 500
-      `,
+      descriptionExpression
+        ? `
+          SELECT value, description
+          FROM (
+            SELECT
+              ${valueExpression} AS value,
+              NULLIF(TRIM(${descriptionExpression}::TEXT), '') AS description,
+              ROW_NUMBER() OVER (
+                PARTITION BY lower(btrim(${valueExpression}))
+                ORDER BY
+                  CASE
+                    WHEN NULLIF(TRIM(${descriptionExpression}::TEXT), '') IS NOT NULL
+                      AND lower(btrim(${descriptionExpression}::TEXT)) <> lower(btrim(${valueExpression}))
+                    THEN 0
+                    ELSE 1
+                  END,
+                  ${valueExpression} ASC
+              ) AS row_rank
+            FROM ${definition.table}
+            WHERE ${field} IS NOT NULL AND TRIM(${field}::TEXT) <> ''
+          ) ranked_options
+          WHERE row_rank = 1
+          ORDER BY value ASC
+          LIMIT 500
+        `
+        : `
+          SELECT DISTINCT ${valueExpression} AS value
+          FROM ${definition.table}
+          WHERE ${field} IS NOT NULL AND TRIM(${field}::TEXT) <> ''
+          ORDER BY value ASC
+          LIMIT 500
+        `,
     )
 
-    return res.json({
-      data: result.rows.map((row) => ({
+    const options = result.rows.map((row) => ({
         value: row.value,
         label: row.description && row.description !== row.value ? `${row.value} (${row.description})` : row.value,
-      })),
+      }))
+
+    return res.json({
+      data: uniqueFilterOptions(options),
     })
   } catch (error) {
     return next(error)

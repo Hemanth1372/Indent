@@ -94,6 +94,28 @@ export async function markAllNotificationsRead(req, res, next) {
   }
 }
 
+export async function clearNotifications(req, res, next) {
+  try {
+    const recipientLogin = getCurrentLogin(req)
+
+    if (!recipientLogin) {
+      return res.status(401).json({ message: 'Authenticated user is required' })
+    }
+
+    await query(
+      `
+        DELETE FROM notifications
+        WHERE recipient_login = $1
+      `,
+      [recipientLogin],
+    )
+
+    return res.json({ message: 'Notifications cleared' })
+  } catch (error) {
+    return next(error)
+  }
+}
+
 function getCurrentLogin(req) {
   return String(req.user?.login_name ?? req.user?.employeeId ?? req.user?.employee_id ?? '').trim()
 }

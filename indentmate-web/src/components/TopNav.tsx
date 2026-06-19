@@ -36,6 +36,7 @@ export default function TopNav({ onMenuClick, title }: TopNavProps) {
       const { data } = await api.get<{ data: NotificationRow[]; unreadCount: number }>('/api/notifications')
       setNotifications(data.data)
       setUnreadCount(data.unreadCount)
+      window.dispatchEvent(new CustomEvent('notifications-refreshed'))
     } catch (error) {
       console.error(error)
     } finally {
@@ -56,7 +57,7 @@ export default function TopNav({ onMenuClick, title }: TopNavProps) {
       })
     }
 
-    navigate(notification.target_path)
+    navigate(`/notifications/${notification.id}`)
   }
 
   async function markAllRead() {
@@ -106,7 +107,7 @@ export default function TopNav({ onMenuClick, title }: TopNavProps) {
         <div className="relative">
           <button
             className="relative grid h-12 w-12 place-items-center rounded-xl border border-slate-200 text-slate-600 transition hover:bg-slate-50"
-            onClick={() => setNotificationsOpen((value) => !value)}
+            onClick={() => navigate('/notifications')}
             type="button"
             title="Notifications"
           >
@@ -119,7 +120,14 @@ export default function TopNav({ onMenuClick, title }: TopNavProps) {
           </button>
 
           {notificationsOpen ? (
-            <div className="absolute right-0 top-14 z-50 w-[340px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
+            <>
+              <button
+                aria-label="Close notifications"
+                className="fixed inset-0 z-40 cursor-default bg-transparent"
+                onClick={() => setNotificationsOpen(false)}
+                type="button"
+              />
+              <div className="absolute right-0 top-14 z-50 w-[340px] overflow-hidden rounded-lg border border-slate-200 bg-white shadow-xl">
               <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
                 <div>
                   <p className="text-sm font-black text-slate-900">Notifications</p>
@@ -154,7 +162,8 @@ export default function TopNav({ onMenuClick, title }: TopNavProps) {
                   </button>
                 ))}
               </div>
-            </div>
+              </div>
+            </>
           ) : null}
         </div>
         <div className="relative">

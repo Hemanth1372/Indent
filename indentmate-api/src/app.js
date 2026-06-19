@@ -1,5 +1,7 @@
 import cors from 'cors'
 import express from 'express'
+import path from 'node:path'
+import { fileURLToPath } from 'node:url'
 import { activityRoutes } from './routes/activityRoutes.js'
 import { env } from './config/env.js'
 import { authRoutes } from './routes/authRoutes.js'
@@ -20,6 +22,8 @@ import { warehouseRoutes } from './routes/warehouseRoutes.js'
 
 export function createApp() {
   const app = express()
+  const __dirname = path.dirname(fileURLToPath(import.meta.url))
+  const uploadsPath = path.resolve(__dirname, '..', 'uploads')
   const normalizeOrigin = (origin) => origin.replace(/\/+$/, '')
   const allowedOrigins = env.corsOrigin
     .split(',')
@@ -48,6 +52,8 @@ export function createApp() {
   app.get('/health', (_req, res) => {
     res.json({ status: 'ok', service: 'NCC Indent API' })
   })
+
+  app.use('/uploads', express.static(uploadsPath))
 
   app.use('/api/auth', authRoutes)
   app.use('/api/activities', activityRoutes)

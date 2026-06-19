@@ -245,7 +245,7 @@ type MasterConfig = {
 
 const masterConfigs: Record<string, MasterConfig> = {
   'responsibility-master': {
-    title: 'User Project Assignment Master',
+    title: 'User Assignment Master',
     subtitle: 'Project-wise user role assignments and validity periods',
     countLabel: 'Assignments',
     addButtonLabel: 'Add Assignment',
@@ -304,7 +304,12 @@ const masterConfigs: Record<string, MasterConfig> = {
     fields: [
       { key: 'project_code', label: 'Project Code', required: true },
       { key: 'project_description', label: 'Project Description', required: true },
-      { key: 'dpr_engineer_control', label: 'Dpr Engineer Control', required: true },
+      {
+        key: 'dpr_engineer_control',
+        label: 'Dpr Engineer Control',
+        required: true,
+        options: [{ label: 'Location', value: 'LOCATION' }, { label: 'Activity', value: 'ACTIVITY' }],
+      },
       {
         key: 'multi_location_activity',
         label: 'Multi Location Activity',
@@ -363,7 +368,6 @@ const masterConfigs: Record<string, MasterConfig> = {
     searchFields: [
       { label: 'Activity Code', value: 'activity_code', placeholder: 'Enter Activity Code...' },
       { label: 'Project Code', value: 'project_code', placeholder: 'Enter Project Code (e.g. NUPEDS014)...' },
-      { label: 'Description', value: 'description', placeholder: 'Enter Description...' },
       { label: 'Activity Type', value: 'activity_type', placeholder: 'Enter Activity Type (e.g. Work Package)...' },
       { label: 'Critical Capacity Type', value: 'critical_capacity_type', placeholder: 'Enter Critical Capacity Type...' },
       { label: 'Work Auth Status', value: 'work_auth_status', placeholder: 'Enter Work Auth Status...' },
@@ -462,7 +466,6 @@ const masterConfigs: Record<string, MasterConfig> = {
       { label: 'Project Code', value: 'project_site', placeholder: 'Enter Project Code (e.g. EODBHS001)...' },
       { label: 'Project Description', value: 'project_description', placeholder: 'Enter Project Description...' },
       { label: 'Item Code', value: 'item_code', placeholder: 'Enter Item Code...' },
-      { label: 'Item Description', value: 'item_description', placeholder: 'Enter Item Description...' },
       { label: 'Serial Number', value: 'serial_number', placeholder: 'Enter Serial Number...' },
       { label: 'Status', value: 'status', placeholder: 'Enter Status (e.g. Released)...' },
     ],
@@ -807,6 +810,33 @@ type FilterValueOptionsResponse = {
   data: Array<string | { label: string; value: string }>
 }
 
+function normalizeFilterValueOptions(options: FilterValueOptionsResponse['data']) {
+  const seen = new Set<string>()
+  const uniqueOptions: SelectOption[] = []
+
+  options.forEach((option) => {
+    const mappedOption = typeof option === 'string'
+      ? { label: option, value: option }
+      : { label: option.label, value: option.value }
+    const label = String(mappedOption.label ?? '').trim()
+    const value = String(mappedOption.value ?? '').trim()
+
+    if (!label || !value) {
+      return
+    }
+
+    const key = `${value.toLowerCase()}::${label.toLowerCase()}`
+    if (seen.has(key)) {
+      return
+    }
+
+    seen.add(key)
+    uniqueOptions.push({ label, value })
+  })
+
+  return uniqueOptions
+}
+
 const PROJECT_CODE_FIELD_KEYS = ['project_code', 'project_id', 'project_site']
 const PROJECT_DESCRIPTION_FIELD_KEYS = ['project_description', 'project_name', 'site_description']
 
@@ -820,6 +850,7 @@ type LoadParams = {
 type MasterFilter = {
   id: string
   field: string
+  operator?: string
   value: string
 }
 
@@ -907,22 +938,25 @@ function formatDisplayDate(value: unknown) {
 }
 
 function buildRoleSelectOptions(roles: RoleOption[]): SelectOption[] {
-  const seenRoleNames = new Set<string>()
+  const bestByRole = new Map<string, RoleOption>()
 
-  return roles
+  roles
     .map((role) => ({
-      role_name: role.role_name || role.responsibility,
-      responsibility: role.responsibility || role.role_name,
+      role_name: String(role.role_name || role.responsibility || '').trim(),
+      responsibility: String(role.responsibility || role.role_name || '').trim(),
     }))
     .filter((role) => role.role_name)
-    .filter((role) => {
-      const key = role.role_name.toLowerCase()
-      if (seenRoleNames.has(key)) {
-        return false
+    .forEach((role) => {
+      const key = roleSelectKey(role)
+      const current = bestByRole.get(key)
+
+      if (!current || roleSelectScore(role) > roleSelectScore(current)) {
+        bestByRole.set(key, role)
       }
-      seenRoleNames.add(key)
-      return true
     })
+
+  return [...bestByRole.values()]
+    .sort((left, right) => (left.responsibility || left.role_name).localeCompare(right.responsibility || right.role_name))
     .map((role) => {
       const label = role.responsibility && role.responsibility !== role.role_name
         ? `${role.responsibility} (${role.role_name})`
@@ -933,6 +967,27 @@ function buildRoleSelectOptions(roles: RoleOption[]): SelectOption[] {
         value: role.role_name,
       }
     })
+}
+
+function roleSelectKey(role: RoleOption) {
+  const text = `${role.role_name ?? ''} ${role.responsibility ?? ''}`.toLowerCase()
+
+  if (/\bsie\b/.test(text) || text.includes('site engineer')) return 'sie'
+  if (/\bser\b/.test(text) || /\bsre\b/.test(text) || text.includes('service engineer') || text.includes('site receiving')) return 'ser'
+  if (/\bspl\b/.test(text) || text.includes('site procurement')) return 'spl'
+
+  return String(role.responsibility || role.role_name || '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function roleSelectScore(role: RoleOption) {
+  const label = String(role.responsibility || role.role_name || '')
+  return label.length
+    + (role.responsibility && role.responsibility !== role.role_name ? 20 : 0)
+    + (/site engineer|service engineer|site procurement/i.test(label) ? 30 : 0)
 }
 
 function toDateTimeInputValue(value: unknown) {
@@ -2615,6 +2670,7 @@ export default function GenericMasterPage() {
       .map((filter) => ({
         ...filter,
         field: filter.field.trim(),
+        operator: filter.operator?.trim() || 'contains',
         value: filter.value.trim(),
       }))
       .filter((filter) => filter.field && filter.value)
@@ -2639,7 +2695,7 @@ export default function GenericMasterPage() {
     try {
       const filters = normalizedFilters(params?.filters)
       const filterParams = filters.length > 0
-        ? { filters: JSON.stringify(filters.map(({ field, value }) => ({ field, value }))) }
+        ? { filters: JSON.stringify(filters.map(({ field, operator, value }) => ({ field, operator, value }))) }
         : params?.field && params?.value
           ? { field: params.field, value: params.value }
           : {}
@@ -2748,6 +2804,11 @@ export default function GenericMasterPage() {
     setFilterModalOpen(true)
   }
 
+  function handleCloseFilterModal() {
+    setDraftFilters([])
+    setFilterModalOpen(false)
+  }
+
   async function loadFilterValueOptions(field: string) {
     if (!field || filterValueOptions[field] || filterValueOptionsLoading[field]) {
       return
@@ -2761,13 +2822,7 @@ export default function GenericMasterPage() {
       })
       setFilterValueOptions((currentOptions) => ({
         ...currentOptions,
-        [field]: data.data.map((option) => {
-          if (typeof option === 'string') {
-            return { label: option, value: option }
-          }
-
-          return { label: option.label, value: option.value }
-        }),
+        [field]: normalizeFilterValueOptions(data.data),
       }))
     } catch (requestError) {
       console.error(requestError)
@@ -2801,7 +2856,7 @@ export default function GenericMasterPage() {
     void loadFilterValueOptions(field)
     setDraftFilters((currentFilters) => [
       ...currentFilters,
-      { id: `${field}-${Date.now()}-${currentFilters.length}`, field, value: '' },
+      { id: `${field}-${Date.now()}-${currentFilters.length}`, field, operator: field === 'on_hand_qty' ? 'eq' : 'contains', value: '' },
     ])
   }
 
@@ -2978,7 +3033,7 @@ export default function GenericMasterPage() {
       const exportParams = selectedKeys.length > 0
         ? { selectedKeys: selectedKeys.join(','), columns: exportColumns }
         : isFilterActive
-          ? { filters: JSON.stringify(normalizedFilters().map(({ field, value }) => ({ field, value }))), columns: exportColumns }
+          ? { filters: JSON.stringify(normalizedFilters().map(({ field, operator, value }) => ({ field, operator, value }))), columns: exportColumns }
           : { columns: exportColumns }
       const { data } = await api.get<Blob>(`/api/master-data/${masterKey}/export`, {
         params: exportParams,
@@ -3269,16 +3324,20 @@ export default function GenericMasterPage() {
                         <div className="flex justify-center">
                           {supportsInlineEdit(masterKey) ? (
                             <Dropdown
-                              menu={{
-                                items: [
-                                  {
-                                    key: 'edit',
-                                    icon: <Pencil size={16} />,
-                                    label: 'Edit',
-                                    onClick: () => handleOpenEdit(record),
-                                  },
-                                ],
-                              }}
+                              dropdownRender={() => (
+                                <div className="w-52 rounded-lg border border-slate-200 bg-white p-2 shadow-xl">
+                                  <button
+                                    className="flex w-full items-center gap-3 rounded-md bg-slate-50 px-2 py-2 text-left text-slate-800 transition hover:bg-slate-100"
+                                    onClick={() => handleOpenEdit(record)}
+                                    type="button"
+                                  >
+                                    <span className="grid h-9 w-9 shrink-0 place-items-center rounded-lg bg-slate-100 text-slate-600">
+                                      <Pencil size={18} />
+                                    </span>
+                                    <span className="text-sm font-semibold">Edit</span>
+                                  </button>
+                                </div>
+                              )}
                               placement="bottomRight"
                               trigger={['click']}
                             >
@@ -3333,7 +3392,7 @@ export default function GenericMasterPage() {
       {config.searchFields && (
         <Modal
           okText="Apply Filters"
-          onCancel={() => setFilterModalOpen(false)}
+          onCancel={handleCloseFilterModal}
           onOk={handleApplyFilters}
           open={filterModalOpen}
           title="Filter Records"
@@ -3353,28 +3412,54 @@ export default function GenericMasterPage() {
             {draftFilters.map((filter) => {
               const selectedField = config.searchFields?.find((field) => field.value === filter.field)
 
+              const isOnHandQtyFilter = filter.field === 'on_hand_qty'
+
               return (
                 <div className="grid grid-cols-[minmax(170px,0.9fr)_minmax(220px,1.25fr)_36px] items-center gap-3" key={filter.id}>
                   <Select
-                    onChange={(value) => updateDraftFilter(filter.id, { field: value, value: '' })}
+                    onChange={(value) => updateDraftFilter(filter.id, { field: value, operator: value === 'on_hand_qty' ? 'eq' : 'contains', value: '' })}
                     options={availableFilterOptions(filter.id)}
                     placeholder="Select Field"
                     value={filter.field || undefined}
                   />
-                  <Select
-                    allowClear
-                    loading={filterValueOptionsLoading[filter.field]}
-                    onChange={(value) => updateDraftFilter(filter.id, { value: value ?? '' })}
-                    onDropdownVisibleChange={(open) => {
-                      if (open) {
-                        void loadFilterValueOptions(filter.field)
-                      }
-                    }}
-                    options={filterValueOptions[filter.field] ?? []}
-                    placeholder={selectedField?.placeholder ?? 'Enter filter value'}
-                    showSearch
-                    value={filter.value || undefined}
-                  />
+                  {isOnHandQtyFilter ? (
+                    <div className="grid grid-cols-[130px_1fr] gap-2">
+                      <Select
+                        onChange={(value) => updateDraftFilter(filter.id, { operator: value })}
+                        options={[
+                          { label: 'Equals to', value: 'eq' },
+                          { label: 'Greater than', value: 'gt' },
+                          { label: 'Less than', value: 'lt' },
+                          { label: 'Greater or equal', value: 'gte' },
+                          { label: 'Less or equal', value: 'lte' },
+                        ]}
+                        value={filter.operator || 'eq'}
+                      />
+                      <Input
+                        onChange={(event) => updateDraftFilter(filter.id, { value: event.target.value })}
+                        placeholder="Enter qty"
+                        type="number"
+                        value={filter.value}
+                      />
+                    </div>
+                  ) : (
+                    <Select
+                      allowClear
+                      loading={filterValueOptionsLoading[filter.field]}
+                      onChange={(value) => updateDraftFilter(filter.id, { value: value ?? '' })}
+                      onDropdownVisibleChange={(open) => {
+                        if (open) {
+                          void loadFilterValueOptions(filter.field)
+                        }
+                      }}
+                      optionFilterProp="label"
+                      options={filterValueOptions[filter.field] ?? []}
+                      placeholder={selectedField?.placeholder ?? 'Enter filter value'}
+                      showSearch
+                      value={filter.value || undefined}
+                      virtual={false}
+                    />
+                  )}
                   <button
                     className="grid h-9 w-9 place-items-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-600"
                     onClick={() => removeDraftFilter(filter.id)}

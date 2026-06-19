@@ -79,6 +79,90 @@ function buildResponsibilityFilters(filters) {
   return { whereConditions, params }
 }
 
+function uniqueFilterOptions(options) {
+  const seen = new Set()
+  const uniqueOptions = []
+
+  for (const option of options) {
+    const value = String(option.value ?? '').trim()
+    const label = String(option.label ?? value).trim()
+
+    if (!value || !label) {
+      continue
+    }
+
+    const key = `${value.toLowerCase()}::${label.toLowerCase()}`
+    if (seen.has(key)) {
+      continue
+    }
+
+    seen.add(key)
+    uniqueOptions.push({ value, label })
+  }
+
+  return uniqueOptions
+}
+
+function roleOptionKey(row) {
+  const text = `${row.role_name ?? ''} ${row.responsibility ?? ''}`.toLowerCase()
+
+  if (/\bsie\b/.test(text) || text.includes('site engineer')) {
+    return 'sie'
+  }
+
+  if (/\bser\b/.test(text) || /\bsre\b/.test(text) || text.includes('service engineer') || text.includes('site receiving')) {
+    return 'ser'
+  }
+
+  if (/\bspl\b/.test(text) || text.includes('site procurement')) {
+    return 'spl'
+  }
+
+  return String(row.responsibility || row.role_name || '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function roleOptionScore(row) {
+  const label = String(row.responsibility || row.role_name || '')
+  let score = label.length
+
+  if (String(row.role_name ?? '').trim() && String(row.responsibility ?? '').trim() !== String(row.role_name ?? '').trim()) {
+    score += 20
+  }
+
+  if (/site engineer|service engineer|site procurement/i.test(label)) {
+    score += 30
+  }
+
+  return score
+}
+
+function uniqueRoleRows(rows) {
+  const bestByRole = new Map()
+
+  for (const row of rows) {
+    const roleName = String(row.role_name ?? '').trim()
+    const responsibility = String(row.responsibility ?? roleName).trim()
+
+    if (!roleName && !responsibility) {
+      continue
+    }
+
+    const normalizedRow = { role_name: roleName || responsibility, responsibility: responsibility || roleName }
+    const key = roleOptionKey(normalizedRow)
+    const current = bestByRole.get(key)
+
+    if (!current || roleOptionScore(normalizedRow) > roleOptionScore(current)) {
+      bestByRole.set(key, normalizedRow)
+    }
+  }
+
+  return [...bestByRole.values()].sort((left, right) => left.responsibility.localeCompare(right.responsibility))
+}
+
 const RESPONSIBILITY_IMPORT_COLUMNS = [
   { label: 'Employee Id', excelHeader: 'Employee ID', dbColumn: 'employee_id', type: 'string', isReadOnly: true },
   { label: 'Employee Name', excelHeader: 'Employee Name', dbColumn: 'employee_name', type: 'string' },
@@ -614,11 +698,13 @@ export async function listResponsibilityFilterOptions(req, res, next) {
       [field],
     )
 
-    return res.json({
-      data: result.rows.map((row) => ({
+    const options = result.rows.map((row) => ({
         value: row.value,
         label: row.description && row.description !== row.value ? `${row.value} (${row.description})` : row.value,
-      })),
+      }))
+
+    return res.json({
+      data: uniqueFilterOptions(options),
     })
   } catch (error) {
     return next(error)
@@ -866,9 +952,11 @@ export async function listResponsibilityOptions(_req, res, next) {
       ORDER BY responsibility ASC
     `)
 
+    const roles = uniqueRoleRows(result.rows)
+
     return res.json({
-      responsibilities: result.rows.map((row) => row.responsibility),
-      roles: result.rows,
+      responsibilities: roles.map((row) => row.responsibility),
+      roles,
     })
   } catch (error) {
     return next(error)

@@ -11,7 +11,7 @@ import { useEffect, useState } from 'react'
 import { Link, NavLink, useLocation, useNavigate } from 'react-router-dom'
 import headerLogo from '../assets/header-logo.png'
 import { useAuth } from '../context/AuthContext'
-import { isAdminUser } from './SuperAdminRoute'
+import { isAdminUser, isProjectInchargeUser } from './SuperAdminRoute'
 
 const mastersGroups = [
   {
@@ -144,6 +144,7 @@ export default function Sidebar({ open }: SidebarProps) {
   const { logout, user } = useAuth()
   const navigate = useNavigate()
   const isAdmin = isAdminUser(user)
+  const isProjectIncharge = isProjectInchargeUser(user)
 
   useEffect(() => {
     const nextActiveGroup = getActiveGroup(location.pathname)
@@ -288,7 +289,23 @@ export default function Sidebar({ open }: SidebarProps) {
           </NavLink>
         )}
 
-        {!isAdmin && (
+        {isProjectIncharge && (
+          <NavLink
+            className={({ isActive }) =>
+              `flex h-12 items-center gap-4 border-l-4 px-5 text-sm font-semibold ${
+                isActive
+                  ? 'border-amber-400 bg-cyan-900/45 text-white'
+                  : 'border-transparent text-slate-300 hover:bg-white/5 hover:text-white'
+              }`
+            }
+            to="/project-review"
+          >
+            <LayoutDashboard className="text-amber-400" size={19} />
+            Indents
+          </NavLink>
+        )}
+
+        {!isAdmin && !isProjectIncharge && (
           <>
             <NavLink
               className={({ isActive }) =>

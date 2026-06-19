@@ -22,6 +22,8 @@ const INDENT_SELECT_SQL = `
     first_line.item_description AS item_name,
     first_line.make,
     first_line.required_qty,
+    first_line.approved_qty,
+    first_line.in_process_qty,
     first_line.issued_qty,
     first_line.on_hand_qty,
     first_line.uom,
@@ -45,6 +47,15 @@ const INDENT_SELECT_SQL = `
       COALESCE(l.item_description, im.item_description) AS item_description,
       l.make,
       l.required_qty,
+      COALESCE(l.approved_qty, l.required_qty) AS approved_qty,
+      COALESCE((
+        SELECT SUM(COALESCE(in_process_line.approved_qty, in_process_line.required_qty))
+        FROM indent_lines in_process_line
+        JOIN indent_headers in_process_header ON in_process_header.id = in_process_line.indent_header_id
+        WHERE in_process_header.status = 'Approved'
+          AND lower(btrim(in_process_header.project_code)) = lower(btrim(h.project_code))
+          AND lower(btrim(in_process_line.item_code)) = lower(btrim(l.item_code))
+      ), 0) AS in_process_qty,
       l.issued_qty,
       COALESCE(im.on_hand_qty, 0) AS on_hand_qty,
       l.uom,
@@ -72,6 +83,15 @@ const INDENT_SELECT_SQL = `
         'make', l.make,
         'uom', l.uom,
         'required_qty', l.required_qty,
+        'approved_qty', COALESCE(l.approved_qty, l.required_qty),
+        'in_process_qty', COALESCE((
+          SELECT SUM(COALESCE(in_process_line.approved_qty, in_process_line.required_qty))
+          FROM indent_lines in_process_line
+          JOIN indent_headers in_process_header ON in_process_header.id = in_process_line.indent_header_id
+          WHERE in_process_header.status = 'Approved'
+            AND lower(btrim(in_process_header.project_code)) = lower(btrim(h.project_code))
+            AND lower(btrim(in_process_line.item_code)) = lower(btrim(l.item_code))
+        ), 0),
         'issued_qty', l.issued_qty,
         'on_hand_qty', COALESCE(im.on_hand_qty, 0),
         'work_type', l.work_type,
@@ -95,12 +115,50 @@ const INDENT_SELECT_SQL = `
   ) lines ON TRUE
 `
 
-export async function listIndents(_req, res, next) {
+export async function listIndents(req, res, next) {
   try {
-    const result = await query(`
-      ${INDENT_SELECT_SQL}
-      ORDER BY h.created_at DESC, h.indent_no DESC
-    `)
+    const { whereSql, params } = buildIndentListFilter(req.query)
+    const result = await query(
+      `
+        ${INDENT_SELECT_SQL}
+        ${whereSql}
+        ORDER BY h.created_at DESC, h.indent_no DESC
+      `,
+      params,
+    )
+
+    return res.json({ data: result.rows })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function listProjectReviewIndents(req, res, next) {
+  try {
+    const requestedProjectCode = String(req.query?.projectCode ?? '').trim()
+    const allowedProjectCodes = getProjectInchargeProjectCodes(req.user)
+
+    if (allowedProjectCodes.length === 0) {
+      return res.status(403).json({ message: 'Project Incharge access is not available' })
+    }
+
+    if (requestedProjectCode && !allowedProjectCodes.some((projectCode) => projectCode.toLowerCase() === requestedProjectCode.toLowerCase())) {
+      return res.status(403).json({ message: 'Project Incharge access is not available for this project' })
+    }
+
+    const { whereSql, params } = buildIndentListFilter({
+      ...req.query,
+      projectCode: requestedProjectCode,
+      projectCodes: requestedProjectCode ? [] : allowedProjectCodes,
+    })
+    const result = await query(
+      `
+        ${INDENT_SELECT_SQL}
+        ${whereSql}
+        ORDER BY h.created_at DESC, h.indent_no DESC
+      `,
+      params,
+    )
 
     return res.json({ data: result.rows })
   } catch (error) {
@@ -116,13 +174,16 @@ export async function listMyIndents(req, res, next) {
       return res.status(401).json({ message: 'Authenticated user is required' })
     }
 
+    const { whereSql, params } = buildIndentListFilter(req.query, [createdBy])
+    const filterSql = whereSql ? whereSql.replace(/^WHERE\s+/i, 'AND ') : ''
     const result = await query(
       `
         ${INDENT_SELECT_SQL}
         WHERE h.created_by = $1
+        ${filterSql}
         ORDER BY h.created_at DESC, h.indent_no DESC
       `,
-      [createdBy],
+      params,
     )
 
     return res.json({ data: result.rows })
@@ -134,6 +195,26 @@ export async function listMyIndents(req, res, next) {
 export async function getIndent(req, res, next) {
   try {
     const indent = await fetchIndentById(req.params.id)
+
+    if (!indent) {
+      return res.status(404).json({ message: 'Indent not found' })
+    }
+
+    return res.json({ data: indent })
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function getProjectReviewIndent(req, res, next) {
+  try {
+    const allowedProjectCodes = getProjectInchargeProjectCodes(req.user)
+
+    if (allowedProjectCodes.length === 0) {
+      return res.status(403).json({ message: 'Project Incharge access is required' })
+    }
+
+    const indent = await fetchIndentByIdForProjects(req.params.id, allowedProjectCodes)
 
     if (!indent) {
       return res.status(404).json({ message: 'Indent not found' })
@@ -167,7 +248,7 @@ export async function getMyIndent(req, res, next) {
 
 export async function listIndentProjectOptions(req, res, next) {
   try {
-    const employeeId = String(req.user?.login_name ?? req.user?.employeeId ?? req.user?.employee_id ?? '').trim()
+    const employeeId = String(req.user?.employee_id ?? req.user?.employeeId ?? req.user?.login_name ?? '').trim()
     const requestedRole = normalizeFieldRole(req.query?.role)
     const userRole = normalizeFieldRole(req.user?.role ?? req.user?.primary_role)
     const fieldRole = requestedRole ?? userRole
@@ -756,6 +837,7 @@ export async function createIndent(req, res, next) {
             make,
             uom,
             required_qty,
+            approved_qty,
             issued_qty,
             work_type,
             activity_code,
@@ -763,7 +845,7 @@ export async function createIndent(req, res, next) {
             remarks,
             attachment_url
           )
-          VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)
+          VALUES ($1, $2, $3, $4, $5, $6, $7, $7, $8, $9, $10, $11, $12, $13)
         `,
         [
           headerId,
@@ -787,6 +869,7 @@ export async function createIndent(req, res, next) {
       createdBy,
       headerId,
       indentNo,
+      projectCode: indentValues.project_code,
       requestTitle: indentValues.app_request_id || indentNo,
     })
 
@@ -827,6 +910,98 @@ function normalizeOptionOffset(value) {
   return parsed
 }
 
+function buildIndentListFilter(source, initialParams = []) {
+  const params = [...initialParams]
+  const clauses = []
+  const projectCode = String(source?.projectCode ?? source?.project_code ?? '').trim()
+  const projectCodes = Array.isArray(source?.projectCodes)
+    ? source.projectCodes.map((code) => String(code ?? '').trim()).filter(Boolean)
+    : []
+  const activityCode = String(source?.activityCode ?? source?.activity_code ?? '').trim()
+  const status = String(source?.status ?? '').trim()
+  const dateFrom = String(source?.date_from ?? '').trim()
+  const dateTo = String(source?.date_to ?? '').trim()
+
+  if (projectCode) {
+    params.push(projectCode.toLowerCase())
+    clauses.push(`lower(btrim(h.project_code)) = $${params.length}`)
+  } else if (projectCodes.length > 0) {
+    const placeholders = projectCodes.map((code) => {
+      params.push(code.toLowerCase())
+      return `$${params.length}`
+    })
+    clauses.push(`lower(btrim(h.project_code)) IN (${placeholders.join(', ')})`)
+  }
+
+  if (activityCode) {
+    params.push(activityCode.toLowerCase())
+    clauses.push(`EXISTS (
+      SELECT 1
+      FROM indent_lines activity_filter_line
+      WHERE activity_filter_line.indent_header_id = h.id
+        AND lower(btrim(activity_filter_line.activity_code)) = $${params.length}
+    )`)
+  }
+
+  if (status) {
+    const normalizedStatus = String(status).replace(/\s+/g, '').trim().toUpperCase()
+    if (normalizedStatus === 'PENDING') {
+      clauses.push(`lower(btrim(h.status::text)) IN ('pending', 'pendingapproval', 'approvalpending', 'created')`)
+    } else if (normalizedStatus === 'PENDINGSYNC') {
+      params.push('pendingsync')
+      clauses.push(`lower(replace(btrim(h.status::text), ' ', '')) = $${params.length}`)
+    } else {
+      params.push(status.toLowerCase())
+      clauses.push(`lower(btrim(h.status::text)) = $${params.length}`)
+    }
+  }
+
+  if (dateFrom) {
+    params.push(dateFrom)
+    clauses.push(`h.created_at::date >= $${params.length}::date`)
+  }
+
+  if (dateTo) {
+    params.push(dateTo)
+    clauses.push(`h.created_at::date <= $${params.length}::date`)
+  }
+
+  return {
+    whereSql: clauses.length ? `WHERE ${clauses.join('\n          AND ')}` : '',
+    params,
+  }
+}
+
+function getProjectInchargeProjectCodes(user) {
+  const assignedProjects = Array.isArray(user?.assigned_projects)
+    ? user.assigned_projects
+    : Array.isArray(user?.assignedProjects)
+      ? user.assignedProjects
+      : []
+
+  return assignedProjects
+    .filter((project) => normalizeProjectInchargeRole(project.role_name))
+    .map((project) => String(project.project_id ?? project.location ?? '').trim())
+    .filter(Boolean)
+}
+
+function normalizeProjectInchargeRole(role) {
+  const normalizedRole = String(role ?? '').trim().toUpperCase()
+
+  if (
+    normalizedRole === 'PROJECT INCHARGE' ||
+    normalizedRole === 'PROJECT INCHARGE (PRI)' ||
+    normalizedRole === 'PRI' ||
+    normalizedRole.includes('PROJECT INCHARGE') ||
+    normalizedRole.includes('PROJECT IN-CHARGE') ||
+    normalizedRole.includes('(PRI)')
+  ) {
+    return 'Project Incharge'
+  }
+
+  return null
+}
+
 function normalizeFieldRole(role) {
   const normalizedRole = String(role ?? '').trim().toUpperCase()
 
@@ -863,9 +1038,74 @@ export async function updateIndentStatus(req, res, next) {
 
   try {
     const { id } = req.validated.params
-    const { status } = req.validated.body
+    const { items = [], status } = req.validated.body
 
     await client.query('BEGIN')
+
+    const existingResult = await client.query(
+      `
+        SELECT id, indent_no, created_by, project_code
+        FROM indent_headers
+        WHERE id = $1
+        FOR UPDATE
+      `,
+      [id],
+    )
+
+    if (!existingResult.rows[0]) {
+      await client.query('ROLLBACK')
+      return res.status(404).json({ message: 'Indent not found' })
+    }
+
+    const existingIndent = existingResult.rows[0]
+    const allowedProjectCodes = getProjectInchargeProjectCodes(req.user)
+    const hasProjectInchargeAccess = allowedProjectCodes.some((projectCode) =>
+      String(projectCode).trim().toLowerCase() === String(existingIndent.project_code).trim().toLowerCase(),
+    )
+
+    if (!hasProjectInchargeAccess) {
+      await client.query('ROLLBACK')
+      return res.status(403).json({ message: 'Project Incharge access is required to update this indent.' })
+    }
+
+    if (!['Approved', 'Rejected'].includes(status)) {
+      await client.query('ROLLBACK')
+      return res.status(400).json({ message: 'Project Incharge can only approve or reject indents.' })
+    }
+
+    if (status === 'Approved') {
+      if (items.length > 0) {
+        for (const item of items) {
+          const lineId = item.id ?? '00000000-0000-0000-0000-000000000000'
+          const lineNumber = item.line_number ?? -1
+          const updateResult = await client.query(
+            `
+              UPDATE indent_lines
+              SET approved_qty = $3,
+                  updated_at = CURRENT_TIMESTAMP
+              WHERE indent_header_id = $1
+                AND (id = $2::uuid OR line_number = $4)
+            `,
+            [id, lineId, item.approved_qty, lineNumber],
+          )
+
+          if (updateResult.rowCount === 0) {
+            await client.query('ROLLBACK')
+            return res.status(400).json({ message: 'One or more approved quantity lines are invalid.' })
+          }
+        }
+      } else {
+        await client.query(
+          `
+            UPDATE indent_lines
+            SET approved_qty = COALESCE(approved_qty, required_qty),
+                updated_at = CURRENT_TIMESTAMP
+            WHERE indent_header_id = $1
+          `,
+          [id],
+        )
+      }
+    }
 
     const result = await client.query(
       `
@@ -899,10 +1139,15 @@ export async function updateIndentStatus(req, res, next) {
       [result.rows[0].indent_no, status],
     )
 
+    const notificationMessage = status === 'Approved'
+      ? await buildApprovalNotificationMessage(client, id, result.rows[0].indent_no)
+      : undefined
+
     await notifyIndentRequester(client, {
       actorLogin: req.user?.login_name,
       indentId: result.rows[0].id,
       indentNo: result.rows[0].indent_no,
+      message: notificationMessage,
       recipientLogin: result.rows[0].created_by,
       status,
     })
@@ -1121,13 +1366,17 @@ function inferDestinationType(body) {
 }
 
 function normalizeIncomingStatus(status) {
-  if (!status) return 'Created'
-  if (status === 'PendingApproval') return 'Pending'
-  return status
+  const normalized = String(status ?? '').replace(/\s+/g, '').trim().toUpperCase()
+
+  if (!normalized) return 'Pending'
+  if (normalized === 'PENDINGSYNC') return 'PendingSync'
+  if (normalized === 'APPROVED') return 'Approved'
+  if (normalized === 'REJECTED') return 'Rejected'
+  return 'Pending'
 }
 
-async function notifyIndentReviewRecipients(client, { createdBy, headerId, indentNo, requestTitle }) {
-  const recipients = await resolveIndentReviewRecipients(client, createdBy)
+async function notifyIndentReviewRecipients(client, { createdBy, headerId, indentNo, projectCode, requestTitle }) {
+  const recipients = await resolveIndentReviewRecipients(client, createdBy, projectCode)
 
   await createIndentNotifications(client, recipients, {
     indentHeaderId: headerId,
@@ -1135,11 +1384,11 @@ async function notifyIndentReviewRecipients(client, { createdBy, headerId, inden
     title: 'New indent request',
     message: `${requestTitle} is waiting for approval.`,
     status: 'Pending',
-    targetPath: `/transactions/${headerId}`,
+    targetPath: `/project-review/transactions/${headerId}`,
   })
 }
 
-async function notifyIndentRequester(client, { actorLogin, indentId, indentNo, recipientLogin, status }) {
+async function notifyIndentRequester(client, { actorLogin, indentId, indentNo, message, recipientLogin, status }) {
   if (!recipientLogin || recipientLogin === actorLogin) {
     return
   }
@@ -1149,44 +1398,66 @@ async function notifyIndentRequester(client, { actorLogin, indentId, indentNo, r
     indentHeaderId: indentId,
     indentNo,
     title: `Indent ${normalizedStatus}`,
-    message: `${indentNo} has been ${normalizedStatus.toLowerCase()}.`,
+    message: message || `${indentNo} has been ${normalizedStatus.toLowerCase()}.`,
     status: normalizedStatus,
     targetPath: `/indent-workspace/indents/${indentId}`,
   })
 }
 
-async function resolveIndentReviewRecipients(client, createdBy) {
+async function buildApprovalNotificationMessage(client, indentId, indentNo) {
+  const result = await client.query(
+    `
+      SELECT line_number, item_code, required_qty, COALESCE(approved_qty, required_qty) AS approved_qty
+      FROM indent_lines
+      WHERE indent_header_id = $1
+      ORDER BY line_number
+    `,
+    [indentId],
+  )
+
+  const adjustedLines = result.rows
+    .filter((line) => Number(line.approved_qty) !== Number(line.required_qty))
+    .map((line) => `Line ${line.line_number} ${line.item_code}: requested ${formatNotificationQty(line.required_qty)}, approved ${formatNotificationQty(line.approved_qty)}`)
+
+  if (adjustedLines.length === 0) {
+    return `${indentNo} has been approved with requested quantities.`
+  }
+
+  return `${indentNo} has been approved with quantity changes. ${adjustedLines.join('; ')}.`
+}
+
+function formatNotificationQty(value) {
+  const parsed = Number(value)
+  return Number.isFinite(parsed) ? parsed.toLocaleString('en-IN') : String(value ?? '-')
+}
+
+async function resolveIndentReviewRecipients(client, createdBy, projectCode) {
   const result = await client.query(
     `
       SELECT DISTINCT login_name
       FROM (
-        SELECT u.login_name
-        FROM users u
-        WHERE COALESCE(u.is_deleted, FALSE) = FALSE
-          AND COALESCE(u.is_active, TRUE) = TRUE
-          AND (
-            upper(btrim(COALESCE(u.primary_role, ''))) IN ('SUPER ADMIN', 'ADMINISTRATOR', 'ADMIN')
-            OR upper(btrim(COALESCE(u.primary_role, ''))) LIKE '%SUPER ADMIN%'
-          )
-
-        UNION
-
-        SELECT rm.employee_id AS login_name
+        SELECT u.login_name AS login_name
         FROM responsibility_master rm
-        LEFT JOIN users u ON u.login_name = rm.employee_id
+        INNER JOIN users u ON lower(btrim(u.login_name)) = lower(btrim(rm.employee_id))
         WHERE lower(COALESCE(NULLIF(btrim(rm.manual_status), ''), 'active')) <> 'inactive'
           AND (rm.valid_from IS NULL OR rm.valid_from <= CURRENT_DATE)
           AND (rm.valid_to IS NULL OR rm.valid_to >= CURRENT_DATE)
           AND COALESCE(u.is_deleted, FALSE) = FALSE
           AND COALESCE(u.is_active, TRUE) = TRUE
+          AND lower(btrim(rm.project_id)) = lower(btrim($1))
           AND (
-            upper(btrim(COALESCE(rm.responsibility, ''))) IN ('SUPER ADMIN', 'ADMINISTRATOR', 'ADMIN')
-            OR upper(btrim(COALESCE(rm.responsibility, ''))) LIKE '%SUPER ADMIN%'
+            upper(btrim(COALESCE(rm.responsibility, ''))) = 'PROJECT INCHARGE'
+            OR upper(btrim(COALESCE(rm.responsibility, ''))) = 'PROJECT INCHARGE (PRI)'
+            OR upper(btrim(COALESCE(rm.responsibility, ''))) = 'PRI'
+            OR upper(btrim(COALESCE(rm.responsibility, ''))) LIKE '%PROJECT INCHARGE%'
+            OR upper(btrim(COALESCE(rm.responsibility, ''))) LIKE '%PROJECT IN-CHARGE%'
+            OR upper(btrim(COALESCE(rm.responsibility, ''))) LIKE '%(PRI)%'
           )
-      ) admins
+      ) project_incharges
       WHERE login_name IS NOT NULL
         AND btrim(login_name) <> ''
     `,
+    [projectCode],
   )
 
   return [...new Set(result.rows
@@ -1218,11 +1489,8 @@ async function createIndentNotifications(client, recipients, { indentHeaderId, i
 }
 
 function normalizeIndentStatusForNotification(status) {
-  const normalized = String(status ?? '').trim()
-  if (normalized === 'Issue') {
-    return 'Issued'
-  }
-  return normalized || 'Updated'
+  const normalized = normalizeIncomingStatus(status)
+  return normalized === 'PendingSync' ? 'Pending Sync' : normalized
 }
 
 async function ensureMobileIndentReferences(client, indentValues) {
@@ -1328,8 +1596,7 @@ async function insertLegacyIndent(client, indentValues) {
 }
 
 function toLegacyStatus(status) {
-  if (['Pending', 'Approved', 'Rejected', 'Issued'].includes(status)) return status
-  if (['Issue', 'PartiallyIssued', 'Completed'].includes(status)) return 'Issued'
+  if (['Pending', 'Approved', 'Rejected'].includes(status)) return status
   return 'Pending'
 }
 
@@ -1355,6 +1622,28 @@ async function fetchIndentByIdForUser(id, createdBy) {
       LIMIT 1
     `,
     [id, createdBy],
+  )
+
+  return result.rows[0]
+}
+
+async function fetchIndentByIdForProjects(id, projectCodes) {
+  const normalizedProjectCodes = projectCodes
+    .map((projectCode) => String(projectCode ?? '').trim().toLowerCase())
+    .filter(Boolean)
+
+  if (normalizedProjectCodes.length === 0) {
+    return undefined
+  }
+
+  const result = await query(
+    `
+      ${INDENT_SELECT_SQL}
+      WHERE h.id = $1
+        AND lower(btrim(h.project_code)) = ANY($2)
+      LIMIT 1
+    `,
+    [id, normalizedProjectCodes],
   )
 
   return result.rows[0]

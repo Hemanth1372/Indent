@@ -55,7 +55,7 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
         _ => string.Empty
     };
 
-    public string ItemCountDisplay => $"{Items.Count}/20 added";
+    public string ItemCountDisplay => $"{Items.Count} added";
     public bool HasNoItems => Items.Count == 0;
 
     public IndentDetailsViewModel()
@@ -171,9 +171,6 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
 
             if (Items.Count == 0)
                 throw new InvalidOperationException("Please add at least one item before submitting.");
-
-            if (Items.Count > 20)
-                throw new InvalidOperationException("Maximum 20 line items allowed per indent.");
 
             EnsureNoDuplicateItemsForSubmit();
 

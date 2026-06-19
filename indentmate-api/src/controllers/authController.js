@@ -110,24 +110,34 @@ export async function webLogin(req, res, next) {
     }
 
     const adminAssignment = activeAssignments.find((assignment) => normalizePortalRole(assignment.responsibility))
+    const projectInchargeAssignments = activeAssignments.filter((assignment) => normalizeProjectInchargeRole(assignment.responsibility))
+    const projectInchargeAssignment = projectInchargeAssignments[0]
     const fieldAssignments = activeAssignments.filter((assignment) => normalizeFieldRole(assignment.responsibility))
     const fieldAssignment = fieldAssignments.find((assignment) =>
       normalizeFieldRole(assignment.responsibility) === normalizeFieldRole(loginUser.primary_role)
     ) ?? fieldAssignments[0]
 
-    if (!adminAssignment && !fieldAssignment) {
+    if (!adminAssignment && !projectInchargeAssignment && !fieldAssignment) {
       return res.status(403).json({
         errorCode: 'WEB_ACCESS_DENIED',
-        message: 'Unauthorized Access: Web access is restricted to Admin, Site Engineer, and Service Engineer accounts.',
+        message: 'Unauthorized Access: Web access is restricted to Admin, Project Incharge, Site Engineer, and Service Engineer accounts.',
       })
     }
 
     const isAdminSession = Boolean(adminAssignment)
-    const selectedAssignment = adminAssignment ?? fieldAssignment
+    const isProjectInchargeSession = !isAdminSession && Boolean(projectInchargeAssignment)
+    const selectedAssignment = adminAssignment ?? projectInchargeAssignment ?? fieldAssignment
     const role = isAdminSession
       ? normalizePortalRole(selectedAssignment.responsibility)
-      : normalizeFieldRole(selectedAssignment.responsibility)
-    const assignedProjects = (isAdminSession ? activeAssignments : fieldAssignments).map((assignment) => ({
+      : isProjectInchargeSession
+        ? normalizeProjectInchargeRole(selectedAssignment.responsibility)
+        : normalizeFieldRole(selectedAssignment.responsibility)
+    const sessionAssignments = isAdminSession
+      ? activeAssignments
+      : isProjectInchargeSession
+        ? projectInchargeAssignments
+        : fieldAssignments
+    const assignedProjects = sessionAssignments.map((assignment) => ({
       project_id: assignment.project_id,
       project_name: assignment.project_description,
       location: assignment.project_id,
@@ -153,7 +163,7 @@ export async function webLogin(req, res, next) {
       role,
       primary_role: role,
       responsibility: selectedAssignment.responsibility,
-      access_scope: isAdminSession ? 'admin' : 'field',
+      access_scope: isAdminSession ? 'admin' : isProjectInchargeSession ? 'project_incharge' : 'field',
       isActive: true,
       assigned_projects: assignedProjects,
       assignedProjects: assignedProjects,
@@ -293,6 +303,23 @@ function normalizePortalRole(role) {
 
   if (normalizedRole === 'ADMIN' || normalizedRole.startsWith('ADMIN ') || normalizedRole.includes('(ADMIN)')) {
     return 'Admin'
+  }
+
+  return null
+}
+
+function normalizeProjectInchargeRole(role) {
+  const normalizedRole = String(role ?? '').trim().toUpperCase()
+
+  if (
+    normalizedRole === 'PROJECT INCHARGE' ||
+    normalizedRole === 'PROJECT INCHARGE (PRI)' ||
+    normalizedRole === 'PRI' ||
+    normalizedRole.includes('PROJECT INCHARGE') ||
+    normalizedRole.includes('PROJECT IN-CHARGE') ||
+    normalizedRole.includes('(PRI)')
+  ) {
+    return 'Project Incharge'
   }
 
   return null

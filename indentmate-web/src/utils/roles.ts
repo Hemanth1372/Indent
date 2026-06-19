@@ -16,6 +16,19 @@ export function isPortalAdminRole(value: unknown) {
   )
 }
 
+export function isProjectInchargeRole(value: unknown) {
+  const role = normalizeRole(value)
+
+  return (
+    role === 'PROJECT INCHARGE' ||
+    role === 'PROJECT INCHARGE (PRI)' ||
+    role === 'PRI' ||
+    role.includes('PROJECT INCHARGE') ||
+    role.includes('PROJECT IN-CHARGE') ||
+    role.includes('(PRI)')
+  )
+}
+
 export function isFieldRole(value: unknown) {
   const role = normalizeRole(value)
 

@@ -11,7 +11,7 @@ const indents: Indent[] = [
     warehouseId: 'WH-MAT',
     indentType: 'Issue',
     engineerType: 'SIE',
-    status: 'PendingApproval',
+    status: 'Pending',
     createdAt: new Date().toISOString(),
     isSynced: true,
   },

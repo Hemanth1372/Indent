@@ -200,6 +200,23 @@ public class ApiService
             responseJson);
     }
 
+    public async Task<UploadedAttachment?> UploadIndentAttachmentAsync(string filePath, string fileName, CancellationToken ct = default)
+    {
+        await ApplyStoredAuthTokenAsync();
+
+        await using var fileStream = File.OpenRead(filePath);
+        using var content = new MultipartFormDataContent();
+        using var fileContent = new StreamContent(fileStream);
+        fileContent.Headers.ContentType = new MediaTypeHeaderValue("application/octet-stream");
+        content.Add(fileContent, "file", string.IsNullOrWhiteSpace(fileName) ? Path.GetFileName(filePath) : fileName);
+
+        var response = await _httpClient.PostAsync("/api/indents/attachments", content, ct);
+        response.EnsureSuccessStatusCode();
+        var responseJson = await response.Content.ReadAsStringAsync(ct);
+        var uploadResponse = JsonConvert.DeserializeObject<UploadAttachmentResponse>(responseJson);
+        return uploadResponse?.Data;
+    }
+
     public async Task<List<RemoteIndentReference>> GetMyIndentReferencesAsync(CancellationToken ct = default)
     {
         var response = await GetAsync<MyIndentsResponse>("/api/indents/mine", ct);
@@ -285,6 +302,12 @@ public class ApiService
 
         [JsonProperty("unreadCount")]
         public int UnreadCount { get; set; }
+    }
+
+    private sealed class UploadAttachmentResponse
+    {
+        [JsonProperty("data")]
+        public UploadedAttachment? Data { get; set; }
     }
 
     private sealed class MyIndentRow
@@ -730,6 +753,9 @@ public sealed record PagedApiResult<T>(List<T> Data, bool HasMore, int NextOffse
 
 public sealed record RemoteIndentReference(string AppRequestId, string IndentNo, string Status);
 public sealed record NotificationListResult(List<AppNotification> Notifications, int UnreadCount);
+public sealed record UploadedAttachment(
+    [property: JsonProperty("name")] string Name,
+    [property: JsonProperty("url")] string Url);
 
 public sealed class AppNotification
 {

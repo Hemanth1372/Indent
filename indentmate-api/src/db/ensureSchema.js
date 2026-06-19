@@ -645,6 +645,7 @@ export async function ensureSchema() {
       make VARCHAR(120),
       uom VARCHAR(50) NOT NULL,
       required_qty NUMERIC(14, 3) NOT NULL,
+      approved_qty NUMERIC(14, 3),
       issued_qty NUMERIC(14, 3) NOT NULL DEFAULT 0,
       work_type VARCHAR(80),
       activity_code VARCHAR(100),
@@ -668,6 +669,7 @@ export async function ensureSchema() {
   await query('CREATE INDEX IF NOT EXISTS idx_indent_headers_created_by ON indent_headers(created_by)')
   await query('CREATE INDEX IF NOT EXISTS idx_indent_headers_project_code ON indent_headers(project_code)')
   await query('CREATE INDEX IF NOT EXISTS idx_indent_headers_created_at ON indent_headers(created_at)')
+  await query('ALTER TABLE IF EXISTS indent_lines ADD COLUMN IF NOT EXISTS approved_qty NUMERIC(14, 3)')
   await query('CREATE INDEX IF NOT EXISTS idx_indent_lines_header_id ON indent_lines(indent_header_id)')
   await query('CREATE INDEX IF NOT EXISTS idx_indent_lines_item_code ON indent_lines(item_code)')
 
@@ -734,6 +736,7 @@ export async function ensureSchema() {
       make,
       uom,
       required_qty,
+      approved_qty,
       issued_qty,
       remarks,
       created_at,
@@ -745,6 +748,7 @@ export async function ensureSchema() {
       i.item_code,
       i.make,
       i.uom,
+      i.required_qty,
       i.required_qty,
       0,
       i.remarks,

@@ -1,5 +1,6 @@
 import { Router } from 'express'
 import {
+  clearNotifications,
   listNotifications,
   markAllNotificationsRead,
   markNotificationRead,
@@ -12,3 +13,4 @@ notificationRoutes.use(verifyToken)
 notificationRoutes.get('/', listNotifications)
 notificationRoutes.patch('/read-all', markAllNotificationsRead)
 notificationRoutes.patch('/:id/read', markNotificationRead)
+notificationRoutes.delete('/', clearNotifications)

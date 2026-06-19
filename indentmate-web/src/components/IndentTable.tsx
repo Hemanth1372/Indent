@@ -16,7 +16,7 @@ export default function IndentTable({ data, loading }: IndentTableProps) {
       loading={loading}
       pagination={{ pageSize: 10 }}
       columns={[
-        {
+        { 
           title: 'Request No',
           dataIndex: 'requestNo',
           render: (value: string, record) => (

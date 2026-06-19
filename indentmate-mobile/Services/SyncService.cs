@@ -310,7 +310,7 @@ public class SyncService
     private async Task PushIndentAsync(LocalIndent indent, CancellationToken ct)
     {
         var items = await _databaseService.GetItemsForIndentAsync(indent.IndentId);
-        var payload = BuildIndentPayload(indent, items);
+        var payload = await BuildIndentPayloadAsync(indent, items, ct);
 
         try
         {
@@ -348,7 +348,7 @@ public class SyncService
         }
     }
 
-    private static IndentSyncPayload BuildIndentPayload(LocalIndent indent, List<LocalIndentItem> items)
+    private async Task<IndentSyncPayload> BuildIndentPayloadAsync(LocalIndent indent, List<LocalIndentItem> items, CancellationToken ct)
     {
         var firstItem = items.FirstOrDefault();
 
@@ -378,7 +378,7 @@ public class SyncService
             ToEntityId = string.IsNullOrWhiteSpace(indent.ToContractorId) ? indent.OrderNo : indent.ToContractorId,
             EquipmentDisplay = indent.EquipmentDisplay,
             Status = "Created",
-            Items = items.Select(item => new IndentSyncLinePayload
+            Items = (await Task.WhenAll(items.Select(async item => new IndentSyncLinePayload
             {
                 ItemCode = item.MaterialCode,
                 MaterialCode = item.MaterialCode,
@@ -392,9 +392,62 @@ public class SyncService
                 RequestedQty = item.RequestedQty,
                 ToBusinessPartner = item.BusinessPartnerId,
                 Remarks = item.Remarks,
-                AttachmentUrl = item.AttachmentUrl
-            }).ToList()
+                AttachmentUrl = await ResolveAttachmentUrlAsync(item.AttachmentUrl, ct)
+            }))).ToList()
         };
+    }
+
+    private async Task<string> ResolveAttachmentUrlAsync(string? attachmentValue, CancellationToken ct)
+    {
+        var attachments = ParseLocalAttachments(attachmentValue);
+        if (attachments.Count == 0)
+            return string.Empty;
+
+        var resolved = new List<UploadedAttachment>();
+        foreach (var attachment in attachments)
+        {
+            if (IsRemoteAttachment(attachment.Path))
+            {
+                resolved.Add(new UploadedAttachment(attachment.Name, attachment.Path));
+                continue;
+            }
+
+            if (!File.Exists(attachment.Path))
+                continue;
+
+            var uploaded = await _apiService.UploadIndentAttachmentAsync(attachment.Path, attachment.Name, ct);
+            if (uploaded is not null && !string.IsNullOrWhiteSpace(uploaded.Url))
+                resolved.Add(uploaded);
+        }
+
+        return resolved.Count == 0 ? string.Empty : JsonConvert.SerializeObject(resolved);
+    }
+
+    private static List<LocalAttachment> ParseLocalAttachments(string? value)
+    {
+        if (string.IsNullOrWhiteSpace(value))
+            return new List<LocalAttachment>();
+
+        try
+        {
+            var attachments = JsonConvert.DeserializeObject<List<LocalAttachment>>(value);
+            if (attachments is not null)
+                return attachments.Where(attachment => !string.IsNullOrWhiteSpace(attachment.Path)).ToList();
+        }
+        catch (JsonException)
+        {
+        }
+
+        return new List<LocalAttachment>
+        {
+            new(Path.GetFileName(value), value)
+        };
+    }
+
+    private static bool IsRemoteAttachment(string value)
+    {
+        return Uri.TryCreate(value, UriKind.Absolute, out var uri) &&
+            (uri.Scheme == Uri.UriSchemeHttp || uri.Scheme == Uri.UriSchemeHttps);
     }
 
     private static string ExtractErrorMessage(string responseBody)
@@ -535,6 +588,10 @@ public sealed class ApiErrorResponse
     [JsonProperty("message")]
     public string? Message { get; set; }
 }
+
+public sealed record LocalAttachment(
+    [property: JsonProperty("Name")] string Name,
+    [property: JsonProperty("Path")] string Path);
 
 public class SyncProgressEventArgs : EventArgs
 {

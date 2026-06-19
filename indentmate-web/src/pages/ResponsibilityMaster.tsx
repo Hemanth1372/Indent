@@ -89,6 +89,33 @@ type FilterValueOptionsResponse = {
   data: Array<string | { label: string; value: string }>
 }
 
+function normalizeFilterValueOptions(options: FilterValueOptionsResponse['data']) {
+  const seen = new Set<string>()
+  const uniqueOptions: SelectOption[] = []
+
+  options.forEach((option) => {
+    const mappedOption = typeof option === 'string'
+      ? { label: option, value: option }
+      : { label: option.label, value: option.value }
+    const label = String(mappedOption.label ?? '').trim()
+    const value = String(mappedOption.value ?? '').trim()
+
+    if (!label || !value) {
+      return
+    }
+
+    const key = `${value.toLowerCase()}::${label.toLowerCase()}`
+    if (seen.has(key)) {
+      return
+    }
+
+    seen.add(key)
+    uniqueOptions.push({ label, value })
+  })
+
+  return uniqueOptions
+}
+
 const searchFields = [
   { label: 'Employee ID', value: 'employee_id', placeholder: 'Enter Employee ID...' },
   { label: 'Employee Name', value: 'employee_name', placeholder: 'Enter Employee Name...' },
@@ -328,7 +355,7 @@ export default function ResponsibilityMaster() {
       })
       setFilterValueOptions((currentOptions) => ({
         ...currentOptions,
-        [field]: data.data.map((option) => typeof option === 'string' ? { label: option, value: option } : option),
+        [field]: normalizeFilterValueOptions(data.data),
       }))
     } catch (requestError) {
       console.error(requestError)
@@ -942,10 +969,12 @@ export default function ResponsibilityMaster() {
                       void loadFilterValueOptions(filter.field)
                     }
                   }}
+                  optionFilterProp="label"
                   options={filterValueOptions[filter.field] ?? []}
                   placeholder={selectedField?.placeholder ?? 'Select filter value'}
                   showSearch
                   value={filter.value || undefined}
+                  virtual={false}
                 />
                 <button
                   className="grid h-9 w-9 place-items-center rounded-md text-slate-400 transition hover:bg-red-50 hover:text-red-600"
@@ -1186,26 +1215,50 @@ function buildRoleSelectOptions(roleOptions: RoleOptions): SelectOption[] {
   const sourceRoles = roleOptions.roles?.length
     ? roleOptions.roles
     : roleOptions.responsibilities.map((responsibility) => ({ role_name: responsibility, responsibility }))
-  const seenRoleNames = new Set<string>()
+  const bestByRole = new Map<string, RoleOption>()
 
-  return sourceRoles
+  sourceRoles
     .map((role) => ({
       role_name: String(role.role_name || role.responsibility || '').trim(),
       responsibility: String(role.responsibility || role.role_name || '').trim(),
     }))
     .filter((role) => role.role_name)
-    .filter((role) => {
-      const key = role.role_name.toLowerCase()
-      if (seenRoleNames.has(key)) {
-        return false
+    .forEach((role) => {
+      const key = roleSelectKey(role)
+      const current = bestByRole.get(key)
+
+      if (!current || roleSelectScore(role) > roleSelectScore(current)) {
+        bestByRole.set(key, role)
       }
-      seenRoleNames.add(key)
-      return true
     })
+
+  return [...bestByRole.values()]
+    .sort((left, right) => (left.responsibility || left.role_name).localeCompare(right.responsibility || right.role_name))
     .map((role) => ({
       label: formatRoleOptionLabel(role),
       value: role.role_name,
     }))
+}
+
+function roleSelectKey(role: RoleOption) {
+  const text = `${role.role_name ?? ''} ${role.responsibility ?? ''}`.toLowerCase()
+
+  if (/\bsie\b/.test(text) || text.includes('site engineer')) return 'sie'
+  if (/\bser\b/.test(text) || /\bsre\b/.test(text) || text.includes('service engineer') || text.includes('site receiving')) return 'ser'
+  if (/\bspl\b/.test(text) || text.includes('site procurement')) return 'spl'
+
+  return String(role.responsibility || role.role_name || '')
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, '')
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+}
+
+function roleSelectScore(role: RoleOption) {
+  const label = String(role.responsibility || role.role_name || '')
+  return label.length
+    + (role.responsibility && role.responsibility !== role.role_name ? 20 : 0)
+    + (/site engineer|service engineer|site procurement/i.test(label) ? 30 : 0)
 }
 
 function formatRoleOptionLabel(role: RoleOption) {

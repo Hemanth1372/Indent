@@ -1,7 +1,7 @@
 import type { ReactNode } from 'react'
 import { Navigate, Route, Routes, useParams } from 'react-router-dom'
 import AdminLayout from './components/AdminLayout'
-import SuperAdminRoute, { isAdminUser } from './components/SuperAdminRoute'
+import SuperAdminRoute, { isAdminUser, isProjectInchargeUser } from './components/SuperAdminRoute'
 import { AuthProvider, useAuth } from './context/AuthContext'
 import Dashboard from './pages/Dashboard'
 import {
@@ -15,6 +15,8 @@ import GenericMasterPage from './pages/GenericMasterPage'
 import IndentDetail from './pages/IndentDetail'
 import IndentList from './pages/IndentList'
 import Login from './pages/Login'
+import NotificationsPage from './pages/NotificationsPage'
+import ProjectInchargeWorkspace, { ProjectInchargeDrilldown } from './pages/ProjectInchargeWorkspace'
 import ResponsibilityMaster from './pages/ResponsibilityMaster'
 import Transactions from './pages/Transactions'
 
@@ -43,7 +45,21 @@ function FieldRoute({ children, title = 'Indent Home' }: { children: ReactNode; 
     return <Navigate to="/login" replace />
   }
 
-  if (isAdminUser(user)) {
+  if (isAdminUser(user) || isProjectInchargeUser(user)) {
+    return <Navigate to="/" replace />
+  }
+
+  return <AdminLayout title={title}>{children}</AdminLayout>
+}
+
+function ProjectInchargeRoute({ children, title = 'Indents' }: { children: ReactNode; title?: string }) {
+  const { isAuthenticated, user } = useAuth()
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />
+  }
+
+  if (!isProjectInchargeUser(user)) {
     return <Navigate to="/" replace />
   }
 
@@ -53,7 +69,15 @@ function FieldRoute({ children, title = 'Indent Home' }: { children: ReactNode; 
 function RoleHome() {
   const { user } = useAuth()
 
-  return isAdminUser(user) ? <Dashboard /> : <FieldIndentHome />
+  if (isAdminUser(user)) {
+    return <Dashboard />
+  }
+
+  if (isProjectInchargeUser(user)) {
+    return <ProjectInchargeWorkspace />
+  }
+
+  return <FieldIndentHome />
 }
 
 function PlaceholderPage({ title }: { title: string }) {
@@ -99,6 +123,10 @@ function titleFromSlug(value: string) {
     return 'Warehouse Location Master'
   }
 
+  if (value === 'responsibility-master') {
+    return 'User Assignment Master'
+  }
+
   return value
     .split('-')
     .filter(Boolean)
@@ -116,6 +144,22 @@ export default function App() {
           element={
             <AuthenticatedRoute>
               <RoleHome />
+            </AuthenticatedRoute>
+          }
+        />
+        <Route
+          path="/notifications"
+          element={
+            <AuthenticatedRoute title="Notifications">
+              <NotificationsPage />
+            </AuthenticatedRoute>
+          }
+        />
+        <Route
+          path="/notifications/:notificationId"
+          element={
+            <AuthenticatedRoute title="Notifications">
+              <NotificationsPage />
             </AuthenticatedRoute>
           }
         />
@@ -152,6 +196,30 @@ export default function App() {
           }
         />
         <Route
+          path="/project-review"
+          element={
+            <ProjectInchargeRoute title="Indents">
+              <ProjectInchargeWorkspace />
+            </ProjectInchargeRoute>
+          }
+        />
+        <Route
+          path="/project-review/drilldown"
+          element={
+            <ProjectInchargeRoute title="Indents">
+              <ProjectInchargeDrilldown />
+            </ProjectInchargeRoute>
+          }
+        />
+        <Route
+          path="/project-review/transactions/:indentId"
+          element={
+            <ProjectInchargeRoute title="Transaction Detail">
+              <IndentDetail approvalMode endpoint="/api/indents/review" />
+            </ProjectInchargeRoute>
+          }
+        />
+        <Route
           path="/transactions"
           element={
             <ProtectedRoute title="Transactions">
@@ -172,9 +240,13 @@ export default function App() {
           element={
             <FieldRoute title="Transactions">
               <Transactions
+                backLabel="Back to Dashboard"
+                backPath="/indent-workspace"
                 detailPath={(id) => `/indent-workspace/indents/${id}`}
                 endpoint="/api/indents/mine"
                 eyebrow="My Material Ledger"
+                projectOptionsEndpoint="/api/indents/options/projects"
+                showProjectFilter
                 title="My Transactions"
               />
             </FieldRoute>

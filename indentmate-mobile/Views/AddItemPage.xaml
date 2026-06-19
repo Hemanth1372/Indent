@@ -361,6 +361,9 @@
                                 Stroke="#BFDBFE"
                                 StrokeShape="RoundRectangle 8"
                                 StrokeThickness="1">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding OpenAttachmentCommand}" />
+                                </Border.GestureRecognizers>
                                 <Label
                                     FontSize="13"
                                     LineBreakMode="TailTruncation"

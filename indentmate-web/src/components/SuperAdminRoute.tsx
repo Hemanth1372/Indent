@@ -1,6 +1,6 @@
 import type { ReactNode } from 'react'
 import { Navigate, useLocation } from 'react-router-dom'
-import { isFieldRole, isPortalAdminRole } from '../utils/roles'
+import { isFieldRole, isPortalAdminRole, isProjectInchargeRole } from '../utils/roles'
 
 const AUTH_TOKEN_KEY = 'ncc_token'
 const AUTH_USER_KEY = 'ncc_user'
@@ -44,6 +44,20 @@ export function isAdminUser(user: StoredUser | null) {
   const accessScope = String(user?.access_scope ?? '').trim().toLowerCase()
 
   return accessScope === 'admin'
+}
+
+export function isProjectInchargeUser(user: StoredUser | null) {
+  const responsibility = String(user?.responsibility ?? '').trim()
+  const assignedProjects = user?.assigned_projects ?? user?.assignedProjects ?? []
+  const role = user?.role ?? user?.primary_role
+  const accessScope = String(user?.access_scope ?? '').trim().toLowerCase()
+
+  return (
+    isProjectInchargeRole(role) ||
+    isProjectInchargeRole(responsibility) ||
+    accessScope === 'project_incharge' ||
+    assignedProjects.some((project) => isProjectInchargeRole(project.role_name))
+  )
 }
 
 export default function SuperAdminRoute({ children }: { children: ReactNode }) {
