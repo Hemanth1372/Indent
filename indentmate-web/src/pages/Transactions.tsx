@@ -1,5 +1,5 @@
 import { AlertCircle, ArrowLeft, ArrowUpRight, Building2, CalendarDays, Factory, MapPin, RefreshCw, Send, Zap } from 'lucide-react'
-import type { ReactNode } from 'react'
+  import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../services/api'

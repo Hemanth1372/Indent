@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, useState, type ReactNode } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 
 type AuthUser = {
   user_id?: string
@@ -74,6 +74,46 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(AUTH_TOKEN_KEY))
   const [user, setUser] = useState<AuthUser | null>(() => readStoredUser())
 
+  function clearSession() {
+    sessionStorage.removeItem(AUTH_TOKEN_KEY)
+    sessionStorage.removeItem(AUTH_USER_KEY)
+    setToken(null)
+    setUser(null)
+  }
+
+  useEffect(() => {
+    if (!token) {
+      return
+    }
+
+    let cancelled = false
+
+    async function validateSession() {
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/auth/session`, {
+          headers: {
+            Authorization: `Bearer ${token}`,
+          },
+        })
+
+        if (!cancelled && response.status === 401) {
+          clearSession()
+          window.location.assign('/login')
+        }
+      } catch {
+        // Keep the current session during transient network failures.
+      }
+    }
+
+    const intervalId = window.setInterval(validateSession, 30000)
+    void validateSession()
+
+    return () => {
+      cancelled = true
+      window.clearInterval(intervalId)
+    }
+  }, [token])
+
   const value = useMemo<AuthContextValue>(
     () => ({
       isAuthenticated: Boolean(token),
@@ -113,10 +153,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
       },
       logout: () => {
-        sessionStorage.removeItem(AUTH_TOKEN_KEY)
-        sessionStorage.removeItem(AUTH_USER_KEY)
-        setToken(null)
-        setUser(null)
+        clearSession()
       },
     }),
     [token, user],

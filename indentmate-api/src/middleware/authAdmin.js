@@ -1,7 +1,8 @@
 import jwt from 'jsonwebtoken'
 import { env } from '../config/env.js'
+import { query } from '../db/pool.js'
 
-export function verifySuperAdmin(req, res, next) {
+export async function verifySuperAdmin(req, res, next) {
   const authHeader = req.headers.authorization
   const token = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
 
@@ -11,6 +12,25 @@ export function verifySuperAdmin(req, res, next) {
 
   try {
     const payload = jwt.verify(token, env.jwtSecret)
+    const loginName = String(payload.login_name ?? payload.employeeId ?? payload.employee_id ?? '').trim()
+    const result = await query(
+      `
+        SELECT session_version
+        FROM users
+        WHERE login_name = $1
+          AND COALESCE(is_deleted, FALSE) = FALSE
+          AND COALESCE(is_active, TRUE) = TRUE
+        LIMIT 1
+      `,
+      [loginName],
+    )
+    const currentSessionVersion = Number(result.rows[0]?.session_version ?? -1)
+    const tokenSessionVersion = Number(payload.session_version ?? 0)
+
+    if (!loginName || !result.rows[0] || currentSessionVersion !== tokenSessionVersion) {
+      return res.status(401).json({ message: 'Session expired. Please login again.' })
+    }
+
     const role = String(payload.role ?? payload.primary_role ?? '').trim().toUpperCase()
 
     if (!isPortalAdminRole(role)) {

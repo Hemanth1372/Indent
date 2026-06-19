@@ -4,7 +4,7 @@ import { env } from '../config/env.js'
 import { query } from '../db/pool.js'
 
 const USER_BY_LOGIN_NAME_SQL = `
-  SELECT user_id, login_name, employee_name, primary_role, password_hash, current_pin, is_active
+  SELECT user_id, login_name, employee_name, primary_role, password_hash, current_pin, is_active, COALESCE(session_version, 0) AS session_version
   FROM users
   WHERE login_name = $1
     AND COALESCE(is_deleted, FALSE) = FALSE
@@ -165,6 +165,7 @@ export async function webLogin(req, res, next) {
       responsibility: selectedAssignment.responsibility,
       access_scope: isAdminSession ? 'admin' : isProjectInchargeSession ? 'project_incharge' : 'field',
       isActive: true,
+      session_version: Number(loginUser.session_version ?? 0),
       assigned_projects: assignedProjects,
       assignedProjects: assignedProjects,
     }
@@ -209,7 +210,8 @@ export async function resetAdminPassword(req, res, next) {
       `
         UPDATE users
         SET password_hash = $2,
-            current_pin = $3
+            current_pin = $3,
+            session_version = COALESCE(session_version, 0) + 1
         WHERE login_name = $1
       `,
       [employeeId, hashedPassword, password],
@@ -269,6 +271,7 @@ async function handleLogin(req, res, next, { requirePortalAccess }) {
       role: context.primary_role,
       primary_role: context.primary_role,
       isActive: true,
+      session_version: Number(user.session_version ?? 0),
       assigned_projects: context.assigned_projects,
       assignedProjects: context.assigned_projects,
     }
@@ -399,6 +402,7 @@ async function handleFieldLogin(req, res, next) {
       primary_role: role,
       responsibility: fieldAssignment.responsibility,
       isActive: true,
+      session_version: Number(loginUser.session_version ?? 0),
       assigned_projects: [],
       assignedProjects: [],
     }

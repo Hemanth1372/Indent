@@ -308,7 +308,7 @@ const masterConfigs: Record<string, MasterConfig> = {
         key: 'dpr_engineer_control',
         label: 'Dpr Engineer Control',
         required: true,
-        options: [{ label: 'Location', value: 'LOCATION' }, { label: 'Activity', value: 'ACTIVITY' }],
+        options: [{ label: 'Location', value: 'LOCATION' }, { label: 'Activity', value: 'ACTIVITY' }, { label: 'Loc/Activity', value: 'LOC/ACTIVITY' }],
       },
       {
         key: 'multi_location_activity',

@@ -421,7 +421,7 @@ async function syncLoginUser(row) {
           ELSE COALESCE(users.primary_role, EXCLUDED.primary_role)
         END,
         is_active = EXCLUDED.is_active
-        ${hasProvidedPin ? ', password_hash = EXCLUDED.password_hash, current_pin = EXCLUDED.current_pin' : ''}
+        ${hasProvidedPin ? ', password_hash = EXCLUDED.password_hash, current_pin = EXCLUDED.current_pin, session_version = COALESCE(users.session_version, 0) + 1' : ''}
     `,
     [row.employee_id, row.employee_name, primaryRole, passwordHash, isActive, pin],
   )
@@ -744,6 +744,7 @@ export async function createUserMaster(req, res, next) {
           employee_name = EXCLUDED.employee_name,
           password_hash = EXCLUDED.password_hash,
           current_pin = EXCLUDED.current_pin,
+          session_version = COALESCE(users.session_version, 0) + 1,
           is_active = TRUE,
           is_deleted = FALSE,
           primary_role = COALESCE(users.primary_role, EXCLUDED.primary_role)
@@ -785,6 +786,7 @@ export async function updateUserMaster(req, res, next) {
       fields.push(`password_hash = $${values.length}`)
       values.push(pin)
       fields.push(`current_pin = $${values.length}`)
+      fields.push('session_version = COALESCE(session_version, 0) + 1')
     }
 
     if (!fields.length) {
@@ -1280,7 +1282,8 @@ export async function changeResponsibilityPassword(req, res, next) {
       `
         UPDATE users
         SET password_hash = $2,
-            current_pin = $3
+            current_pin = $3,
+            session_version = COALESCE(session_version, 0) + 1
         WHERE login_name = $1
       `,
       [row.employee_id, passwordHash, pin],

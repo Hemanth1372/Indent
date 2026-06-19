@@ -349,6 +349,7 @@ export function FieldIndentHeader() {
     orderNo: '',
   })
   const [errorMessage, setErrorMessage] = useState('')
+  const isIssueReturn = form.indentType === 'Issue Return'
 
   useEffect(() => {
     async function loadBaseOptions() {
@@ -411,7 +412,7 @@ export function FieldIndentHeader() {
   }, [form.projectCode])
 
   useEffect(() => {
-    if (!form.projectCode || (role === 'SIE' && !form.warehouseCode)) {
+    if (!form.projectCode || (role === 'SIE' && !isIssueReturn && !form.warehouseCode)) {
       setLocations([])
       setPartners([])
       return
@@ -421,7 +422,7 @@ export function FieldIndentHeader() {
       return
     }
 
-    const warehouseCode = role === 'SIE' ? form.warehouseCode : ''
+    const warehouseCode = role === 'SIE' && !isIssueReturn ? form.warehouseCode : ''
     api.get<{ data: Array<{ location_code: string; description: string }> }>(`/api/indents/options/warehouse-locations?projectCode=${encodeURIComponent(form.projectCode)}&warehouseCode=${encodeURIComponent(warehouseCode)}`)
       .then((response) => {
         const nextLocations = response.data.data.map((location) => ({
@@ -435,22 +436,22 @@ export function FieldIndentHeader() {
           ...current,
           sourceLocationCode: nextLocations.some((location) => location.code === current.sourceLocationCode)
             ? current.sourceLocationCode
-            : role === 'SIE'
+            : role === 'SIE' && !isIssueReturn
               ? nextLocations[0]?.code ?? ''
               : '',
           toEntityId: role === 'SIE' ? '' : current.toEntityId,
         }))
       })
       .catch(() => setErrorMessage(role === 'SIE' ? 'Unable to load warehouse locations.' : 'Unable to load project locations.'))
-  }, [form.projectCode, form.warehouseCode, role])
+  }, [form.projectCode, form.warehouseCode, role, isIssueReturn])
 
   useEffect(() => {
-    if (role !== 'SIE' || !form.projectCode || !form.sourceLocationCode) {
+    if (role !== 'SIE' || isIssueReturn || !form.projectCode || !form.sourceLocationCode) {
       setPartners([])
       return
     }
 
-    loadContractorOptions(form.projectCode, form.sourceLocationCode)
+    loadDeliveryPointOptions(form.projectCode)
       .then((nextPartners) => {
         setPartners(nextPartners)
         setForm((current) => ({
@@ -458,8 +459,8 @@ export function FieldIndentHeader() {
           toEntityId: nextPartners.some((partner) => partner.code === current.toEntityId) ? current.toEntityId : '',
         }))
       })
-      .catch(() => setErrorMessage('Unable to load contractor options.'))
-  }, [form.projectCode, form.sourceLocationCode, role])
+      .catch(() => setErrorMessage('Unable to load business partner options.'))
+  }, [form.projectCode, form.sourceLocationCode, role, isIssueReturn])
 
   const selectedProject = projects.find((project) => project.code === form.projectCode)
   const selectedWarehouse = warehouses.find((warehouse) => warehouse.code === form.warehouseCode)
@@ -469,8 +470,8 @@ export function FieldIndentHeader() {
     selectedProject &&
     (
       role === 'SIE'
-        ? selectedWarehouse && selectedLocation && (partners.length === 0 || form.toEntityId)
-        : selectedOrder && selectedLocation
+        ? selectedWarehouse && selectedLocation
+        : selectedOrder && selectedLocation && (!isIssueReturn || selectedWarehouse)
     ),
   )
 
@@ -483,12 +484,7 @@ export function FieldIndentHeader() {
     }
 
     if (role === 'SIE' && (!selectedWarehouse || !selectedLocation)) {
-      setErrorMessage('Select warehouse and from location.')
-      return
-    }
-
-    if (role === 'SIE' && partners.length > 0 && !selectedPartner) {
-      setErrorMessage('Select contractor / BP.')
+      setErrorMessage(isIssueReturn ? 'Select from location and to warehouse.' : 'Select warehouse and from location.')
       return
     }
 
@@ -499,6 +495,11 @@ export function FieldIndentHeader() {
 
     if (role === 'SER' && !selectedLocation) {
       setErrorMessage('Select delivery location.')
+      return
+    }
+
+    if (role === 'SER' && isIssueReturn && !selectedWarehouse) {
+      setErrorMessage('Select to warehouse.')
       return
     }
 
@@ -514,8 +515,12 @@ export function FieldIndentHeader() {
       warehouseLabel: selectedWarehouse?.label,
       sourceLocationCode: selectedLocation?.code,
       sourceLocationLabel: selectedLocation?.label,
-      toEntityId: role === 'SIE' ? selectedPartner?.code : selectedLocation?.code,
-      toEntityLabel: role === 'SIE' ? selectedPartner?.label : selectedLocation?.label,
+      toEntityId: role === 'SIE'
+        ? isIssueReturn ? selectedWarehouse?.code : selectedPartner?.code
+        : isIssueReturn ? selectedWarehouse?.code : selectedLocation?.code,
+      toEntityLabel: role === 'SIE'
+        ? isIssueReturn ? selectedWarehouse?.label : selectedPartner?.label
+        : isIssueReturn ? selectedWarehouse?.label : selectedLocation?.label,
       orderNo: String(selectedOrder?.meta?.orderNo ?? selectedOrder?.code ?? ''),
       orderType: String(selectedOrder?.meta?.orderType ?? ''),
       equipmentDisplay: String(selectedOrder?.meta?.equipment ?? ''),
@@ -528,12 +533,12 @@ export function FieldIndentHeader() {
 
   return (
     <MobileShell title="Indent Creation" onBack={() => navigate('/indent-workspace')}>
-      <div className="grid w-full gap-5">
-        <div className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
-          <div className="mb-4 flex items-center justify-between gap-4 border-b border-slate-100 pb-3">
-            <h3 className="text-lg font-black text-slate-900">{role} Header Details</h3>
+      <div className="grid w-full min-w-0 gap-5">
+        <div className="min-w-0 overflow-visible rounded-lg border border-slate-200 bg-white p-4 shadow-sm">
+          <div className="mb-4 flex min-w-0 flex-wrap items-center justify-between gap-3 border-b border-slate-100 pb-3">
+            <h3 className="min-w-0 text-base font-black text-slate-900">{role} Header Details</h3>
             <button
-              className="inline-flex h-11 items-center justify-center gap-2 rounded-lg bg-blue-950 px-5 text-sm font-black text-white shadow-sm transition hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-45 xl:min-w-40"
+              className="inline-flex h-10 shrink-0 items-center justify-center gap-2 rounded-lg bg-blue-950 px-4 text-sm font-black text-white shadow-sm transition hover:bg-blue-900 disabled:cursor-not-allowed disabled:opacity-45"
               disabled={!canCreateRequest}
               onClick={createDraft}
               type="button"
@@ -542,8 +547,8 @@ export function FieldIndentHeader() {
               Create Request
             </button>
           </div>
-          <div className="grid gap-4 xl:pr-6 2xl:pr-10">
-            <div className={`grid gap-4 ${role === 'SER' ? 'lg:grid-cols-3 xl:grid-cols-[minmax(260px,1.2fr)_minmax(260px,1.1fr)_minmax(180px,0.8fr)_minmax(220px,1fr)]' : 'lg:grid-cols-4 xl:grid-cols-[minmax(280px,1.3fr)_minmax(160px,0.65fr)_minmax(240px,1fr)_minmax(240px,1fr)]'}`}>
+          <div className="grid min-w-0 gap-4">
+            <div className={`grid min-w-0 gap-3 ${role === 'SER' ? 'grid-cols-[repeat(auto-fit,minmax(190px,1fr))]' : 'grid-cols-[repeat(auto-fit,minmax(185px,1fr))]'}`}>
               <OptionField compact label="Project *" value={form.projectCode} onChange={(value) => setForm((current) => ({ ...current, projectCode: value }))} options={projects} placeholder="Select Project" />
             {role === 'SER' ? (
               <>
@@ -562,11 +567,11 @@ export function FieldIndentHeader() {
                 <ReadonlyField compact label="Equipment" value={String(orders.find((order) => order.code === form.orderNo)?.meta?.equipment ?? 'Auto-filled after order selection')} />
                 <OptionField
                   compact
-                  label="Delivery Location *"
+                  label={isIssueReturn ? 'From Location *' : 'Delivery Location *'}
                   value={form.sourceLocationCode}
                   onChange={(value) => setForm((current) => ({ ...current, sourceLocationCode: value }))}
                   options={locations}
-                  placeholder="Select delivery location"
+                  placeholder={isIssueReturn ? 'Select from location' : 'Select delivery location'}
                 />
               </>
             ) : null}
@@ -576,23 +581,35 @@ export function FieldIndentHeader() {
             ]} />
             {role === 'SIE' ? (
               <>
-                <OptionField compact label="Warehouse *" value={form.warehouseCode} onChange={(value) => setForm((current) => ({ ...current, warehouseCode: value }))} options={warehouses} placeholder="Select warehouse" />
-                <OptionField compact label="From Location *" value={form.sourceLocationCode} onChange={(value) => setForm((current) => ({ ...current, sourceLocationCode: value }))} options={locations} placeholder="Select from location" />
-                {partners.length > 0 ? (
+                {isIssueReturn ? (
+                  <>
+                    <OptionField compact label="From Location *" value={form.sourceLocationCode} onChange={(value) => setForm((current) => ({ ...current, sourceLocationCode: value }))} options={locations} placeholder="Select from location" />
+                    <OptionField compact label="To Warehouse *" value={form.warehouseCode} onChange={(value) => setForm((current) => ({ ...current, warehouseCode: value }))} options={warehouses} placeholder="Select to warehouse" />
+                  </>
+                ) : (
+                  <>
+                    <OptionField compact label="Warehouse *" value={form.warehouseCode} onChange={(value) => setForm((current) => ({ ...current, warehouseCode: value }))} options={warehouses} placeholder="Select warehouse" />
+                    <OptionField compact label="From Location *" value={form.sourceLocationCode} onChange={(value) => setForm((current) => ({ ...current, sourceLocationCode: value }))} options={locations} placeholder="Select location" />
+                  </>
+                )}
+                {!isIssueReturn && partners.length > 0 ? (
                   <OptionField
                     compact
-                    label="To (Contractor / BP)"
+                    label="To (Business Partner)"
                     value={form.toEntityId}
                     onChange={(value) => setForm((current) => ({ ...current, toEntityId: value }))}
-                    onSearch={(search) => loadContractorOptions(form.projectCode, form.sourceLocationCode, search).then((nextPartners) => {
+                    onSearch={(search) => loadDeliveryPointOptions(form.projectCode, '', search).then((nextPartners) => {
                       setPartners((current) => mergeOptions(current, nextPartners))
                       return nextPartners
                     })}
                     options={partners}
-                    placeholder="Select contractor"
+                    placeholder="Select BP"
                   />
                 ) : null}
               </>
+            ) : null}
+            {role === 'SER' && isIssueReturn ? (
+              <OptionField compact label="To Warehouse *" value={form.warehouseCode} onChange={(value) => setForm((current) => ({ ...current, warehouseCode: value }))} options={warehouses} placeholder="Select to warehouse" />
             ) : null}
           </div>
           </div>
@@ -624,12 +641,15 @@ export function FieldIndentDraftDetails() {
 
     setIsSubmitting(true)
     setMessage('')
+    const isReturnDraft = isIssueReturnType(draft.indentType)
     const payload: IndentSubmitPayload = {
       app_request_id: draft.requestNo,
       project_code: draft.projectCode,
       source_warehouse: draft.warehouseCode ?? null,
       source_location: draft.sourceLocationCode ?? draft.warehouseCode ?? null,
-      delivery_location: draft.sourceLocationCode ?? draft.projectCode,
+      delivery_location: isReturnDraft
+        ? draft.warehouseCode ?? draft.sourceLocationCode ?? draft.projectCode
+        : draft.sourceLocationCode ?? draft.projectCode,
       requirement_type: draft.indentType,
       indent_type: draft.indentType,
       engineerType: draft.engineerType === 'SER' ? 'SER' : 'SIE',
@@ -800,13 +820,11 @@ export function FieldIndentDraftDetails() {
 function InlineDraftItemForm({ draft, editItem, existingItems, onCancel, onSave }: { draft: IndentDraft; editItem?: DraftItem | null; existingItems: DraftItem[]; onCancel: () => void; onSave: (item: DraftItem) => void }) {
   const [materials, setMaterials] = useState<Option[]>([])
   const [activities, setActivities] = useState<Option[]>([])
-  const [partners, setPartners] = useState<Option[]>([])
   const [form, setForm] = useState({
     workType: editItem?.workType ?? 'BOQ',
     activityCode: editItem?.activityCode ?? '',
     materialCode: editItem?.materialCode ?? '',
     requestedQty: editItem?.requestedQty ?? '',
-    toBusinessPartner: editItem?.toBusinessPartner ?? draft.toEntityId ?? '',
     remarks: editItem?.remarks ?? '',
     attachments: editItem?.attachments ?? legacyDraftAttachments(editItem?.attachmentName),
   })
@@ -847,19 +865,6 @@ function InlineDraftItemForm({ draft, editItem, existingItems, onCancel, onSave 
   }, [draft, editItem])
 
   useEffect(() => {
-    if (draft.engineerType !== 'SIE') {
-      return
-    }
-
-    loadDeliveryPointOptions(draft.projectCode, '', '', form.activityCode)
-      .then((initialPartners) => setPartners(mergeOptions(initialPartners, editItem?.toBusinessPartner ? [{
-        code: editItem.toBusinessPartner,
-        label: editItem.toBusinessPartnerLabel ?? editItem.toBusinessPartner,
-      }] : [])))
-      .catch(() => undefined)
-  }, [draft.engineerType, draft.projectCode, form.activityCode, editItem])
-
-  useEffect(() => {
     if (cameraVideoRef.current && cameraStream) {
       cameraVideoRef.current.srcObject = cameraStream
     }
@@ -871,7 +876,6 @@ function InlineDraftItemForm({ draft, editItem, existingItems, onCancel, onSave 
 
   const selectedMaterial = materials.find((material) => material.code === form.materialCode)
   const selectedActivity = activities.find((activity) => activity.code === form.activityCode)
-  const selectedPartner = partners.find((partner) => partner.code === form.toBusinessPartner)
   const canSaveItem = Boolean(
     selectedMaterial &&
     form.requestedQty &&
@@ -990,7 +994,7 @@ function InlineDraftItemForm({ draft, editItem, existingItems, onCancel, onSave 
       item.materialCode === selectedMaterial.code &&
       item.locationCode === draft.sourceLocationCode &&
       item.activityCode === selectedActivity?.code &&
-      item.toBusinessPartner === (selectedPartner?.code ?? draft.toEntityId)
+      item.toBusinessPartner === draft.toEntityId
     )
 
     if (duplicate) {
@@ -1009,8 +1013,8 @@ function InlineDraftItemForm({ draft, editItem, existingItems, onCancel, onSave 
       materialDesc: selectedMaterial.description || selectedMaterial.label,
       uom: String(selectedMaterial.meta?.uom ?? ''),
       requestedQty: form.requestedQty,
-      toBusinessPartner: selectedPartner?.code ?? draft.toEntityId,
-      toBusinessPartnerLabel: selectedPartner?.label ?? draft.toEntityLabel,
+      toBusinessPartner: draft.toEntityId,
+      toBusinessPartnerLabel: draft.toEntityLabel,
       remarks: form.remarks,
       attachmentName: form.attachments.map((attachment) => attachment.name).join(', '),
       attachments: form.attachments,
@@ -1062,20 +1066,8 @@ function InlineDraftItemForm({ draft, editItem, existingItems, onCancel, onSave 
               placeholder="Select material"
             />
           </div>
-          <div className="grid min-w-0 max-w-full gap-3 lg:grid-cols-[70px_minmax(220px,0.95fr)_90px_minmax(240px,1fr)_minmax(260px,0.9fr)]">
+          <div className="grid min-w-0 max-w-full gap-3 lg:grid-cols-[70px_110px_minmax(240px,1fr)_minmax(260px,0.9fr)]">
             <ReadonlyField compact label="UOM" value={String(selectedMaterial?.meta?.uom ?? '') || '-'} />
-          <OptionField
-            compact
-            label="To (Business Partner)"
-            value={form.toBusinessPartner}
-            onChange={(value) => setForm((current) => ({ ...current, toBusinessPartner: value }))}
-            onSearch={(search) => loadDeliveryPointOptions(draft.projectCode, '', search, form.activityCode).then((nextPartners) => {
-              setPartners((current) => mergeOptions(current, nextPartners))
-              return nextPartners
-            })}
-            options={partners}
-            placeholder="Select BP"
-          />
             <TextField compact label="Req Qty *" value={form.requestedQty} onChange={(value) => setForm((current) => ({ ...current, requestedQty: value }))} placeholder="Qty" type="number" />
             <TextField compact label="Remarks" value={form.remarks} onChange={(value) => setForm((current) => ({ ...current, remarks: value }))} placeholder="Enter remarks" />
             <AttachmentPicker attachments={form.attachments} cameraInputRef={cameraInputRef} onCamera={startCameraCapture} onChange={handleAttachmentSelect} onRemove={removeAttachment} />
@@ -1317,14 +1309,12 @@ export function FieldIndentAddItem() {
   const [materials, setMaterials] = useState<Option[]>([])
   const [activities, setActivities] = useState<Option[]>([])
   const [locations, setLocations] = useState<Option[]>([])
-  const [partners, setPartners] = useState<Option[]>([])
   const [form, setForm] = useState({
     workType: editItem?.workType ?? 'BOQ',
     locationCode: editItem?.locationCode ?? draft?.sourceLocationCode ?? '',
     activityCode: editItem?.activityCode ?? '',
     materialCode: editItem?.materialCode ?? '',
     requestedQty: editItem?.requestedQty ?? '',
-    toBusinessPartner: editItem?.toBusinessPartner ?? draft?.toEntityId ?? '',
     remarks: editItem?.remarks ?? '',
     attachmentName: editItem?.attachmentName ?? '',
     attachments: editItem?.attachments ?? legacyDraftAttachments(editItem?.attachmentName),
@@ -1360,10 +1350,9 @@ export function FieldIndentAddItem() {
         return
       }
 
-      const [activityResponse, locationResponse, partnerResponse] = await Promise.all([
+      const [activityResponse, locationResponse] = await Promise.all([
         api.get<OptionResponse<{ activity_code: string; description: string }>>(`/api/indents/options/activities?projectCode=${encodeURIComponent(sourceDraft.projectCode)}&limit=500`),
         api.get<{ data: Array<{ location_code: string; description: string }> }>(`/api/indents/options/warehouse-locations?projectCode=${encodeURIComponent(sourceDraft.projectCode)}&warehouseCode=${encodeURIComponent(sourceDraft.warehouseCode ?? '')}`),
-        loadDeliveryPointOptions(sourceDraft.projectCode, ''),
       ])
       setActivities(activityResponse.data.data.map((activity) => ({
         code: activity.activity_code,
@@ -1375,7 +1364,6 @@ export function FieldIndentAddItem() {
         label: `${location.location_code} - ${location.description}`,
         description: location.description,
       })))
-      setPartners(partnerResponse)
       setForm((current) => ({
         ...current,
         materialCode: current.materialCode,
@@ -1408,7 +1396,6 @@ export function FieldIndentAddItem() {
     code: activeDraft.sourceLocationCode ?? '',
     label: activeDraft.sourceLocationLabel ?? '',
   }
-  const selectedPartner = partners.find((partner) => partner.code === form.toBusinessPartner)
   const canSaveItem = Boolean(
     selectedMaterial &&
     form.requestedQty &&
@@ -1534,7 +1521,7 @@ export function FieldIndentAddItem() {
       item.materialCode === selectedMaterial.code &&
       item.locationCode === selectedLocation.code &&
       item.activityCode === selectedActivity?.code &&
-      item.toBusinessPartner === (selectedPartner?.code ?? activeDraft.toEntityId)
+      item.toBusinessPartner === activeDraft.toEntityId
     )
 
     if (duplicate) {
@@ -1553,8 +1540,8 @@ export function FieldIndentAddItem() {
         materialDesc: selectedMaterial.description || selectedMaterial.label,
         uom: String(selectedMaterial.meta?.uom ?? ''),
         requestedQty: form.requestedQty,
-        toBusinessPartner: selectedPartner?.code ?? activeDraft.toEntityId,
-        toBusinessPartnerLabel: selectedPartner?.label ?? activeDraft.toEntityLabel,
+        toBusinessPartner: activeDraft.toEntityId,
+        toBusinessPartnerLabel: activeDraft.toEntityLabel,
         remarks: form.remarks,
         attachmentName: form.attachmentName,
         attachments: form.attachments,
@@ -1612,19 +1599,6 @@ export function FieldIndentAddItem() {
             />
             <ReadonlyField label="UOM (Auto-filled)" value={String(selectedMaterial?.meta?.uom ?? '') || '-'} />
             <TextField label="Requested Qty *" value={form.requestedQty} onChange={(value) => setForm((current) => ({ ...current, requestedQty: value }))} placeholder="Enter quantity" type="number" />
-            {draft.engineerType === 'SIE' ? (
-              <OptionField
-                label="To (Business Partner)"
-                value={form.toBusinessPartner}
-                onChange={(value) => setForm((current) => ({ ...current, toBusinessPartner: value }))}
-                onSearch={(search) => loadDeliveryPointOptions(activeDraft.projectCode, '', search).then((nextPartners) => {
-                  setPartners((current) => mergeOptions(current, nextPartners))
-                  return nextPartners
-                })}
-                options={partners}
-                placeholder="Select business partner"
-              />
-            ) : null}
             <TextField label="Remarks" value={form.remarks} onChange={(value) => setForm((current) => ({ ...current, remarks: value }))} placeholder="Enter remarks" multiline />
             <div>
               <p className="mb-2 text-sm font-black text-slate-600">Attachment</p>
@@ -1918,6 +1892,7 @@ function OptionField({
             }
           }}
           placeholder={placeholder}
+          title={query}
           value={query}
         />
         <button
@@ -1950,6 +1925,7 @@ function OptionField({
               onMouseDown={(event) => event.preventDefault()}
               onClick={() => selectOption(row.option)}
               type="button"
+              title={row.option.label}
             >
               {row.option.label}
             </button>
@@ -2110,36 +2086,6 @@ async function loadActivityOptions(projectCode: string, search = '') {
     code: activity.activity_code,
     label: `${activity.activity_code} - ${activity.description}`,
     description: activity.description,
-  }))
-}
-
-async function loadContractorOptions(projectCode: string, locationCode = '', search = '', activityCode = '') {
-  if (!projectCode) {
-    return []
-  }
-
-  const params = new URLSearchParams({
-    projectCode,
-    limit: search.trim().length >= 2 ? '50' : '21',
-  })
-
-  if (locationCode) {
-    params.set('locationCode', locationCode)
-  }
-
-  if (activityCode) {
-    params.set('activityCode', activityCode)
-  }
-
-  if (search.trim().length >= 2) {
-    params.set('search', search.trim())
-  }
-
-  const response = await api.get<OptionResponse<{ business_partner_code: string; business_partner_name: string }>>(`/api/indents/options/contractors?${params}`)
-  return response.data.data.map((partner) => ({
-    code: partner.business_partner_code,
-    label: `${partner.business_partner_code} - ${partner.business_partner_name}`,
-    description: partner.business_partner_name,
   }))
 }
 
@@ -2331,6 +2277,8 @@ async function syncPendingSyncIndents() {
 }
 
 function draftToTransaction(draft: IndentDraft): IndentTransaction {
+  const isReturnDraft = isIssueReturnType(draft.indentType)
+
   return {
     id: draft.id,
     app_request_id: draft.requestNo,
@@ -2340,7 +2288,8 @@ function draftToTransaction(draft: IndentDraft): IndentTransaction {
     source_warehouse: draft.warehouseCode ?? '-',
     source_warehouse_name: draft.warehouseLabel?.replace(`${draft.warehouseCode} - `, ''),
     source_location: draft.sourceLocationLabel ?? draft.sourceLocationCode,
-    delivery_location: draft.sourceLocationCode,
+    delivery_location: isReturnDraft ? draft.warehouseCode : draft.sourceLocationCode,
+    delivery_location_name: isReturnDraft ? draft.warehouseLabel?.replace(`${draft.warehouseCode} - `, '') : draft.sourceLocationLabel,
     indent_type: draft.indentType,
     to_entity_type: draft.engineerType,
     to_entity_id: draft.toEntityLabel ?? draft.toEntityId,
@@ -2422,6 +2371,10 @@ function buildRequestNo() {
 function countStatus(rows: IndentTransaction[], statuses: string[]) {
   const allowed = new Set(statuses.map(normalizeStatus))
   return rows.filter((row) => allowed.has(normalizeStatus(row.status))).length
+}
+
+function isIssueReturnType(indentType?: string | null) {
+  return normalizeStatus(indentType ?? '') === 'ISSUERETURN'
 }
 
 function normalizeStatus(status: string) {

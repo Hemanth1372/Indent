@@ -162,7 +162,8 @@ async function upsertLoginUser({ employee_id, employee_name, responsibility, pas
         employee_name = EXCLUDED.employee_name,
         primary_role = EXCLUDED.primary_role,
         password_hash = EXCLUDED.password_hash,
-        current_pin = EXCLUDED.current_pin
+        current_pin = EXCLUDED.current_pin,
+        session_version = COALESCE(users.session_version, 0) + 1
     `,
     [employee_id, employee_name, primaryRole, passwordHash, pin],
   )
@@ -342,7 +343,13 @@ export async function changeUserPassword(req, res, next) {
     const user = normalizeUser(result.rows[0])
     const passwordHash = await bcrypt.hash(pin, 12)
     await query(
-      'UPDATE users SET password_hash = $1, current_pin = $2 WHERE login_name = $3',
+      `
+        UPDATE users
+        SET password_hash = $1,
+            current_pin = $2,
+            session_version = COALESCE(session_version, 0) + 1
+        WHERE login_name = $3
+      `,
       [passwordHash, pin, user.employee_id],
     )
 
@@ -383,7 +390,8 @@ export async function syncUserPin(req, res, next) {
       `
         UPDATE users
         SET password_hash = $2,
-            current_pin = $3
+            current_pin = $3,
+            session_version = COALESCE(session_version, 0) + 1
         WHERE login_name = $1 AND is_active = TRUE
         RETURNING user_id, login_name, login_name AS employee_id, employee_name, primary_role, is_active, current_pin, current_pin AS password_hash, created_at
       `,

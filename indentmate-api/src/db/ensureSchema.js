@@ -36,6 +36,7 @@ export async function ensureSchema() {
       is_deleted BOOLEAN DEFAULT FALSE,
       password_hash VARCHAR(255) NOT NULL,
       current_pin VARCHAR(6),
+      session_version INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
     )
   `)
@@ -45,6 +46,8 @@ export async function ensureSchema() {
   await query('DROP TABLE IF EXISTS projects CASCADE')
   await query('DROP TABLE IF EXISTS delivery_point_master CASCADE')
   await query('ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS current_pin VARCHAR(6)')
+  await query('ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS session_version INTEGER DEFAULT 0')
+  await query('UPDATE users SET session_version = 0 WHERE session_version IS NULL')
   await query('ALTER TABLE IF EXISTS users ADD COLUMN IF NOT EXISTS is_deleted BOOLEAN DEFAULT FALSE')
   await query('ALTER TABLE IF EXISTS users DROP COLUMN IF EXISTS employee_id_str')
 
