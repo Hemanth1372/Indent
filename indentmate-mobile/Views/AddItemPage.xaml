@@ -241,19 +241,44 @@
                             <Border
                                 BackgroundColor="#F8FAFC"
                                 HeightRequest="54"
-                                Padding="14,0"
+                                Padding="14,0,8,0"
                                 Stroke="#D6DEE9"
                                 StrokeShape="RoundRectangle 10"
                                 StrokeThickness="1">
-                                <Entry
-                                    BackgroundColor="Transparent"
-                                    FontSize="15"
-                                    Keyboard="Numeric"
-                                    Placeholder="Enter quantity"
-                                    PlaceholderColor="#94A3B8"
-                                    Text="{Binding RequestedQty}"
-                                    TextColor="#172033"
-                                    VerticalOptions="Center" />
+                                <Grid ColumnDefinitions="*,28">
+                                    <Entry
+                                        BackgroundColor="Transparent"
+                                        FontSize="15"
+                                        Keyboard="Numeric"
+                                        Placeholder="Enter quantity"
+                                        PlaceholderColor="#94A3B8"
+                                        Text="{Binding RequestedQty}"
+                                        TextColor="#172033"
+                                        VerticalOptions="Center" />
+                                    <Grid Grid.Column="1" RowDefinitions="*,*" VerticalOptions="Center">
+                                        <Label
+                                            FontAttributes="Bold"
+                                            FontSize="14"
+                                            HorizontalTextAlignment="Center"
+                                            Text="▲"
+                                            TextColor="#94A3B8">
+                                            <Label.GestureRecognizers>
+                                                <TapGestureRecognizer Command="{Binding IncrementQuantityCommand}" />
+                                            </Label.GestureRecognizers>
+                                        </Label>
+                                        <Label
+                                            Grid.Row="1"
+                                            FontAttributes="Bold"
+                                            FontSize="14"
+                                            HorizontalTextAlignment="Center"
+                                            Text="▼"
+                                            TextColor="#94A3B8">
+                                            <Label.GestureRecognizers>
+                                                <TapGestureRecognizer Command="{Binding DecrementQuantityCommand}" />
+                                            </Label.GestureRecognizers>
+                                        </Label>
+                                    </Grid>
+                                </Grid>
                             </Border>
                         </VerticalStackLayout>
 
@@ -353,23 +378,58 @@
                                 FontSize="12"
                                 Text="Max attachment size: 5 MB"
                                 TextColor="#94A3B8" />
-                            <!-- Attached file name -->
-                            <Border
-                                BackgroundColor="#EFF6FF"
+                            <VerticalStackLayout
+                                BindableLayout.ItemsSource="{Binding Attachments}"
                                 IsVisible="{Binding HasAttachment}"
-                                Padding="12,8"
-                                Stroke="#BFDBFE"
-                                StrokeShape="RoundRectangle 8"
-                                StrokeThickness="1">
-                                <Border.GestureRecognizers>
-                                    <TapGestureRecognizer Command="{Binding OpenAttachmentCommand}" />
-                                </Border.GestureRecognizers>
-                                <Label
-                                    FontSize="13"
-                                    LineBreakMode="TailTruncation"
-                                    Text="{Binding AttachmentName}"
-                                    TextColor="#0E2A5C" />
-                            </Border>
+                                Spacing="6">
+                                <BindableLayout.ItemTemplate>
+                                    <DataTemplate x:DataType="vm:AttachmentSelection">
+                                        <Border
+                                            BackgroundColor="#F8FAFC"
+                                            Padding="10,5"
+                                            Stroke="#D6DEE9"
+                                            StrokeShape="RoundRectangle 8"
+                                            StrokeThickness="1">
+                                            <Grid ColumnDefinitions="Auto,*,40" ColumnSpacing="10">
+                                                <controls:IconLabel
+                                                    Glyph="{x:Static glyphs:IconGlyphs.Attach}"
+                                                    IconSize="18"
+                                                    IconColor="#475467"
+                                                    VerticalOptions="Center" />
+                                                <Label
+                                                    Grid.Column="1"
+                                                    FontAttributes="Bold"
+                                                    FontSize="13"
+                                                    LineBreakMode="TailTruncation"
+                                                    Text="{Binding Name}"
+                                                    TextColor="#172033"
+                                                    VerticalOptions="Center">
+                                                    <Label.GestureRecognizers>
+                                                        <TapGestureRecognizer
+                                                            Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.OpenAttachmentCommand}"
+                                                            CommandParameter="{Binding .}" />
+                                                    </Label.GestureRecognizers>
+                                                </Label>
+                                                <Button
+                                                    Grid.Column="2"
+                                                    Padding="0"
+                                                    BackgroundColor="White"
+                                                    BorderColor="#D6DEE9"
+                                                    BorderWidth="1"
+                                                    Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.RemoveAttachmentCommand}"
+                                                    CommandParameter="{Binding .}"
+                                                    CornerRadius="6"
+                                                    FontAttributes="Bold"
+                                                    FontSize="15"
+                                                    HeightRequest="30"
+                                                    Text="X"
+                                                    TextColor="#475467"
+                                                    WidthRequest="30" />
+                                            </Grid>
+                                        </Border>
+                                    </DataTemplate>
+                                </BindableLayout.ItemTemplate>
+                            </VerticalStackLayout>
                         </VerticalStackLayout>
 
                         <!-- Validation error -->

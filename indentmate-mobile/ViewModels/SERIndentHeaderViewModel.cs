@@ -82,7 +82,7 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
                 OrderNo = SelectedOrder.OrderNo,
                 OrderType = SelectedOrder.OrderType,
                 EquipmentDisplay = SelectedOrder.EquipmentDisplay,
-                Status = "Created",
+                Status = "Incomplete",
                 CreatedAt = DateTime.UtcNow,
                 IsSynced = false
             });
@@ -444,9 +444,33 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
 
     private static string DisplayOrId(string? displayName, string id)
     {
-        return string.IsNullOrWhiteSpace(displayName)
-            ? id
-            : displayName.Trim();
+        var display = StripRepeatedCode(id, displayName);
+        return string.IsNullOrWhiteSpace(display) ? id : display;
+    }
+
+    private static string StripRepeatedCode(string code, string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(text))
+        {
+            return text;
+        }
+
+        if (text.Equals(code, StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        foreach (var separator in new[] { " - ", " – ", " — ", "-", "–", "—" })
+        {
+            var prefix = code + separator;
+            if (text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return text[prefix.Length..].Trim();
+            }
+        }
+
+        return text;
     }
 
     private static string BuildUserInfo(string engineerId, string engineerName, string environment, string company)

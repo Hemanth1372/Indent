@@ -1,4 +1,4 @@
-import { Ban, Bell, ChevronDown, Menu, UserRound } from 'lucide-react'
+import { Ban, Bell, Menu, MoreVertical } from 'lucide-react'
 import { useEffect, useState } from 'react'
 import { useNavigate } from 'react-router-dom'
 import { useAuth } from '../context/AuthContext'
@@ -168,15 +168,12 @@ export default function TopNav({ onMenuClick, title }: TopNavProps) {
         </div>
         <div className="relative">
           <button
-            className="flex h-14 items-center gap-3 rounded-xl border border-slate-200 bg-white px-2.5 pr-5 text-slate-700 shadow-sm transition hover:bg-slate-50"
+            className="grid h-12 w-12 place-items-center rounded-xl border border-slate-200 bg-white text-slate-700 shadow-sm transition hover:bg-slate-50"
             onClick={() => setProfileOpen((value) => !value)}
             type="button"
+            title="Account menu"
           >
-            <span className="grid h-10 w-10 place-items-center rounded-lg bg-cyan-700 text-white">
-              <UserRound size={20} />
-            </span>
-            <span className="hidden font-medium sm:inline">{user?.name ?? 'Administrator'}</span>
-            <ChevronDown className="hidden text-slate-400 sm:block" size={14} />
+            <MoreVertical size={20} />
           </button>
 
           {profileOpen && (

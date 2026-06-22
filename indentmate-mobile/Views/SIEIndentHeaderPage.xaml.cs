@@ -28,6 +28,17 @@ public partial class SIEIndentHeaderPage : ContentPage
 
     private async void OnBackClicked(object? sender, EventArgs e)
     {
+        await NavigateBackAsync();
+    }
+
+    protected override bool OnBackButtonPressed()
+    {
+        _ = NavigateBackAsync();
+        return true;
+    }
+
+    private async Task NavigateBackAsync()
+    {
         DropdownField.CloseAll();
         await Shell.Current.GoToAsync("//sie-dashboard");
     }

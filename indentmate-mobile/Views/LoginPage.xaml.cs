@@ -17,8 +17,6 @@ public partial class LoginPage : ContentPage
         {
             await viewModel.LoadEngineerInfoAsync();
         }
-
-        HiddenPinEntry.Focus();
     }
 
     private void OnPinEntryTextChanged(object? sender, TextChangedEventArgs e)
@@ -27,6 +25,11 @@ public partial class LoginPage : ContentPage
     }
 
     private void OnUserInteraction(object? sender, TappedEventArgs e)
+    {
+        NotifyUserInteraction();
+    }
+
+    private void OnPinDisplayTapped(object? sender, TappedEventArgs e)
     {
         NotifyUserInteraction();
         HiddenPinEntry.Focus();

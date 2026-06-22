@@ -108,35 +108,8 @@
                             TextColor="#111827"
                             VerticalOptions="Center" />
                     </Grid>
-                    <BoxView BackgroundColor="#EEF2F7" HeightRequest="1" />
-
-                    <Grid ColumnDefinitions="*,Auto" ColumnSpacing="16" Padding="0,2">
-                        <Grid.GestureRecognizers>
-                            <TapGestureRecognizer Command="{Binding OpenPendingIndentsCommand}" />
-                        </Grid.GestureRecognizers>
-                        <Label Text="Pending Indents" TextColor="#667085" VerticalOptions="Center" />
-                        <Label Grid.Column="1" FontAttributes="Bold" Text="{Binding PendingIndentCount}" TextColor="#F7931E" VerticalOptions="Center" />
-                    </Grid>
                 </VerticalStackLayout>
             </Border>
-
-            <Button
-                BackgroundColor="#F7931E"
-                Command="{Binding CreateIndentCommand}"
-                CornerRadius="12"
-                FontAttributes="Bold"
-                HeightRequest="50"
-                Margin="0,6,0,0"
-                Text="Create Indent"
-                TextColor="#092759" />
-
-            <Button
-                BackgroundColor="Transparent"
-                Command="{Binding LogoutCommand}"
-                FontAttributes="Bold"
-                FontSize="13"
-                Text="Logout"
-                TextColor="#0E2A5C" />
         </VerticalStackLayout>
     </ScrollView>
 </ContentPage>

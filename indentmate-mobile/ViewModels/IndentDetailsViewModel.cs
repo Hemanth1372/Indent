@@ -21,7 +21,7 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
     [ObservableProperty] private string _warehouseDisplay = string.Empty;
     [ObservableProperty] private string _fromLocation = string.Empty;
     [ObservableProperty] private string _indentType = string.Empty;
-    [ObservableProperty] private string _status = "Created";
+    [ObservableProperty] private string _status = "Incomplete";
     [ObservableProperty] private string _toContractor = string.Empty;
     [ObservableProperty] private string _orderDisplay = string.Empty;
     [ObservableProperty] private string _equipmentDisplay = string.Empty;
@@ -33,13 +33,17 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
     public ObservableCollection<LocalIndentItem> Items { get; } = new();
 
     public bool CanEdit =>
-        (Status == "Created" && _indent?.IsSynced != true) ||
+        ((Status is "Incomplete" or "Pending") && _indent?.IsSynced != true) ||
         Status is "Rejected" or "SyncError";
+    public bool CanSubmitForApproval => CanEdit && Items.Count > 0 && IsNotBusy;
+    public double SubmitButtonOpacity => CanSubmitForApproval ? 1.0 : 0.45;
     public bool IsSerIndent => _indent?.EngineerType == "SER";
     public bool IsSieIndent => !IsSerIndent;
 
     public string IndentNoDisplay => string.IsNullOrWhiteSpace(OfficialIndentNo)
-        ? "Indent No. will be assigned after submission"
+        ? Status == "Incomplete"
+            ? "Complete the indent"
+            : "Indent No. will be assigned after submission"
         : OfficialIndentNo;
 
     public Color IndentNoColor => string.IsNullOrWhiteSpace(OfficialIndentNo)
@@ -74,6 +78,8 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
     {
         OnPropertyChanged(nameof(ItemCountDisplay));
         OnPropertyChanged(nameof(HasNoItems));
+        OnPropertyChanged(nameof(CanSubmitForApproval));
+        OnPropertyChanged(nameof(SubmitButtonOpacity));
     }
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
@@ -90,9 +96,9 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
         // Badge colours — one step darker for visibility
         StatusColor = value switch
         {
-            "Created"                                    => Color.FromArgb("#BFDBFE"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                     => Color.FromArgb("#FDE68A"),
+            "Incomplete"                                 => Color.FromArgb("#E0E7FF"),
             "PendingSync"                                => Color.FromArgb("#FED7AA"),
             "Approved"                                   => Color.FromArgb("#A7F3D0"),
             "Rejected"                                   => Color.FromArgb("#FECACA"),
@@ -101,9 +107,9 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
         };
         StatusTextColor = value switch
         {
-            "Created"                                    => Color.FromArgb("#1D4ED8"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                     => Color.FromArgb("#B45309"),
+            "Incomplete"                                 => Color.FromArgb("#4338CA"),
             "PendingSync"                                => Color.FromArgb("#C2410C"),
             "Approved"                                   => Color.FromArgb("#047857"),
             "Rejected"                                   => Color.FromArgb("#B91C1C"),
@@ -112,9 +118,9 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
         };
         CardBg = value switch
         {
-            "Created"                                    => Color.FromArgb("#DBEAFE"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                     => Color.FromArgb("#FEF3C7"),
+            "Incomplete"                                 => Color.FromArgb("#EEF2FF"),
             "PendingSync"                                => Color.FromArgb("#FFEDD5"),
             "Approved"                                   => Color.FromArgb("#D1FAE5"),
             "Rejected"                                   => Color.FromArgb("#FEE2E2"),
@@ -123,9 +129,9 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
         };
         CardAccentColor = value switch
         {
-            "Created"                                    => Color.FromArgb("#2563EB"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                     => Color.FromArgb("#F59E0B"),
+            "Incomplete"                                 => Color.FromArgb("#6366F1"),
             "PendingSync"                                => Color.FromArgb("#EA580C"),
             "Approved"                                   => Color.FromArgb("#10B981"),
             "Rejected"                                   => Color.FromArgb("#DC2626"),
@@ -133,6 +139,9 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
             _                                            => Color.FromArgb("#CBD5E1")
         };
         OnPropertyChanged(nameof(CanEdit));
+        OnPropertyChanged(nameof(CanSubmitForApproval));
+        OnPropertyChanged(nameof(SubmitButtonOpacity));
+        OnPropertyChanged(nameof(IndentNoDisplay));
         OnPropertyChanged(nameof(HasSyncInfo));
         OnPropertyChanged(nameof(SyncStatusDisplay));
     }
@@ -170,7 +179,10 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
                 throw new InvalidOperationException("Indent was not found.");
 
             if (Items.Count == 0)
-                throw new InvalidOperationException("Please add at least one item before submitting.");
+            {
+                ValidationFailed("Please add at least one item before submitting.");
+                return;
+            }
 
             EnsureNoDuplicateItemsForSubmit();
 
@@ -210,6 +222,12 @@ public partial class IndentDetailsViewModel : BaseViewModel, IQueryAttributable
             await _databaseService.DeleteIndentItemAsync(item.ItemLineId);
             Items.Remove(item);
         });
+    }
+
+    private void ValidationFailed(string message)
+    {
+        HasError = true;
+        StatusMessage = message;
     }
 
     private async Task LoadAsync()

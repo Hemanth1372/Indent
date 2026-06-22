@@ -51,6 +51,8 @@ type AuthContextValue = {
 
 const AUTH_TOKEN_KEY = 'ncc_token'
 const AUTH_USER_KEY = 'ncc_user'
+const AUTH_EXPIRES_AT_KEY = 'ncc_session_expires_at'
+const SESSION_DURATION_MS = 10 * 60 * 1000
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:4000'
 
 const AuthContext = createContext<AuthContextValue | undefined>(undefined)
@@ -70,13 +72,34 @@ function readStoredUser() {
   }
 }
 
+function readStoredToken() {
+  const storedToken = sessionStorage.getItem(AUTH_TOKEN_KEY)
+  const expiresAt = Number(sessionStorage.getItem(AUTH_EXPIRES_AT_KEY) ?? '0')
+
+  if (storedToken && expiresAt && Date.now() >= expiresAt) {
+    sessionStorage.removeItem(AUTH_TOKEN_KEY)
+    sessionStorage.removeItem(AUTH_USER_KEY)
+    sessionStorage.removeItem(AUTH_EXPIRES_AT_KEY)
+    return null
+  }
+
+  return storedToken
+}
+
+function refreshSessionExpiry() {
+  if (sessionStorage.getItem(AUTH_TOKEN_KEY)) {
+    sessionStorage.setItem(AUTH_EXPIRES_AT_KEY, String(Date.now() + SESSION_DURATION_MS))
+  }
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(() => sessionStorage.getItem(AUTH_TOKEN_KEY))
+  const [token, setToken] = useState<string | null>(() => readStoredToken())
   const [user, setUser] = useState<AuthUser | null>(() => readStoredUser())
 
   function clearSession() {
     sessionStorage.removeItem(AUTH_TOKEN_KEY)
     sessionStorage.removeItem(AUTH_USER_KEY)
+    sessionStorage.removeItem(AUTH_EXPIRES_AT_KEY)
     setToken(null)
     setUser(null)
   }
@@ -106,11 +129,22 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }
 
     const intervalId = window.setInterval(validateSession, 30000)
+    const expiryId = window.setInterval(() => {
+      const expiresAt = Number(sessionStorage.getItem(AUTH_EXPIRES_AT_KEY) ?? '0')
+      if (expiresAt && Date.now() >= expiresAt) {
+        clearSession()
+        window.location.assign('/login')
+      }
+    }, 1000)
+    const activityEvents = ['click', 'keydown', 'mousemove', 'touchstart', 'scroll'] as const
+    activityEvents.forEach((eventName) => window.addEventListener(eventName, refreshSessionExpiry, { passive: true }))
     void validateSession()
 
     return () => {
       cancelled = true
       window.clearInterval(intervalId)
+      window.clearInterval(expiryId)
+      activityEvents.forEach((eventName) => window.removeEventListener(eventName, refreshSessionExpiry))
     }
   }, [token])
 
@@ -140,6 +174,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           sessionStorage.setItem(AUTH_TOKEN_KEY, data.token)
           sessionStorage.setItem(AUTH_USER_KEY, JSON.stringify(data.user))
+          refreshSessionExpiry()
           setToken(data.token)
           setUser(data.user)
 

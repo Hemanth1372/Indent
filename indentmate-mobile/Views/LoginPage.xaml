@@ -102,13 +102,25 @@
                             Stroke="#E5EAF2"
                             StrokeShape="RoundRectangle 18"
                             StrokeThickness="1">
-                            <Grid ColumnDefinitions="*,*,*,*,*,*" ColumnSpacing="6">
-                                <Label FontAttributes="Bold" FontSize="24" HorizontalTextAlignment="Center" Text="{Binding PinChar1}" TextColor="#092759" VerticalTextAlignment="Center" />
-                                <Label Grid.Column="1" FontAttributes="Bold" FontSize="24" HorizontalTextAlignment="Center" Text="{Binding PinChar2}" TextColor="#092759" VerticalTextAlignment="Center" />
-                                <Label Grid.Column="2" FontAttributes="Bold" FontSize="24" HorizontalTextAlignment="Center" Text="{Binding PinChar3}" TextColor="#092759" VerticalTextAlignment="Center" />
-                                <Label Grid.Column="3" FontAttributes="Bold" FontSize="24" HorizontalTextAlignment="Center" Text="{Binding PinChar4}" TextColor="#092759" VerticalTextAlignment="Center" />
-                                <Label Grid.Column="4" FontAttributes="Bold" FontSize="24" HorizontalTextAlignment="Center" Text="{Binding PinChar5}" TextColor="#092759" VerticalTextAlignment="Center" />
-                                <Label Grid.Column="5" FontAttributes="Bold" FontSize="24" HorizontalTextAlignment="Center" Text="{Binding PinChar6}" TextColor="#092759" VerticalTextAlignment="Center" />
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Tapped="OnPinDisplayTapped" />
+                            </Border.GestureRecognizers>
+                            <Grid>
+                                <Label
+                                    FontSize="14"
+                                    HorizontalOptions="Center"
+                                    IsVisible="{Binding ShowPinPlaceholder}"
+                                    Text="Enter your 6 digit pin"
+                                    TextColor="#98A2B3"
+                                    VerticalOptions="Center" />
+                                <Grid ColumnDefinitions="*,*,*,*,*,*" ColumnSpacing="6">
+                                    <Label FontAttributes="Bold" FontSize="24" HorizontalTextAlignment="Center" Text="{Binding PinChar1}" TextColor="#092759" VerticalTextAlignment="Center" />
+                                    <Label Grid.Column="1" FontAttributes="Bold" FontSize="24" HorizontalTextAlignment="Center" Text="{Binding PinChar2}" TextColor="#092759" VerticalTextAlignment="Center" />
+                                    <Label Grid.Column="2" FontAttributes="Bold" FontSize="24" HorizontalTextAlignment="Center" Text="{Binding PinChar3}" TextColor="#092759" VerticalTextAlignment="Center" />
+                                    <Label Grid.Column="3" FontAttributes="Bold" FontSize="24" HorizontalTextAlignment="Center" Text="{Binding PinChar4}" TextColor="#092759" VerticalTextAlignment="Center" />
+                                    <Label Grid.Column="4" FontAttributes="Bold" FontSize="24" HorizontalTextAlignment="Center" Text="{Binding PinChar5}" TextColor="#092759" VerticalTextAlignment="Center" />
+                                    <Label Grid.Column="5" FontAttributes="Bold" FontSize="24" HorizontalTextAlignment="Center" Text="{Binding PinChar6}" TextColor="#092759" VerticalTextAlignment="Center" />
+                                </Grid>
                             </Grid>
                         </Border>
 
@@ -142,30 +154,6 @@
                         TextChanged="OnPinEntryTextChanged"
                         WidthRequest="1" />
 
-                    <Grid
-                        ColumnDefinitions="*,*,*"
-                        ColumnSpacing="16"
-                        HorizontalOptions="Center"
-                        RowDefinitions="Auto,Auto,Auto,Auto"
-                        RowSpacing="10"
-                        WidthRequest="360">
-                        <Button BackgroundColor="White" BorderColor="#E5EAF2" BorderWidth="1" Command="{Binding AddDigitCommand}" CommandParameter="1" CornerRadius="16" FontAttributes="Bold" FontSize="26" HeightRequest="62" IsEnabled="{Binding IsPinEntryEnabled}" Text="1" TextColor="#172033" />
-                        <Button Grid.Column="1" BackgroundColor="White" BorderColor="#E5EAF2" BorderWidth="1" Command="{Binding AddDigitCommand}" CommandParameter="2" CornerRadius="16" FontAttributes="Bold" FontSize="26" HeightRequest="62" IsEnabled="{Binding IsPinEntryEnabled}" Text="2" TextColor="#172033" />
-                        <Button Grid.Column="2" BackgroundColor="White" BorderColor="#E5EAF2" BorderWidth="1" Command="{Binding AddDigitCommand}" CommandParameter="3" CornerRadius="16" FontAttributes="Bold" FontSize="26" HeightRequest="62" IsEnabled="{Binding IsPinEntryEnabled}" Text="3" TextColor="#172033" />
-
-                        <Button Grid.Row="1" BackgroundColor="White" BorderColor="#E5EAF2" BorderWidth="1" Command="{Binding AddDigitCommand}" CommandParameter="4" CornerRadius="16" FontAttributes="Bold" FontSize="26" HeightRequest="62" IsEnabled="{Binding IsPinEntryEnabled}" Text="4" TextColor="#172033" />
-                        <Button Grid.Row="1" Grid.Column="1" BackgroundColor="White" BorderColor="#E5EAF2" BorderWidth="1" Command="{Binding AddDigitCommand}" CommandParameter="5" CornerRadius="16" FontAttributes="Bold" FontSize="26" HeightRequest="62" IsEnabled="{Binding IsPinEntryEnabled}" Text="5" TextColor="#172033" />
-                        <Button Grid.Row="1" Grid.Column="2" BackgroundColor="White" BorderColor="#E5EAF2" BorderWidth="1" Command="{Binding AddDigitCommand}" CommandParameter="6" CornerRadius="16" FontAttributes="Bold" FontSize="26" HeightRequest="62" IsEnabled="{Binding IsPinEntryEnabled}" Text="6" TextColor="#172033" />
-
-                        <Button Grid.Row="2" BackgroundColor="White" BorderColor="#E5EAF2" BorderWidth="1" Command="{Binding AddDigitCommand}" CommandParameter="7" CornerRadius="16" FontAttributes="Bold" FontSize="26" HeightRequest="62" IsEnabled="{Binding IsPinEntryEnabled}" Text="7" TextColor="#172033" />
-                        <Button Grid.Row="2" Grid.Column="1" BackgroundColor="White" BorderColor="#E5EAF2" BorderWidth="1" Command="{Binding AddDigitCommand}" CommandParameter="8" CornerRadius="16" FontAttributes="Bold" FontSize="26" HeightRequest="62" IsEnabled="{Binding IsPinEntryEnabled}" Text="8" TextColor="#172033" />
-                        <Button Grid.Row="2" Grid.Column="2" BackgroundColor="White" BorderColor="#E5EAF2" BorderWidth="1" Command="{Binding AddDigitCommand}" CommandParameter="9" CornerRadius="16" FontAttributes="Bold" FontSize="26" HeightRequest="62" IsEnabled="{Binding IsPinEntryEnabled}" Text="9" TextColor="#172033" />
-
-                        <Button Grid.Row="3" BackgroundColor="#EAF0F6" BorderColor="#EAF0F6" BorderWidth="1" Command="{Binding BackspaceCommand}" CornerRadius="16" FontAttributes="Bold" FontSize="20" HeightRequest="62" IsEnabled="{Binding IsPinEntryEnabled}" Text="&#x232B;" TextColor="#667085" />
-                        <Button Grid.Row="3" Grid.Column="1" BackgroundColor="White" BorderColor="#E5EAF2" BorderWidth="1" Command="{Binding AddDigitCommand}" CommandParameter="0" CornerRadius="16" FontAttributes="Bold" FontSize="26" HeightRequest="62" IsEnabled="{Binding IsPinEntryEnabled}" Text="0" TextColor="#172033" />
-                        <Button Grid.Row="3" Grid.Column="2" BackgroundColor="#EAF0F6" BorderColor="#EAF0F6" BorderWidth="1" Command="{Binding ClearPinCommand}" CornerRadius="16" FontAttributes="Bold" FontSize="13" HeightRequest="62" IsEnabled="{Binding IsPinEntryEnabled}" Text="CLEAR" TextColor="#667085" />
-                    </Grid>
-
                     <Label
                         FontAttributes="Bold"
                         FontSize="13"
@@ -173,6 +161,17 @@
                         IsVisible="{Binding HasError}"
                         Text="{Binding StatusMessage}"
                         TextColor="#D92D20" />
+
+                    <Label
+                        FontAttributes="Bold"
+                        FontSize="13"
+                        HorizontalOptions="Center"
+                        Text="Forgot password?"
+                        TextColor="#092759">
+                        <Label.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding ForgotPinCommand}" />
+                        </Label.GestureRecognizers>
+                    </Label>
 
                     <Button
                         BackgroundColor="#092759"

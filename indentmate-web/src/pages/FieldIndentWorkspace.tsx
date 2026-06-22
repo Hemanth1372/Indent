@@ -921,7 +921,7 @@ function InlineDraftItemForm({ draft, editItem, existingItems, onCancel, onSave 
     setCameraMessage('')
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      cameraInputRef.current?.click()
+      setCameraMessage('Camera is not available in this browser.')
       return
     }
 
@@ -934,8 +934,7 @@ function InlineDraftItemForm({ draft, editItem, existingItems, onCancel, onSave 
       })
       setCameraStream(stream)
     } catch {
-      setCameraMessage('Camera is not available. Opening photo picker instead.')
-      cameraInputRef.current?.click()
+      setCameraMessage('Camera is not available. Please allow camera access and try again.')
     }
   }
 
@@ -1457,7 +1456,7 @@ export function FieldIndentAddItem() {
     setCameraMessage('')
 
     if (!navigator.mediaDevices?.getUserMedia) {
-      cameraInputRef.current?.click()
+      setCameraMessage('Camera is not available in this browser.')
       return
     }
 
@@ -1470,8 +1469,7 @@ export function FieldIndentAddItem() {
       })
       setCameraStream(stream)
     } catch {
-      setCameraMessage('Camera is not available. Opening photo picker instead.')
-      cameraInputRef.current?.click()
+      setCameraMessage('Camera is not available. Please allow camera access and try again.')
     }
   }
 

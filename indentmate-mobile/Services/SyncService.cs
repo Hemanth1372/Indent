@@ -377,7 +377,7 @@ public class SyncService
             OrderType = indent.OrderType,
             ToEntityId = string.IsNullOrWhiteSpace(indent.ToContractorId) ? indent.OrderNo : indent.ToContractorId,
             EquipmentDisplay = indent.EquipmentDisplay,
-            Status = "Created",
+            Status = "Pending",
             Items = (await Task.WhenAll(items.Select(async item => new IndentSyncLinePayload
             {
                 ItemCode = item.MaterialCode,

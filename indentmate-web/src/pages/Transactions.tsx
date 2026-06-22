@@ -1,5 +1,5 @@
-import { AlertCircle, ArrowLeft, ArrowUpRight, Building2, CalendarDays, Factory, MapPin, Send, Zap } from 'lucide-react'
-  import type { ReactNode } from 'react'
+import { AlertCircle, ArrowLeft, ArrowUpRight, Building2, CalendarDays, Factory, MapPin, RefreshCw, Send, Zap } from 'lucide-react'
+import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
 import { api } from '../services/api'
@@ -297,6 +297,15 @@ export default function Transactions({
               type="button"
             >
               Clear
+            </button>
+            <button
+              className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
+              disabled={isLoading}
+              onClick={fetchTransactions}
+              type="button"
+            >
+              <RefreshCw size={16} />
+              Refresh
             </button>
           </div>
         </div>

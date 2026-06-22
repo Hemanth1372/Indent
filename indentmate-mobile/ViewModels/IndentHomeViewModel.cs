@@ -11,6 +11,7 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
     private readonly DatabaseService _databaseService;
     private readonly ApiService _apiService;
     private List<LocalIndent> _allIndents = new();
+    private List<LocalIndent> _visibleIndents = new();
 
     [ObservableProperty] private string _dashboardTitle = "Indent Home";
     [ObservableProperty] private string _userInfo = string.Empty;
@@ -38,15 +39,17 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
     private int _rejectedIndentsCount;
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CreatedCardBg))]
-    [NotifyPropertyChangedFor(nameof(CreatedAccentColor))]
-    [NotifyPropertyChangedFor(nameof(CreatedNumColor))]
-    private int _createdStatusCount;
+    [NotifyPropertyChangedFor(nameof(PendingSyncCardBg))]
+    [NotifyPropertyChangedFor(nameof(PendingSyncAccentColor))]
+    [NotifyPropertyChangedFor(nameof(PendingSyncNumColor))]
+    private int _pendingSyncCount;
 
     [ObservableProperty] private string _selectedStatusFilter = "All";
     [ObservableProperty] private bool _showAllRequests;
     [ObservableProperty] private bool _showNotifications;
+    [ObservableProperty] private bool _showAccountMenu;
     [ObservableProperty] private int _unreadNotificationCount;
+    [ObservableProperty] private ProjectFilterOption? _selectedProjectFilter;
 
     // ── Pending for Approval (amber) ─────────────────────────────────────────
     public Color PendingCardBg => PendingApprovalCount > 0 ? Color.FromArgb("#FFFBEB") : Colors.White;
@@ -63,12 +66,13 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
     public Color RejectedAccentColor => RejectedIndentsCount > 0 ? Color.FromArgb("#DC2626") : Color.FromArgb("#E5EAF2");
     public Color RejectedNumColor => RejectedIndentsCount > 0 ? Color.FromArgb("#DC2626") : Color.FromArgb("#CBD5E1");
 
-    // ── Created Status (blue) ───────────────────────────────────────────────
-    public Color CreatedCardBg => CreatedStatusCount > 0 ? Color.FromArgb("#EFF6FF") : Colors.White;
-    public Color CreatedAccentColor => CreatedStatusCount > 0 ? Color.FromArgb("#2563EB") : Color.FromArgb("#E5EAF2");
-    public Color CreatedNumColor => CreatedStatusCount > 0 ? Color.FromArgb("#1D4ED8") : Color.FromArgb("#CBD5E1");
+    // ── Pending Sync (orange) ───────────────────────────────────────────────
+    public Color PendingSyncCardBg => PendingSyncCount > 0 ? Color.FromArgb("#FFEDD5") : Colors.White;
+    public Color PendingSyncAccentColor => PendingSyncCount > 0 ? Color.FromArgb("#EA580C") : Color.FromArgb("#E5EAF2");
+    public Color PendingSyncNumColor => PendingSyncCount > 0 ? Color.FromArgb("#C2410C") : Color.FromArgb("#CBD5E1");
 
     public ObservableCollection<StatusFilterViewModel> StatusFilters { get; } = new();
+    public ObservableCollection<ProjectFilterOption> ProjectFilters { get; } = new();
     public ObservableCollection<RecentIndentViewModel> RecentIndents { get; } = new();
     public ObservableCollection<AppNotificationViewModel> Notifications { get; } = new();
     public bool HasSeeAllAction => ShowAllRequests || GetFilteredIndents().Count > 10;
@@ -140,9 +144,11 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
                 PendingApprovalCount = 0;
                 IndentsRaisedCount = 0;
                 RejectedIndentsCount = 0;
-                CreatedStatusCount = 0;
+                PendingSyncCount = 0;
                 UnreadNotificationCount = 0;
                 _allIndents = new List<LocalIndent>();
+                _visibleIndents = new List<LocalIndent>();
+                ProjectFilters.Clear();
                 RecentIndents.Clear();
                 Notifications.Clear();
                 OnPropertyChanged(nameof(HasSeeAllAction));
@@ -153,12 +159,12 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
 
             await ReconcileSyncedIndentsWithServerAsync();
             await LoadNotificationsAsync();
-            _allIndents = await _databaseService.GetIndentsForEngineerAsync(engineerId);
+            _allIndents = (await _databaseService.GetIndentsForEngineerAsync(engineerId))
+                .Where(indent => indent.Status != "Incomplete")
+                .ToList();
 
-            PendingApprovalCount = _allIndents.Count(IsPendingStatus);
-            IndentsRaisedCount = _allIndents.Count;
-            RejectedIndentsCount = _allIndents.Count(i => i.Status == "Rejected");
-            CreatedStatusCount = _allIndents.Count(i => i.Status == "Created");
+            BuildProjectFilters();
+            ApplyProjectFilter();
             ApplyFilter();
         });
     }
@@ -205,6 +211,24 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
         {
             await LoadNotificationsAsync();
         }
+    }
+
+    [RelayCommand]
+    private void CloseNotifications()
+    {
+        ShowNotifications = false;
+    }
+
+    [RelayCommand]
+    private void ToggleAccountMenu()
+    {
+        ShowAccountMenu = !ShowAccountMenu;
+    }
+
+    [RelayCommand]
+    private void CloseAccountMenu()
+    {
+        ShowAccountMenu = false;
     }
 
     [RelayCommand]
@@ -260,16 +284,29 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
     }
 
     [RelayCommand]
+    private void SelectSummaryCard(string? status)
+    {
+        SelectStatusFilter(status);
+    }
+
+    [RelayCommand]
     private void ToggleSeeAll()
     {
         ShowAllRequests = !ShowAllRequests;
         ApplyFilter();
     }
 
+    partial void OnSelectedProjectFilterChanged(ProjectFilterOption? value)
+    {
+        ShowAllRequests = false;
+        ApplyProjectFilter();
+        ApplyFilter();
+    }
+
     private void BuildStatusFilters()
     {
         StatusFilters.Clear();
-        foreach (var status in new[] { "All", "Created", "Pending", "Approved", "Rejected" })
+        foreach (var status in new[] { "All", "Pending", "Pending Sync", "Approved", "Rejected" })
         {
             StatusFilters.Add(new StatusFilterViewModel(status, status == SelectedStatusFilter));
         }
@@ -298,6 +335,42 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
 
         OnPropertyChanged(nameof(HasSeeAllAction));
         OnPropertyChanged(nameof(SeeAllText));
+    }
+
+    private void BuildProjectFilters()
+    {
+        var selectedProjectId = SelectedProjectFilter?.ProjectId ?? string.Empty;
+        ProjectFilters.Clear();
+        ProjectFilters.Add(new ProjectFilterOption("All Projects", string.Empty));
+
+        foreach (var project in _allIndents
+            .Where(indent => !string.IsNullOrWhiteSpace(indent.ProjectId))
+            .GroupBy(indent => indent.ProjectId, StringComparer.OrdinalIgnoreCase)
+            .Select(group => new ProjectFilterOption(BuildProjectLabel(group.First()), group.Key))
+            .OrderBy(project => project.Label))
+        {
+            ProjectFilters.Add(project);
+        }
+
+        SelectedProjectFilter = ProjectFilters.FirstOrDefault(project =>
+            string.Equals(project.ProjectId, selectedProjectId, StringComparison.OrdinalIgnoreCase))
+            ?? ProjectFilters.FirstOrDefault();
+    }
+
+    private void ApplyProjectFilter()
+    {
+        var selectedProjectId = SelectedProjectFilter?.ProjectId ?? string.Empty;
+        _visibleIndents = string.IsNullOrWhiteSpace(selectedProjectId)
+            ? _allIndents.ToList()
+            : _allIndents
+                .Where(indent => string.Equals(indent.ProjectId, selectedProjectId, StringComparison.OrdinalIgnoreCase))
+                .ToList();
+
+        PendingApprovalCount = _visibleIndents.Count(IsPendingStatus);
+        IndentsRaisedCount = _visibleIndents.Count;
+        RejectedIndentsCount = _visibleIndents.Count(i => i.Status == "Rejected");
+        PendingSyncCount = _visibleIndents.Count(IsPendingSyncStatus);
+        OnPropertyChanged(nameof(HasSeeAllAction));
     }
 
     private async Task ReconcileSyncedIndentsWithServerAsync()
@@ -352,11 +425,11 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
     {
         return SelectedStatusFilter switch
         {
-            "Created" => _allIndents.Where(indent => indent.Status == "Created").ToList(),
-            "Pending" => _allIndents.Where(IsPendingStatus).ToList(),
-            "Approved" => _allIndents.Where(indent => indent.Status == "Approved").ToList(),
-            "Rejected" => _allIndents.Where(indent => indent.Status == "Rejected").ToList(),
-            _ => _allIndents.ToList()
+            "Pending" => _visibleIndents.Where(IsPendingStatus).ToList(),
+            "Pending Sync" => _visibleIndents.Where(IsPendingSyncStatus).ToList(),
+            "Approved" => _visibleIndents.Where(indent => indent.Status == "Approved").ToList(),
+            "Rejected" => _visibleIndents.Where(indent => indent.Status == "Rejected").ToList(),
+            _ => _visibleIndents.ToList()
         };
     }
 
@@ -396,15 +469,20 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
 
     private static bool IsPendingStatus(LocalIndent indent)
     {
-        return indent.Status is "Pending" or "PendingApproval" or "PendingSync" or "ApprovalPending" or "SyncError";
+        return indent.Status is "Pending" or "PendingApproval" or "ApprovalPending";
+    }
+
+    private static bool IsPendingSyncStatus(LocalIndent indent)
+    {
+        return indent.Status is "PendingSync" or "SyncError";
     }
 
     private static string NormalizeStatusFilter(string? status)
     {
         return (status ?? string.Empty).Trim() switch
         {
-            "Created" => "Created",
             "Pending" => "Pending",
+            "Pending Sync" => "Pending Sync",
             "Approved" => "Approved",
             "Rejected" => "Rejected",
             "All" => "All",
@@ -452,11 +530,48 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
         return string.Join("-", parts);
     }
 
+    private static string BuildProjectLabel(LocalIndent indent)
+    {
+        var projectId = (indent.ProjectId ?? string.Empty).Trim();
+        var projectName = StripRepeatedProjectCode(projectId, indent.ProjectName);
+
+        return string.IsNullOrWhiteSpace(projectName)
+            ? projectId
+            : $"{projectId} - {projectName}";
+    }
+
     [RelayCommand]
     private async Task LogoutAsync()
     {
+        ShowAccountMenu = false;
         SecureStorage.Default.Remove("session_active");
+        SecureStorage.Default.Remove("session_expires_at_utc");
         await Shell.Current.GoToAsync("//login");
+    }
+
+    private static string StripRepeatedProjectCode(string code, string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(text))
+        {
+            return text;
+        }
+
+        if (text.Equals(code, StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        foreach (var separator in new[] { " - ", " – ", " — ", "-", "–", "—" })
+        {
+            var prefix = code + separator;
+            if (text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return text[prefix.Length..].Trim();
+            }
+        }
+
+        return text;
     }
 }
 
@@ -486,7 +601,6 @@ public class RecentIndentViewModel
         // Badge colours — one step darker for visibility
         StatusColor = indent.Status switch
         {
-            "Created"                                       => Color.FromArgb("#BFDBFE"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                        => Color.FromArgb("#FDE68A"),
             "PendingSync"                                   => Color.FromArgb("#FED7AA"),
@@ -497,7 +611,6 @@ public class RecentIndentViewModel
         };
         StatusTextColor = indent.Status switch
         {
-            "Created"                                       => Color.FromArgb("#1D4ED8"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                        => Color.FromArgb("#B45309"),
             "PendingSync"                                   => Color.FromArgb("#C2410C"),
@@ -508,7 +621,6 @@ public class RecentIndentViewModel
         };
         CardBg = indent.Status switch
         {
-            "Created"                                       => Color.FromArgb("#DBEAFE"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                        => Color.FromArgb("#FEF3C7"),
             "PendingSync"                                   => Color.FromArgb("#FFEDD5"),
@@ -519,7 +631,6 @@ public class RecentIndentViewModel
         };
         CardAccentColor = indent.Status switch
         {
-            "Created"                                       => Color.FromArgb("#2563EB"),
             "Pending" or "PendingApproval"
                 or "ApprovalPending"                        => Color.FromArgb("#F59E0B"),
             "PendingSync"                                   => Color.FromArgb("#EA580C"),
@@ -565,9 +676,37 @@ public class RecentIndentViewModel
 
     private static string PreferDisplay(string displayValue, string fallbackValue)
     {
-        return string.IsNullOrWhiteSpace(displayValue)
-            ? fallbackValue
-            : displayValue;
+        var fallback = (fallbackValue ?? string.Empty).Trim();
+        var display = StripRepeatedProjectCode(fallback, displayValue);
+
+        return string.IsNullOrWhiteSpace(display)
+            ? fallback
+            : display;
+    }
+
+    private static string StripRepeatedProjectCode(string code, string? value)
+    {
+        var text = (value ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(text))
+        {
+            return text;
+        }
+
+        if (text.Equals(code, StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        foreach (var separator in new[] { " - ", " – ", " — ", "-", "–", "—" })
+        {
+            var prefix = code + separator;
+            if (text.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return text[prefix.Length..].Trim();
+            }
+        }
+
+        return text;
     }
 
     private static string NormalizeStatusLabel(string status)
@@ -601,8 +740,8 @@ public partial class StatusFilterViewModel : ObservableObject
 
     private Color AccentColor => Label switch
     {
-        "Created"  => Color.FromArgb("#1D4ED8"),
         "Pending"  => Color.FromArgb("#F7931E"),
+        "Pending Sync" => Color.FromArgb("#EA580C"),
         "Approved" => Color.FromArgb("#059669"),
         "Rejected" => Color.FromArgb("#DC2626"),
         _          => Color.FromArgb("#1D2B58")
@@ -610,8 +749,8 @@ public partial class StatusFilterViewModel : ObservableObject
 
     private Color PastelColor => Label switch
     {
-        "Created"  => Color.FromArgb("#EFF6FF"),
         "Pending"  => Color.FromArgb("#FFFBEB"),
+        "Pending Sync" => Color.FromArgb("#FFEDD5"),
         "Approved" => Color.FromArgb("#ECFDF5"),
         "Rejected" => Color.FromArgb("#FEF2F2"),
         _          => Color.FromArgb("#F4F6FB")
@@ -654,4 +793,16 @@ public partial class AppNotificationViewModel : ObservableObject
         OnPropertyChanged(nameof(BackgroundColor));
         OnPropertyChanged(nameof(AccentColor));
     }
+}
+
+public sealed class ProjectFilterOption
+{
+    public ProjectFilterOption(string label, string projectId)
+    {
+        Label = label;
+        ProjectId = projectId;
+    }
+
+    public string Label { get; }
+    public string ProjectId { get; }
 }

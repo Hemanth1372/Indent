@@ -5,6 +5,8 @@ namespace IndentMate.Mobile;
 public partial class AppShell : Shell
 {
     private const string DeviceSetupCompleteKey = "indentmate_device_setup_complete";
+    private static readonly TimeSpan SessionDuration = TimeSpan.FromMinutes(10);
+    private IDispatcherTimer? _sessionTimer;
 
     public AppShell()
     {
@@ -27,6 +29,7 @@ public partial class AppShell : Shell
         Routing.RegisterRoute("add-item-ser", typeof(AddItemSERPage));
 
         Loaded += OnLoaded;
+        Navigating += OnShellNavigating;
     }
 
     private async void OnLoaded(object? sender, EventArgs e)
@@ -35,5 +38,67 @@ public partial class AppShell : Shell
 
         var isDeviceSetup = Preferences.Default.Get(DeviceSetupCompleteKey, false);
         await GoToAsync(isDeviceSetup ? "//login" : "//setup");
+        StartSessionTimer();
+    }
+
+    private void StartSessionTimer()
+    {
+        _sessionTimer = Dispatcher.CreateTimer();
+        _sessionTimer.Interval = TimeSpan.FromSeconds(15);
+        _sessionTimer.Tick += async (_, _) => await ExpireSessionIfNeededAsync();
+        _sessionTimer.Start();
+    }
+
+    private async void OnShellNavigating(object? sender, ShellNavigatingEventArgs e)
+    {
+        if (IsPublicRoute(e.Target.Location.OriginalString))
+        {
+            return;
+        }
+
+        if (await IsSessionExpiredAsync())
+        {
+            e.Cancel();
+            await ExpireSessionAsync();
+        }
+    }
+
+    private async Task ExpireSessionIfNeededAsync()
+    {
+        if (await IsSessionExpiredAsync())
+        {
+            await ExpireSessionAsync();
+        }
+    }
+
+    private static async Task<bool> IsSessionExpiredAsync()
+    {
+        var isActive = await SecureStorage.Default.GetAsync("session_active");
+        if (!string.Equals(isActive, "true", StringComparison.OrdinalIgnoreCase))
+        {
+            return false;
+        }
+
+        var expiresAtText = await SecureStorage.Default.GetAsync("session_expires_at_utc");
+        if (!DateTime.TryParse(expiresAtText, null, System.Globalization.DateTimeStyles.RoundtripKind, out var expiresAtUtc))
+        {
+            await SecureStorage.Default.SetAsync("session_expires_at_utc", DateTime.UtcNow.Add(SessionDuration).ToString("O"));
+            return false;
+        }
+
+        return DateTime.UtcNow >= expiresAtUtc.ToUniversalTime();
+    }
+
+    private static async Task ExpireSessionAsync()
+    {
+        SecureStorage.Default.Remove("session_active");
+        SecureStorage.Default.Remove("session_expires_at_utc");
+        await Current.GoToAsync("//login");
+    }
+
+    private static bool IsPublicRoute(string target)
+    {
+        return target.Contains("login", StringComparison.OrdinalIgnoreCase) ||
+               target.Contains("setup", StringComparison.OrdinalIgnoreCase);
     }
 }

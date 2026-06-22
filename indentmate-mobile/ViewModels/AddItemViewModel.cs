@@ -30,6 +30,7 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
     public ObservableCollection<LocalActivity> Activities { get; } = new();
     public ObservableCollection<LocalItem> Materials { get; } = new();
     public ObservableCollection<SelectionOption> BusinessPartners { get; } = new();
+    public ObservableCollection<AttachmentSelection> Attachments { get; } = new();
 
     [ObservableProperty] private string _indentId = string.Empty;
     [ObservableProperty] private string _itemLineId = string.Empty;
@@ -52,7 +53,7 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
     [ObservableProperty] private bool _isMaterialSearchLoading;
     [ObservableProperty] private bool _hasMoreMaterials;
 
-    public bool HasAttachment => !string.IsNullOrWhiteSpace(AttachmentName);
+    public bool HasAttachment => Attachments.Count > 0;
     public bool HasValidationError => !string.IsNullOrWhiteSpace(ValidationMessage);
     public bool IsWorkTypeEnabled => !IsVirtualWarehouse;
     public bool IsLocationPickerVisible => !HasHeaderLocation;
@@ -73,6 +74,11 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
     {
         _databaseService = databaseService;
         _apiService = apiService;
+        Attachments.CollectionChanged += (_, _) =>
+        {
+            SyncAttachmentFields();
+            OnPropertyChanged(nameof(HasAttachment));
+        };
     }
 
     public void ApplyQueryAttributes(IDictionary<string, object> query)
@@ -148,7 +154,16 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
             var photo = await MediaPicker.Default.CapturePhotoAsync();
             if (photo is not null)
             {
-                AttachmentName = photo.FileName;
+                if (!string.IsNullOrWhiteSpace(photo.FullPath))
+                {
+                    var photoInfo = new FileInfo(photo.FullPath);
+                    if (photoInfo.Exists && photoInfo.Length > MaxAttachmentBytes)
+                    {
+                        ValidationMessage = "Attachment size must be 5 MB or less.";
+                        return;
+                    }
+                }
+
                 AppendAttachment(photo.FileName, photo.FullPath ?? string.Empty);
             }
         }
@@ -173,6 +188,28 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
         }
 
         AppendAttachment(file.FileName, file.FullPath);
+    }
+
+    [RelayCommand]
+    private async Task OpenAttachmentAsync(AttachmentSelection? attachment)
+    {
+        attachment ??= Attachments.FirstOrDefault();
+        if (attachment is null || string.IsNullOrWhiteSpace(attachment.Path))
+            return;
+
+        await Launcher.Default.OpenAsync(new OpenFileRequest
+        {
+            File = new ReadOnlyFile(attachment.Path)
+        });
+    }
+
+    [RelayCommand]
+    private void RemoveAttachment(AttachmentSelection? attachment)
+    {
+        if (attachment is null)
+            return;
+
+        Attachments.Remove(attachment);
     }
 
     [RelayCommand]
@@ -310,6 +347,25 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
             if (_editingItem is not null)
                 ApplyEditingItem();
         });
+    }
+
+    [RelayCommand]
+    private void IncrementQuantity()
+    {
+        RequestedQty = AdjustQuantity(1);
+    }
+
+    [RelayCommand]
+    private void DecrementQuantity()
+    {
+        RequestedQty = AdjustQuantity(-1);
+    }
+
+    private string AdjustQuantity(int delta)
+    {
+        _ = decimal.TryParse(RequestedQty, out var current);
+        var next = Math.Max(0, current + delta);
+        return next == 0 ? string.Empty : next.ToString("0.##");
     }
 
     private async Task LoadLocationsAsync()
@@ -609,20 +665,7 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
         RequestedQty = _editingItem.RequestedQty.ToString("0.##");
         Remarks = _editingItem.Remarks;
         AttachmentPath = _editingItem.AttachmentUrl;
-        AttachmentName = FormatAttachmentNames(ParseAttachments(_editingItem.AttachmentUrl));
-    }
-
-    [RelayCommand]
-    private async Task OpenAttachmentAsync()
-    {
-        var attachment = ParseAttachments(AttachmentPath).FirstOrDefault();
-        if (attachment is null || string.IsNullOrWhiteSpace(attachment.Path))
-            return;
-
-        await Launcher.Default.OpenAsync(new OpenFileRequest
-        {
-            File = new ReadOnlyFile(attachment.Path)
-        });
+        LoadAttachmentItems(_editingItem.AttachmentUrl);
     }
 
     private void AppendAttachment(string name, string path)
@@ -630,10 +673,22 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
         if (string.IsNullOrWhiteSpace(path))
             return;
 
-        var attachments = ParseAttachments(AttachmentPath);
-        attachments.Add(new AttachmentSelection(name, path));
-        AttachmentPath = JsonSerializer.Serialize(attachments);
-        AttachmentName = FormatAttachmentNames(attachments);
+        Attachments.Add(new AttachmentSelection(name, path));
+    }
+
+    private void LoadAttachmentItems(string? value)
+    {
+        Attachments.Clear();
+        foreach (var attachment in ParseAttachments(value))
+        {
+            Attachments.Add(attachment);
+        }
+    }
+
+    private void SyncAttachmentFields()
+    {
+        AttachmentPath = Attachments.Count == 0 ? string.Empty : JsonSerializer.Serialize(Attachments.ToList());
+        AttachmentName = FormatAttachmentNames(Attachments);
     }
 
     private static List<AttachmentSelection> ParseAttachments(string? value)
@@ -661,8 +716,6 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
     {
         return string.Join(", ", attachments.Select(attachment => attachment.Name).Where(name => !string.IsNullOrWhiteSpace(name)));
     }
-
-    private sealed record AttachmentSelection(string Name, string Path);
 
     private string GetPrimaryProjectCode()
     {

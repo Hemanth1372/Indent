@@ -47,6 +47,8 @@ public partial class LoginViewModel : BaseViewModel
     public string SelectedInitials => BuildInitials(EngineerName);
     public bool IsPinHidden => !IsPinVisible;
     public bool IsPinEntryEnabled => !IsLoginLockedOut;
+    public bool HasPinInput => PinInput.Length > 0;
+    public bool ShowPinPlaceholder => PinInput.Length == 0;
     public string PinChar1 => GetPinCharacter(0);
     public string PinChar2 => GetPinCharacter(1);
     public string PinChar3 => GetPinCharacter(2);
@@ -343,8 +345,8 @@ public partial class LoginViewModel : BaseViewModel
     {
         var accountName = SelectedEngineer?.Name ?? EngineerName;
         await Shell.Current.DisplayAlert(
-            "Security Notice",
-            $"PIN resets must be authorized by a System Administrator.\n\nPlease contact your Admin to reset the PIN for {accountName}.",
+            "Forgot Password",
+            $"Password changes must be authorized by a System Administrator.\n\nPlease reach out to your System Administrator to reset the password for {accountName}.",
             "OK");
     }
 
@@ -371,6 +373,8 @@ public partial class LoginViewModel : BaseViewModel
         PinDot4 = cleaned.Length >= 4;
         PinDot5 = cleaned.Length >= 5;
         PinDot6 = cleaned.Length >= 6;
+        OnPropertyChanged(nameof(HasPinInput));
+        OnPropertyChanged(nameof(ShowPinPlaceholder));
         NotifyPinCharactersChanged();
 
         if (HasError && !IsLoginLockedOut)
@@ -695,6 +699,7 @@ public partial class LoginViewModel : BaseViewModel
         IsLoginLockedOut = false;
         LockoutSecondsRemaining = 0;
         await SecureStorage.Default.SetAsync("session_active", "true");
+        await SecureStorage.Default.SetAsync("session_expires_at_utc", DateTime.UtcNow.AddMinutes(10).ToString("O"));
 
         await Shell.Current.GoToAsync("//login-success");
     }

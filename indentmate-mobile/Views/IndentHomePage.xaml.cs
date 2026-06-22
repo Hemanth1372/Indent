@@ -23,4 +23,15 @@ public partial class IndentHomePage : ContentPage
         if (syncService != null)
             _ = syncService.PushPendingIndentsAsync();
     }
+
+    protected override bool OnBackButtonPressed()
+    {
+        if (BindingContext is IndentHomeViewModel viewModel)
+        {
+            viewModel.BackCommand.Execute(null);
+            return true;
+        }
+
+        return base.OnBackButtonPressed();
+    }
 }

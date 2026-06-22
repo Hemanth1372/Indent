@@ -37,9 +37,43 @@ public class LocalProject
     public string AddressCode { get; set; } = string.Empty;
     public string EngineerId { get; set; } = string.Empty;
     public string ResponsibilityCode { get; set; } = string.Empty;
-    public string DisplayName => string.IsNullOrWhiteSpace(Description)
-        ? ProjectId
-        : $"{ProjectId} – {Description}";
+    public string DisplayName
+    {
+        get
+        {
+            var projectId = (ProjectId ?? string.Empty).Trim();
+            var description = StripRepeatedCode(projectId, Description);
+
+            return string.IsNullOrWhiteSpace(description)
+                ? projectId
+                : $"{projectId} - {description}";
+        }
+    }
+
+    private static string StripRepeatedCode(string code, string? description)
+    {
+        var cleaned = (description ?? string.Empty).Trim();
+        if (string.IsNullOrWhiteSpace(code) || string.IsNullOrWhiteSpace(cleaned))
+        {
+            return cleaned;
+        }
+
+        if (cleaned.Equals(code, StringComparison.OrdinalIgnoreCase))
+        {
+            return string.Empty;
+        }
+
+        foreach (var separator in new[] { " - ", " – ", " — ", "-", "–", "—" })
+        {
+            var prefix = code + separator;
+            if (cleaned.StartsWith(prefix, StringComparison.OrdinalIgnoreCase))
+            {
+                return cleaned[prefix.Length..].Trim();
+            }
+        }
+
+        return cleaned;
+    }
 }
 
 [Table("LocalActivities")]

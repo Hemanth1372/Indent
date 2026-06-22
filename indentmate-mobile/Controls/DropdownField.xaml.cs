@@ -14,10 +14,13 @@ public partial class DropdownField : ContentView
     private const int MaxRenderedItems = 80;
     private const double SearchEntryHeight = 44;
     private const int SearchThreshold = 25;
+    private const double PopupHorizontalMargin = 8;
 
     private static readonly List<WeakReference<DropdownField>> OpenDropdowns = new();
     private static DateTime ignoreOutsideCloseUntilUtc;
     private Border? popupBorder;
+    private Grid? popupDismissLayer;
+    private ScrollView? popupScrollView;
     private List<object> _popupAllItems = new();
     private VerticalStackLayout? _popupItemList;
     private string _currentSearchText = string.Empty;
@@ -60,6 +63,12 @@ public partial class DropdownField : ContentView
         240d,
         propertyChanged: OnDropdownHeightChanged);
 
+    public static readonly BindableProperty PopupWidthRequestProperty = BindableProperty.Create(
+        nameof(PopupWidthRequest),
+        typeof(double),
+        typeof(DropdownField),
+        0d);
+
     public static readonly BindableProperty SearchCommandProperty = BindableProperty.Create(
         nameof(SearchCommand),
         typeof(ICommand),
@@ -92,10 +101,67 @@ public partial class DropdownField : ContentView
         typeof(DropdownField),
         0);
 
+    public static readonly BindableProperty TriggerBackgroundColorProperty = BindableProperty.Create(
+        nameof(TriggerBackgroundColor),
+        typeof(Color),
+        typeof(DropdownField),
+        Colors.White,
+        propertyChanged: OnTriggerStyleChanged);
+
+    public static readonly BindableProperty TriggerBorderColorProperty = BindableProperty.Create(
+        nameof(TriggerBorderColor),
+        typeof(Color),
+        typeof(DropdownField),
+        Color.FromArgb("#D6DEE9"),
+        propertyChanged: OnTriggerStyleChanged);
+
+    public static readonly BindableProperty TriggerOpenBorderColorProperty = BindableProperty.Create(
+        nameof(TriggerOpenBorderColor),
+        typeof(Color),
+        typeof(DropdownField),
+        Color.FromArgb("#0E2A5C"),
+        propertyChanged: OnTriggerStyleChanged);
+
+    public static readonly BindableProperty TriggerTextColorProperty = BindableProperty.Create(
+        nameof(TriggerTextColor),
+        typeof(Color),
+        typeof(DropdownField),
+        Color.FromArgb("#172033"),
+        propertyChanged: OnTriggerStyleChanged);
+
+    public static readonly BindableProperty TriggerPlaceholderColorProperty = BindableProperty.Create(
+        nameof(TriggerPlaceholderColor),
+        typeof(Color),
+        typeof(DropdownField),
+        Color.FromArgb("#667085"),
+        propertyChanged: OnTriggerStyleChanged);
+
+    public static readonly BindableProperty TriggerIconColorProperty = BindableProperty.Create(
+        nameof(TriggerIconColor),
+        typeof(Color),
+        typeof(DropdownField),
+        Color.FromArgb("#667085"),
+        propertyChanged: OnTriggerStyleChanged);
+
+    public static readonly BindableProperty TriggerOpenIconColorProperty = BindableProperty.Create(
+        nameof(TriggerOpenIconColor),
+        typeof(Color),
+        typeof(DropdownField),
+        Color.FromArgb("#0E2A5C"),
+        propertyChanged: OnTriggerStyleChanged);
+
+    public static readonly BindableProperty TriggerFontAttributesProperty = BindableProperty.Create(
+        nameof(TriggerFontAttributes),
+        typeof(FontAttributes),
+        typeof(DropdownField),
+        FontAttributes.None,
+        propertyChanged: OnTriggerStyleChanged);
+
     public DropdownField()
     {
         InitializeComponent();
         MaximumWidthRequest = DefaultDropdownWidth;
+        ApplyTriggerStyle();
         UpdateSelectedText();
     }
 
@@ -129,6 +195,12 @@ public partial class DropdownField : ContentView
         set => SetValue(DropdownHeightProperty, value);
     }
 
+    public double PopupWidthRequest
+    {
+        get => (double)GetValue(PopupWidthRequestProperty);
+        set => SetValue(PopupWidthRequestProperty, value);
+    }
+
     public ICommand? SearchCommand
     {
         get => (ICommand?)GetValue(SearchCommandProperty);
@@ -157,6 +229,54 @@ public partial class DropdownField : ContentView
     {
         get => (int)GetValue(MinimumSearchLengthProperty);
         set => SetValue(MinimumSearchLengthProperty, value);
+    }
+
+    public Color TriggerBackgroundColor
+    {
+        get => (Color)GetValue(TriggerBackgroundColorProperty);
+        set => SetValue(TriggerBackgroundColorProperty, value);
+    }
+
+    public Color TriggerBorderColor
+    {
+        get => (Color)GetValue(TriggerBorderColorProperty);
+        set => SetValue(TriggerBorderColorProperty, value);
+    }
+
+    public Color TriggerOpenBorderColor
+    {
+        get => (Color)GetValue(TriggerOpenBorderColorProperty);
+        set => SetValue(TriggerOpenBorderColorProperty, value);
+    }
+
+    public Color TriggerTextColor
+    {
+        get => (Color)GetValue(TriggerTextColorProperty);
+        set => SetValue(TriggerTextColorProperty, value);
+    }
+
+    public Color TriggerPlaceholderColor
+    {
+        get => (Color)GetValue(TriggerPlaceholderColorProperty);
+        set => SetValue(TriggerPlaceholderColorProperty, value);
+    }
+
+    public Color TriggerIconColor
+    {
+        get => (Color)GetValue(TriggerIconColorProperty);
+        set => SetValue(TriggerIconColorProperty, value);
+    }
+
+    public Color TriggerOpenIconColor
+    {
+        get => (Color)GetValue(TriggerOpenIconColorProperty);
+        set => SetValue(TriggerOpenIconColorProperty, value);
+    }
+
+    public FontAttributes TriggerFontAttributes
+    {
+        get => (FontAttributes)GetValue(TriggerFontAttributesProperty);
+        set => SetValue(TriggerFontAttributesProperty, value);
     }
 
     public static void CloseAll()
@@ -217,6 +337,11 @@ public partial class DropdownField : ContentView
         ((DropdownField)bindable).RefreshOpenPopup();
     }
 
+    private static void OnTriggerStyleChanged(BindableObject bindable, object oldValue, object newValue)
+    {
+        ((DropdownField)bindable).ApplyTriggerStyle();
+    }
+
     private void OnTriggerTapped(object? sender, TappedEventArgs e)
     {
         ignoreOutsideCloseUntilUtc = DateTime.UtcNow.AddMilliseconds(150);
@@ -227,9 +352,9 @@ public partial class DropdownField : ContentView
 
     private void SetOpen(bool isOpen)
     {
-        TriggerBorder.Stroke = isOpen ? Color.FromArgb("#0E2A5C") : Color.FromArgb("#D6DEE9");
+        TriggerBorder.Stroke = isOpen ? TriggerOpenBorderColor : TriggerBorderColor;
         TriggerBorder.StrokeThickness = isOpen ? 1.5 : 1;
-        ChevronLabel.TextColor = isOpen ? Color.FromArgb("#0E2A5C") : Color.FromArgb("#667085");
+        ChevronLabel.TextColor = isOpen ? TriggerOpenIconColor : TriggerIconColor;
         ChevronLabel.Text = isOpen ? IconGlyphs.ChevronUp : IconGlyphs.ChevronDown;
         ZIndex = isOpen ? 1000 : 0;
 
@@ -263,8 +388,17 @@ public partial class DropdownField : ContentView
         var text = GetDisplayText(SelectedItem);
         SelectedTextLabel.Text = string.IsNullOrWhiteSpace(text) ? Placeholder : text;
         SelectedTextLabel.TextColor = string.IsNullOrWhiteSpace(text)
-            ? Color.FromArgb("#667085")
-            : Color.FromArgb("#172033");
+            ? TriggerPlaceholderColor
+            : TriggerTextColor;
+    }
+
+    private void ApplyTriggerStyle()
+    {
+        TriggerBorder.BackgroundColor = TriggerBackgroundColor;
+        TriggerBorder.Stroke = popupBorder is null ? TriggerBorderColor : TriggerOpenBorderColor;
+        ChevronLabel.TextColor = popupBorder is null ? TriggerIconColor : TriggerOpenIconColor;
+        SelectedTextLabel.FontAttributes = TriggerFontAttributes;
+        UpdateSelectedText();
     }
 
     private string GetDisplayText(object? item)
@@ -292,15 +426,15 @@ public partial class DropdownField : ContentView
         if (_popupAllItems.Count == 0 && !isServerSearch)
             return;
 
-        var position = GetPopupPlacement(root);
-        var popupWidth = GetPopupWidth();
+        var popupWidth = GetPopupWidth(root);
+        var position = GetPopupPlacement(root, popupWidth);
         var useSearch = isServerSearch || _popupAllItems.Count >= SearchThreshold;
 
         _popupItemList = new VerticalStackLayout { BackgroundColor = Colors.White, Spacing = 0 };
         BuildPopupItemList(_popupAllItems);
 
         var visibleItemCount = Math.Min(Math.Max(_popupAllItems.Count, 1), MaxVisibleItems);
-        var listHeight = Math.Max(ItemHeight, visibleItemCount * ItemHeight);
+        var listHeight = Math.Max(ItemHeight, visibleItemCount * ItemHeight) + 2;
 
         var listScroll = new ScrollView
         {
@@ -380,14 +514,14 @@ public partial class DropdownField : ContentView
             }
             content = searchContent;
 
-            popupHeight = SearchEntryHeight + 1 + listHeight;
+            popupHeight = SearchEntryHeight + 1 + listHeight + 2;
             if (isServerSearch && HasMore)
                 popupHeight += 45;
         }
         else
         {
             content = listScroll;
-            popupHeight = listHeight;
+            popupHeight = listHeight + 2;
         }
 
         popupBorder = new Border
@@ -405,6 +539,21 @@ public partial class DropdownField : ContentView
             ZIndex = 10000
         };
 
+        popupDismissLayer = new Grid
+        {
+            BackgroundColor = Color.FromRgba("#00000000"),
+            HorizontalOptions = LayoutOptions.Fill,
+            VerticalOptions = LayoutOptions.Fill,
+            ZIndex = 9999
+        };
+        popupDismissLayer.GestureRecognizers.Add(new TapGestureRecognizer
+        {
+            Command = new Command(CloseAll)
+        });
+        Grid.SetRow(popupDismissLayer, 0);
+        Grid.SetRowSpan(popupDismissLayer, Math.Max(1, root.RowDefinitions.Count));
+        root.Children.Add(popupDismissLayer);
+
         popupBorder.Shadow = new Shadow
         {
             Brush = new SolidColorBrush(Color.FromRgba("#0E2A5C30")),
@@ -416,6 +565,11 @@ public partial class DropdownField : ContentView
         Grid.SetRow(popupBorder, position.GridRow);
         Grid.SetRowSpan(popupBorder, position.GridRowSpan);
         root.Children.Add(popupBorder);
+        popupScrollView = FindAncestorScrollView();
+        if (popupScrollView is not null)
+        {
+            popupScrollView.Scrolled += OnHostScrollViewScrolled;
+        }
 
         if (useSearch)
         {
@@ -467,17 +621,34 @@ public partial class DropdownField : ContentView
 
     private void RemovePopup()
     {
+        if (popupScrollView is not null)
+        {
+            popupScrollView.Scrolled -= OnHostScrollViewScrolled;
+            popupScrollView = null;
+        }
+
         if (popupBorder is null)
             return;
+
+        if (popupDismissLayer?.Parent is Layout dismissParent)
+        {
+            dismissParent.Children.Remove(popupDismissLayer);
+        }
 
         if (popupBorder.Parent is Layout parent)
         {
             parent.Children.Remove(popupBorder);
         }
 
+        popupDismissLayer = null;
         popupBorder = null;
         _popupItemList = null;
         _popupAllItems = new();
+    }
+
+    private void OnHostScrollViewScrolled(object? sender, ScrolledEventArgs e)
+    {
+        SetOpen(false);
     }
 
     private Grid? FindPageRoot()
@@ -512,7 +683,7 @@ public partial class DropdownField : ContentView
         return new Point(x, y);
     }
 
-    private PopupPlacement GetPopupPlacement(Grid root)
+    private PopupPlacement GetPopupPlacement(Grid root, double popupWidth)
     {
         var scrollView = FindAncestorScrollView();
         if (scrollView is not null)
@@ -522,7 +693,7 @@ public partial class DropdownField : ContentView
             var rowSpan = Math.Max(1, Grid.GetRowSpan(scrollView));
 
             return new PopupPlacement(
-                positionInScrollView.X,
+                ClampPopupX(positionInScrollView.X, popupWidth, root),
                 positionInScrollView.Y - scrollView.ScrollY + TriggerBorder.Height - 1,
                 row,
                 rowSpan);
@@ -530,10 +701,20 @@ public partial class DropdownField : ContentView
 
         var position = GetPositionRelativeTo(root);
         return new PopupPlacement(
-            position.X,
+            ClampPopupX(position.X, popupWidth, root),
             position.Y + TriggerBorder.Height - 1,
             0,
             Math.Max(1, root.RowDefinitions.Count));
+    }
+
+    private static double ClampPopupX(double x, double popupWidth, VisualElement root)
+    {
+        if (root.Width <= 0)
+            return x;
+
+        var min = PopupHorizontalMargin;
+        var max = root.Width - popupWidth - PopupHorizontalMargin;
+        return max <= min ? min : Math.Clamp(x, min, max);
     }
 
     private ScrollView? FindAncestorScrollView()
@@ -571,7 +752,7 @@ public partial class DropdownField : ContentView
                 {
                     FontSize = 14,
                     FontAttributes = FontAttributes.Bold,
-                    LineBreakMode = LineBreakMode.TailTruncation,
+                    LineBreakMode = LineBreakMode.WordWrap,
                     Text = primaryText,
                     TextColor = isSelected ? Color.FromArgb("#0E2A5C") : Color.FromArgb("#172033")
                 }
@@ -583,7 +764,7 @@ public partial class DropdownField : ContentView
             rowText.Children.Add(new Label
             {
                 FontSize = 12,
-                LineBreakMode = LineBreakMode.TailTruncation,
+                LineBreakMode = LineBreakMode.WordWrap,
                 Text = secondaryText,
                 TextColor = Color.FromArgb("#667085")
             });
@@ -597,7 +778,7 @@ public partial class DropdownField : ContentView
                 new ColumnDefinition { Width = GridLength.Auto }
             },
             Padding = new Thickness(16, 6),
-            HeightRequest = ItemHeight,
+            MinimumHeightRequest = ItemHeight,
             BackgroundColor = normalBackground,
             Children = { rowText }
         };
@@ -618,7 +799,7 @@ public partial class DropdownField : ContentView
         _searchDebounceCts?.Cancel();
         _currentSearchText = string.Empty;
         SelectedTextLabel.Text = GetDisplayText(item);
-        SelectedTextLabel.TextColor = Color.FromArgb("#101828");
+        SelectedTextLabel.TextColor = TriggerTextColor;
         SetOpen(false);
         SelectedItem = item;
 
@@ -790,14 +971,24 @@ public partial class DropdownField : ContentView
         }
     }
 
-    private double GetPopupWidth()
+    private double GetPopupWidth(VisualElement root)
     {
+        double baseWidth;
         if (TriggerBorder.Width > 0)
-            return TriggerBorder.Width;
+            baseWidth = TriggerBorder.Width;
+        else if (Width > 0)
+            baseWidth = Math.Min(Width, DefaultDropdownWidth);
+        else
+            baseWidth = DefaultDropdownWidth;
 
-        if (Width > 0)
-            return Math.Min(Width, DefaultDropdownWidth);
+        var desiredWidth = PopupWidthRequest > 0
+            ? Math.Max(baseWidth, PopupWidthRequest)
+            : baseWidth;
 
-        return DefaultDropdownWidth;
+        var maxWidth = root.Width > PopupHorizontalMargin * 2
+            ? root.Width - (PopupHorizontalMargin * 2)
+            : desiredWidth;
+
+        return Math.Min(desiredWidth, maxWidth);
     }
 }

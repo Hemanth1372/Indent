@@ -12,6 +12,17 @@ public partial class AddItemSERPage : ContentPage
 
     private async void OnBackClicked(object? sender, EventArgs e)
     {
+        await NavigateBackAsync();
+    }
+
+    protected override bool OnBackButtonPressed()
+    {
+        _ = NavigateBackAsync();
+        return true;
+    }
+
+    private async Task NavigateBackAsync()
+    {
         DropdownField.CloseAll();
         if (BindingContext is AddItemSERViewModel vm && !string.IsNullOrWhiteSpace(vm.IndentId))
             await Shell.Current.GoToAsync($"//indent-details?indentId={Uri.EscapeDataString(vm.IndentId)}");

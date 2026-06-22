@@ -222,7 +222,7 @@ public class DatabaseService
         }
     }
 
-    /// <summary>Indents by status (e.g. "Created", "PendingApproval").</summary>
+    /// <summary>Indents by status (e.g. "Pending", "PendingSync").</summary>
     public async Task<List<LocalIndent>> GetIndentsByStatusAsync(string engineerId, string status)
     {
         var db = await GetDbAsync();
@@ -312,7 +312,7 @@ public class DatabaseService
         if (indent is null) return;
 
         indent.OfficialIndentNo = officialIndentNo;
-        indent.Status = "Created";
+        indent.Status = "Pending";
         indent.IsSynced = true;
         indent.SyncErrorMessage = string.Empty;
         await db.UpdateAsync(indent);
