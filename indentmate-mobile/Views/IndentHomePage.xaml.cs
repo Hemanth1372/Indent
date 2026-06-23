@@ -16,7 +16,7 @@ public partial class IndentHomePage : ContentPage
 
         if (BindingContext is IndentHomeViewModel viewModel)
         {
-            viewModel.RefreshCommand.Execute(null);
+            _ = viewModel.LoadIfStaleAsync();
         }
 
         var syncService = IPlatformApplication.Current?.Services?.GetService<SyncService>();

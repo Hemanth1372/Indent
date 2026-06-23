@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="IndentMate.Mobile.Views.ProjectInchargeDashboardPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:controls="clr-namespace:IndentMate.Mobile.Controls"
+    xmlns:glyphs="clr-namespace:IndentMate.Mobile.Resources"
+    xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
+    BackgroundColor="#F4F7FB"
+    Shell.NavBarIsVisible="False"
+    x:DataType="vm:ProjectInchargeDashboardViewModel">
+
+    <ContentPage.BindingContext>
+        <vm:ProjectInchargeDashboardViewModel />
+    </ContentPage.BindingContext>
+
+    <Grid RowDefinitions="Auto,*">
+        <Grid BackgroundColor="#F4F7FB" Padding="14,12,14,0">
+            <Border
+                BackgroundColor="#0E2A5C"
+                Padding="0"
+                StrokeShape="RoundRectangle 14"
+                StrokeThickness="0">
+                <VerticalStackLayout Spacing="0">
+                    <Grid ColumnDefinitions="40,*,40,40" ColumnSpacing="12" Padding="16,14,16,0">
+                        <Border
+                            BackgroundColor="#1AFFFFFF"
+                            HeightRequest="40"
+                            StrokeShape="RoundRectangle 12"
+                            StrokeThickness="0"
+                            WidthRequest="40">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding RefreshCommand}" />
+                            </Border.GestureRecognizers>
+                            <controls:IconLabel Glyph="{x:Static glyphs:IconGlyphs.Refresh}" IconColor="White" IconSize="18" />
+                        </Border>
+
+                        <Label
+                            Grid.Column="1"
+                            FontAttributes="Bold"
+                            FontSize="19"
+                            LineBreakMode="TailTruncation"
+                            Text="Project Incharge"
+                            TextColor="White"
+                            VerticalOptions="Center" />
+
+                        <Border
+                            Grid.Column="3"
+                            BackgroundColor="#1AFFFFFF"
+                            HeightRequest="40"
+                            StrokeShape="Ellipse"
+                            StrokeThickness="0"
+                            WidthRequest="40">
+                            <Border.GestureRecognizers>
+                                <TapGestureRecognizer Command="{Binding ToggleAccountMenuCommand}" />
+                            </Border.GestureRecognizers>
+                            <controls:IconLabel Glyph="{x:Static glyphs:IconGlyphs.MoreVert}" IconColor="White" IconSize="22" />
+                        </Border>
+                    </Grid>
+
+                    <BoxView BackgroundColor="#26FFFFFF" HeightRequest="1" Margin="16,14" />
+
+                    <Grid ColumnDefinitions="44,*,Auto" ColumnSpacing="12" Padding="16,0,16,16">
+                        <Border
+                            HeightRequest="44"
+                            Padding="2"
+                            StrokeShape="Ellipse"
+                            StrokeThickness="0"
+                            WidthRequest="44">
+                            <Border.Background>
+                                <LinearGradientBrush StartPoint="0,0" EndPoint="1,1">
+                                    <GradientStop Color="#522E91" Offset="0.0" />
+                                    <GradientStop Color="#EC008C" Offset="0.35" />
+                                    <GradientStop Color="#F7931E" Offset="0.7" />
+                                    <GradientStop Color="#FDB913" Offset="1.0" />
+                                </LinearGradientBrush>
+                            </Border.Background>
+                            <Border BackgroundColor="#0E2A5C" StrokeShape="Ellipse" StrokeThickness="0">
+                                <Label
+                                    FontAttributes="Bold"
+                                    FontSize="14"
+                                    HorizontalOptions="Center"
+                                    Text="{Binding UserInitials}"
+                                    TextColor="White"
+                                    VerticalOptions="Center" />
+                            </Border>
+                        </Border>
+
+                        <VerticalStackLayout Grid.Column="1" Spacing="3" VerticalOptions="Center">
+                            <Label
+                                FontAttributes="Bold"
+                                FontSize="15"
+                                LineBreakMode="TailTruncation"
+                                Text="{Binding UserName}"
+                                TextColor="White" />
+                            <Grid ColumnDefinitions="Auto,Auto" ColumnSpacing="8">
+                                <Label
+                                    FontSize="12"
+                                    Text="{Binding UserId, StringFormat='ID {0}'}"
+                                    TextColor="#D9FFFFFF"
+                                    VerticalOptions="Center" />
+                                <Border
+                                    Grid.Column="1"
+                                    Padding="7,1"
+                                    Stroke="#8CFDB913"
+                                    StrokeShape="RoundRectangle 6"
+                                    StrokeThickness="1"
+                                    VerticalOptions="Center">
+                                    <Label
+                                        FontAttributes="Bold"
+                                        FontSize="11"
+                                        Text="{Binding UserEntity}"
+                                        TextColor="#FDB913" />
+                                </Border>
+                            </Grid>
+                        </VerticalStackLayout>
+
+                        <controls:DropdownField
+                            Grid.Column="2"
+                            DisplayMemberPath="Label"
+                            HorizontalOptions="End"
+                            ItemsSource="{Binding Projects}"
+                            Placeholder="All Projects"
+                            SelectedItem="{Binding SelectedProject}"
+                            TriggerBackgroundColor="#294A7C"
+                            TriggerBorderColor="#6680AD"
+                            TriggerFontAttributes="Bold"
+                            TriggerIconColor="#E7EEFA"
+                            TriggerOpenBorderColor="#A9BCE0"
+                            TriggerOpenIconColor="White"
+                            TriggerPlaceholderColor="#E7EEFA"
+                            TriggerTextColor="White"
+                            VerticalOptions="Center"
+                            WidthRequest="{Binding ProjectFilterWidth}" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+        </Grid>
+
+        <Grid Grid.Row="1">
+            <RefreshView Command="{Binding RefreshCommand}" RefreshColor="#F7931E">
+                <ScrollView>
+                    <VerticalStackLayout Padding="22,22,22,32" Spacing="18">
+                        <Grid ColumnDefinitions="*,*" RowDefinitions="Auto,Auto" ColumnSpacing="12" RowSpacing="12">
+                            <Border Grid.Row="0" Grid.Column="0" BackgroundColor="{Binding PendingCardBg}" Padding="0" Stroke="#E5EAF2" StrokeShape="RoundRectangle 14">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding OpenStatusCommand}" CommandParameter="Pending" />
+                                </Border.GestureRecognizers>
+                                <Grid ColumnDefinitions="5,*">
+                                    <BoxView BackgroundColor="{Binding PendingAccentColor}" />
+                                    <VerticalStackLayout Grid.Column="1" Padding="13,15,13,14" Spacing="5">
+                                        <Label FontAttributes="Bold" FontSize="34" Text="{Binding PendingCount}" TextColor="{Binding PendingNumColor}" />
+                                        <Label FontSize="12" Text="Pending for Approval" TextColor="#6B7280" />
+                                    </VerticalStackLayout>
+                                </Grid>
+                            </Border>
+
+                            <Border Grid.Row="0" Grid.Column="1" BackgroundColor="{Binding TotalCardBg}" Padding="0" Stroke="#E5EAF2" StrokeShape="RoundRectangle 14">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding OpenStatusCommand}" CommandParameter="" />
+                                </Border.GestureRecognizers>
+                                <Grid ColumnDefinitions="5,*">
+                                    <BoxView BackgroundColor="{Binding TotalAccentColor}" />
+                                    <VerticalStackLayout Grid.Column="1" Padding="13,15,13,14" Spacing="5">
+                                        <Label FontAttributes="Bold" FontSize="34" Text="{Binding TotalCount}" TextColor="{Binding TotalNumColor}" />
+                                        <Label FontSize="12" Text="Total Indents" TextColor="#6B7280" />
+                                    </VerticalStackLayout>
+                                </Grid>
+                            </Border>
+
+                            <Border Grid.Row="1" Grid.Column="0" BackgroundColor="{Binding ApprovedCardBg}" Padding="0" Stroke="#E5EAF2" StrokeShape="RoundRectangle 14">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding OpenStatusCommand}" CommandParameter="Approved" />
+                                </Border.GestureRecognizers>
+                                <Grid ColumnDefinitions="5,*">
+                                    <BoxView BackgroundColor="{Binding ApprovedAccentColor}" />
+                                    <VerticalStackLayout Grid.Column="1" Padding="13,15,13,14" Spacing="5">
+                                        <Label FontAttributes="Bold" FontSize="34" Text="{Binding ApprovedCount}" TextColor="{Binding ApprovedNumColor}" />
+                                        <Label FontSize="12" Text="Approved" TextColor="#6B7280" />
+                                    </VerticalStackLayout>
+                                </Grid>
+                            </Border>
+
+                            <Border Grid.Row="1" Grid.Column="1" BackgroundColor="{Binding RejectedCardBg}" Padding="0" Stroke="#E5EAF2" StrokeShape="RoundRectangle 14">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer Command="{Binding OpenStatusCommand}" CommandParameter="Rejected" />
+                                </Border.GestureRecognizers>
+                                <Grid ColumnDefinitions="5,*">
+                                    <BoxView BackgroundColor="{Binding RejectedAccentColor}" />
+                                    <VerticalStackLayout Grid.Column="1" Padding="13,15,13,14" Spacing="5">
+                                        <Label FontAttributes="Bold" FontSize="34" Text="{Binding RejectedCount}" TextColor="{Binding RejectedNumColor}" />
+                                        <Label FontSize="12" Text="Rejected" TextColor="#6B7280" />
+                                    </VerticalStackLayout>
+                                </Grid>
+                            </Border>
+                        </Grid>
+
+                        <Border BackgroundColor="#FEF2F2" IsVisible="{Binding HasError}" Padding="12,10" Stroke="#FECACA" StrokeShape="RoundRectangle 8">
+                            <Label FontAttributes="Bold" Text="{Binding StatusMessage}" TextColor="#DC2626" />
+                        </Border>
+                    </VerticalStackLayout>
+                </ScrollView>
+            </RefreshView>
+        </Grid>
+
+        <Grid
+            Grid.RowSpan="2"
+            BackgroundColor="#01000000"
+            IsVisible="{Binding ShowAccountMenu}"
+            ZIndex="59">
+            <Grid.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding CloseAccountMenuCommand}" />
+            </Grid.GestureRecognizers>
+        </Grid>
+
+        <Border
+            Grid.RowSpan="2"
+            Margin="12,66,12,0"
+            BackgroundColor="White"
+            HorizontalOptions="End"
+            IsVisible="{Binding ShowAccountMenu}"
+            MaximumWidthRequest="180"
+            Stroke="#DDE5F0"
+            StrokeShape="RoundRectangle 12"
+            StrokeThickness="1"
+            VerticalOptions="Start"
+            ZIndex="60">
+            <Button
+                BackgroundColor="White"
+                Command="{Binding LogoutCommand}"
+                FontAttributes="Bold"
+                FontSize="14"
+                HeightRequest="48"
+                Text="Logout"
+                TextColor="#DC2626" />
+        </Border>
+    </Grid>
+</ContentPage>

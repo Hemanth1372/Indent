@@ -354,14 +354,18 @@ async function handleFieldLogin(req, res, next) {
       })
     }
 
+    const activeProjectInchargeAssignments = activeAssignments.filter((assignment) =>
+      normalizeProjectInchargeRole(assignment.responsibility) !== null
+    )
+    const hasProjectInchargeRole = activeProjectInchargeAssignments.length > 0
     const hasFieldRole = activeAssignments.some((assignment) =>
       normalizeFieldRole(assignment.responsibility) !== null
     )
 
-    if (!hasFieldRole) {
+    if (!hasProjectInchargeRole && !hasFieldRole) {
       return res.status(403).json({
         errorCode: 'UNAUTHORIZED_FIELD_ROLE',
-        message: 'Access Denied: This application is restricted to field personnel (SIE/SER) only.',
+        message: 'Access Denied: This application is restricted to field personnel and Project Incharge users only.',
       })
     }
 
@@ -371,20 +375,30 @@ async function handleFieldLogin(req, res, next) {
       return res.status(401).json({ message: 'Invalid Employee ID or PIN.' })
     }
 
-    // Use primary_role from users table as the authoritative role (set by explicit admin actions).
-    // Verify it's backed by an active assignment to guard against stale data.
-    // Fall back to most-recently-created field assignment (created_at DESC ordering).
-    const primaryRole = normalizeFieldRole(loginUser.primary_role)
     const activeFieldAssignments = activeAssignments.filter((a) => normalizeFieldRole(a.responsibility) !== null)
+    const primaryRole = normalizeFieldRole(loginUser.primary_role)
     const hasPrimaryRoleAssignment = primaryRole
       ? activeFieldAssignments.some((a) => normalizeFieldRole(a.responsibility) === primaryRole)
       : false
-    const fieldAssignment = hasPrimaryRoleAssignment
-      ? (activeFieldAssignments.find((a) => normalizeFieldRole(a.responsibility) === primaryRole) ?? activeFieldAssignments[0])
-      : activeFieldAssignments[0]
-    const role = normalizeFieldRole(fieldAssignment.responsibility)
+    const selectedAssignment = hasProjectInchargeRole
+      ? activeProjectInchargeAssignments[0]
+      : hasPrimaryRoleAssignment
+        ? (activeFieldAssignments.find((a) => normalizeFieldRole(a.responsibility) === primaryRole) ?? activeFieldAssignments[0])
+        : activeFieldAssignments[0]
+    const role = hasProjectInchargeRole
+      ? normalizeProjectInchargeRole(selectedAssignment.responsibility)
+      : normalizeFieldRole(selectedAssignment.responsibility)
+    const assignedProjects = hasProjectInchargeRole
+      ? activeProjectInchargeAssignments.map((assignment) => ({
+          project_id: assignment.project_id,
+          project_name: assignment.project_description,
+          location: assignment.project_id,
+          status: computeUserMasterStatus(assignment),
+          role_name: assignment.responsibility,
+        }))
+      : []
 
-    if (role && role !== primaryRole) {
+    if (role && role !== loginUser.primary_role) {
       await query(
         'UPDATE users SET primary_role = $2 WHERE login_name = $1',
         [login_name, role],
@@ -392,19 +406,21 @@ async function handleFieldLogin(req, res, next) {
     }
 
     const payload = {
-      user_id: String(fieldAssignment.id),
-      userId: String(fieldAssignment.id),
-      employeeId: fieldAssignment.employee_id,
-      login_name: fieldAssignment.employee_id,
-      employeeName: fieldAssignment.employee_name,
-      name: fieldAssignment.employee_name,
+      user_id: String(selectedAssignment.id),
+      userId: String(selectedAssignment.id),
+      employeeId: selectedAssignment.employee_id,
+      employee_id: selectedAssignment.employee_id,
+      login_name: selectedAssignment.employee_id,
+      employeeName: selectedAssignment.employee_name,
+      name: selectedAssignment.employee_name,
       role,
       primary_role: role,
-      responsibility: fieldAssignment.responsibility,
+      responsibility: selectedAssignment.responsibility,
+      access_scope: hasProjectInchargeRole ? 'project_incharge' : 'field',
       isActive: true,
       session_version: Number(loginUser.session_version ?? 0),
-      assigned_projects: [],
-      assignedProjects: [],
+      assigned_projects: assignedProjects,
+      assignedProjects: assignedProjects,
     }
 
     const token = jwt.sign(payload, env.jwtSecret, {

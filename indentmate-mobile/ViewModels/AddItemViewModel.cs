@@ -110,7 +110,6 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
     partial void OnSelectedLocationChanged(LocalLocation? value)
     {
         if (_initializing) return;
-        _ = LoadBusinessPartnersAsync();
     }
 
     partial void OnSelectedMaterialChanged(LocalItem? value)
@@ -269,7 +268,10 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
         {
             var locationId = HasHeaderLocation ? _indent.FromLocationId : SelectedLocation?.LocationCode ?? string.Empty;
             var activityId = IsVirtualWarehouse ? string.Empty : SelectedActivity?.ActivityId ?? string.Empty;
-            var businessPartnerId = SelectedBusinessPartner?.Id ?? string.Empty;
+            var businessPartnerId = _indent.ToContractorId ?? string.Empty;
+            var businessPartnerName = string.IsNullOrWhiteSpace(_indent.ToContractorName)
+                ? businessPartnerId
+                : _indent.ToContractorName;
 
             if (await _databaseService.HasDuplicateSIEItemAsync(
                     _indent.IndentId, SelectedMaterial.ItemCode, locationId, activityId, businessPartnerId, ItemLineId))
@@ -292,7 +294,7 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
                 Remarks = Remarks,
                 AttachmentUrl = AttachmentPath,
                 BusinessPartnerId = businessPartnerId,
-                BusinessPartnerName = SelectedBusinessPartner?.DisplayName ?? string.Empty
+                BusinessPartnerName = businessPartnerName
             });
 
             await Shell.Current.GoToAsync($"//indent-details?indentId={Uri.EscapeDataString(_indent.IndentId)}");
@@ -337,7 +339,6 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
             SelectedMaterial = null;
             HasMoreActivities = false;
             HasMoreMaterials = false;
-            await LoadBusinessPartnersAsync();
 
             if (!IsVirtualWarehouse)
                 await SearchActivitiesAsync(string.Empty);
@@ -659,8 +660,6 @@ public partial class AddItemViewModel : BaseViewModel, IQueryAttributable
             string.Equals(activity.ActivityId, _editingItem.ActivityId, StringComparison.OrdinalIgnoreCase));
         SelectedMaterial = Materials.FirstOrDefault(material =>
             string.Equals(material.ItemCode, _editingItem.MaterialCode, StringComparison.OrdinalIgnoreCase));
-        SelectedBusinessPartner = BusinessPartners.FirstOrDefault(partner =>
-            string.Equals(partner.Id, _editingItem.BusinessPartnerId, StringComparison.OrdinalIgnoreCase));
         UoM = _editingItem.UoM;
         RequestedQty = _editingItem.RequestedQty.ToString("0.##");
         Remarks = _editingItem.Remarks;

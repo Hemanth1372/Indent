@@ -42,7 +42,7 @@ public partial class SetupViewModel : BaseViewModel
         _databaseService = new DatabaseService(Path.Combine(FileSystem.AppDataDirectory, "indentmate.db"));
         _httpClient = new HttpClient
         {
-            BaseAddress = new Uri(ApiEndpoints.BaseUrl),
+            BaseAddress = new Uri(ApiEndpoints.CurrentBaseUrl),
             Timeout = TimeSpan.FromSeconds(10)
         };
         SelectedLNEnvironmentOption = LNEnvironmentOptions.First(option => option.Code == LnEnvironment);
@@ -93,9 +93,9 @@ public partial class SetupViewModel : BaseViewModel
 
             var responsibilityCode = NormalizeRole(adminUser.PrimaryRole);
 
-            if (responsibilityCode is not ("SER" or "SIE"))
+            if (responsibilityCode is not ("SER" or "SIE" or "PRI"))
             {
-                throw new InvalidOperationException("Access Denied: No valid SIE/SER role assigned to this user.");
+                throw new InvalidOperationException("Access Denied: No valid SIE/SER/Project Incharge role assigned to this user.");
             }
 
             var engineer = new LocalEngineer
@@ -110,9 +110,6 @@ public partial class SetupViewModel : BaseViewModel
             };
             await _databaseService.SaveAsync(engineer);
             await SecureStorage.Default.SetAsync("user_role", responsibilityCode);
-
-            StatusMessage = "Preparing local data...";
-            await SeedLocalDataAsync(normalizedEngineerId);
 
             await Shell.Current.GoToAsync("//login");
         }
@@ -130,57 +127,59 @@ public partial class SetupViewModel : BaseViewModel
 
     private async Task<AdminUserResponse> SyncPinToAdminApiAsync(string engineerId, string pin)
     {
-        try
-        {
-            StatusMessage = "Syncing PIN to admin portal...";
-            using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
-            var response = await _httpClient.PostAsJsonAsync("/api/users/sync-pin", new
-            {
-                login_name = engineerId,
-                employee_name = engineerId,
-                current_pin = pin
-            }, timeout.Token);
+        Exception? lastConnectionError = null;
 
-            if (response.StatusCode == HttpStatusCode.NotFound)
+        foreach (var baseUrl in ApiEndpoints.CandidateBaseUrls)
+        {
+            try
             {
-                throw new InvalidOperationException("No login ID found in User Master.");
+                StatusMessage = "Syncing PIN to admin portal...";
+                using var timeout = new CancellationTokenSource(TimeSpan.FromSeconds(12));
+                var response = await _httpClient.PostAsJsonAsync(new Uri(new Uri(baseUrl), "/api/users/sync-pin"), new
+                {
+                    login_name = engineerId,
+                    employee_name = engineerId,
+                    current_pin = pin
+                }, timeout.Token);
+
+                if (response.StatusCode == HttpStatusCode.NotFound)
+                {
+                    throw new InvalidOperationException("No login ID found in User Master.");
+                }
+
+                if (!response.IsSuccessStatusCode)
+                {
+                    throw new InvalidOperationException("Could not verify this user in User Master.");
+                }
+
+                var syncResponse = await response.Content.ReadFromJsonAsync<SyncPinResponse>();
+                var user = syncResponse?.User ?? syncResponse?.Data;
+
+                if (user is null)
+                {
+                    throw new InvalidOperationException("Could not verify this user in User Master.");
+                }
+
+                user.EmployeeName = string.IsNullOrWhiteSpace(user.EmployeeName)
+                    ? engineerId
+                    : user.EmployeeName.Trim();
+
+                ApiEndpoints.SetActiveBaseUrl(baseUrl);
+                return user;
             }
-
-            if (!response.IsSuccessStatusCode)
+            catch (InvalidOperationException)
             {
-                throw new InvalidOperationException("Could not verify this user in User Master.");
+                throw;
             }
-
-            var syncResponse = await response.Content.ReadFromJsonAsync<SyncPinResponse>();
-            var user = syncResponse?.User ?? syncResponse?.Data;
-
-            if (user is null)
+            catch (Exception ex) when (ex is TaskCanceledException or HttpRequestException)
             {
-                throw new InvalidOperationException("Could not verify this user in User Master.");
+                lastConnectionError = ex;
             }
+        }
 
-            user.EmployeeName = string.IsNullOrWhiteSpace(user.EmployeeName)
-                ? engineerId
-                : user.EmployeeName.Trim();
-
-            return user;
-        }
-        catch (InvalidOperationException)
-        {
-            throw;
-        }
-        catch (TaskCanceledException)
-        {
-            throw new InvalidOperationException("Could not connect to User Master within 12 seconds. Please check the admin API URL and network.");
-        }
-        catch (HttpRequestException)
-        {
-            throw new InvalidOperationException("Could not connect to User Master. Please check the admin API URL and network.");
-        }
-        catch
-        {
-            throw new InvalidOperationException("Could not connect to User Master. Please check the admin API.");
-        }
+        throw lastConnectionError is TaskCanceledException
+            ? new InvalidOperationException("Could not connect to User Master within 12 seconds. Please check the admin API URL and network.")
+            : new InvalidOperationException("Could not connect to User Master. Please check the admin API URL and network.");
     }
 
     partial void OnSelectedLNEnvironmentOptionChanged(LNEnvironmentOption? value)
@@ -200,135 +199,6 @@ public partial class SetupViewModel : BaseViewModel
     partial void OnIsPinVisibleChanged(bool value)
     {
         OnPropertyChanged(nameof(IsPinHidden));
-    }
-
-    private async Task SeedLocalDataAsync(string engineerId)
-    {
-        var projects = new[]
-        {
-            new LocalProject
-            {
-                ProjectId = "PRJ-SIE-001",
-                Description = "Local SIE Project",
-                SiteCode = "SITE-SIE",
-                AddressCode = "ADDR-SIE",
-                EngineerId = engineerId,
-                ResponsibilityCode = "SIE"
-            },
-            new LocalProject
-            {
-                ProjectId = "PRJ-SER-001",
-                Description = "Local SER Project",
-                SiteCode = "SITE-SER",
-                AddressCode = "ADDR-SER",
-                EngineerId = engineerId,
-                ResponsibilityCode = "SER"
-            }
-        };
-        await _databaseService.SaveBatchAsync(projects);
-
-        await _databaseService.SaveBatchAsync(new[]
-        {
-            new LocalWarehouse
-            {
-                WarehouseCode = "VWH-SIE",
-                Description = "Virtual Material Warehouse",
-                SiteCode = "SITE-SIE",
-                IsMaterialWH = true,
-                IsVirtual = true
-            },
-            new LocalWarehouse
-            {
-                WarehouseCode = "MWH-SIE",
-                Description = "Material Warehouse",
-                SiteCode = "SITE-SIE",
-                IsMaterialWH = true,
-                IsVirtual = false
-            }
-        });
-
-        await _databaseService.SaveBatchAsync(new[]
-        {
-            new LocalWarehouseLocation { LocationCode = "STO-01", WarehouseCode = "VWH-SIE", Description = "Main Storage", Category = "Storage" },
-            new LocalWarehouseLocation { LocationCode = "EMP-01", WarehouseCode = "VWH-SIE", Description = "Employee Location", Category = "Employee" },
-            new LocalWarehouseLocation { LocationCode = "SUB-01", WarehouseCode = "VWH-SIE", Description = "Subcontractor Location", Category = "Subcon" },
-            new LocalWarehouseLocation { LocationCode = "BIN-01", WarehouseCode = "MWH-SIE", Description = "Warehouse Bin 01", Category = "Storage" }
-        });
-
-        await _databaseService.SaveBatchAsync(new[]
-        {
-            new LocalBusinessPartner
-            {
-                BusinessPartnerId = "BP-SUB-001",
-                ProjectId = "PRJ-SIE-001",
-                ActivityId = "ACT-BOQ-001",
-                Name = "Local Subcontractor",
-                SubcontractorPO = true
-            }
-        });
-
-        await _databaseService.SaveBatchAsync(new[]
-        {
-            new LocalLocation { LocationCode = "LOC-SIE-01", ProjectId = "PRJ-SIE-001", Description = "SIE Project Location", WarehouseCode = "MWH-SIE" },
-            new LocalLocation { LocationCode = "LOC-SER-01", ProjectId = "PRJ-SER-001", Description = "SER Project Location" }
-        });
-
-        await _databaseService.SaveBatchAsync(new[]
-        {
-            new LocalActivity
-            {
-                ActivityId = "ACT-BOQ-001",
-                ProjectId = "PRJ-SIE-001",
-                Description = "Civil Work Package",
-                ActivityType = "Work package",
-                CapacityType = "Material",
-                Status = "Released"
-            },
-            new LocalActivity
-            {
-                ActivityId = "ACT-NBOQ-001",
-                ProjectId = "PRJ-SIE-001",
-                Description = "Sundry Cost Control",
-                ActivityType = "Control account",
-                CapacityType = "Sundry Cost",
-                Status = "Released"
-            }
-        });
-
-        await _databaseService.SaveBatchAsync(new[]
-        {
-            new LocalItem { ItemCode = "MAT-001", Description = "Cement Bag", PurchaseUnit = "BAG", UoM = "BAG", ItemGroup = 10, SiteCode = "SITE-SIE", OnHandQty = 100 },
-            new LocalItem { ItemCode = "MAT-002", Description = "Steel Rod", PurchaseUnit = "KG", UoM = "KG", ItemGroup = 10, SiteCode = "SITE-SIE", OnHandQty = 250 },
-            new LocalItem { ItemCode = "SER-MAT-001", Description = "Hydraulic Hose", PurchaseUnit = "EA", UoM = "EA", ItemGroup = 20, SiteCode = "SITE-SER", OnHandQty = 15 },
-            new LocalItem { ItemCode = "SER-MAT-002", Description = "Service Oil", PurchaseUnit = "LTR", UoM = "LTR", ItemGroup = 20, SiteCode = "SITE-SER", OnHandQty = 60 }
-        });
-
-        await _databaseService.SaveBatchAsync(new[]
-        {
-            new LocalServiceOrder
-            {
-                OrderNo = "SEV-00006",
-                Status = "Released",
-                SiteCode = "SITE-SER",
-                Equipment = "Hydraulic Crane",
-                SerialNumber = "TS09 1234",
-                Description = "Hydraulic Crane"
-            }
-        });
-
-        await _databaseService.SaveBatchAsync(new[]
-        {
-            new LocalRentalOrder
-            {
-                OrderNo = "REN-00011",
-                Status = "Released",
-                SiteCode = "SITE-SER",
-                ProjectCode = "PRJ-SER-001",
-                Equipment = "Compressor",
-                SerialNumber = "CP22 9087",
-                Description = "Air Compressor"
-            }
-        });
     }
 
     private static string NormalizeRole(string? role)
@@ -351,6 +221,14 @@ public partial class SetupViewModel : BaseViewModel
             normalizedRole.Contains("SITE ENGINEER"))
         {
             return "SIE";
+        }
+
+        if (
+            normalizedRole is "PRI" ||
+            normalizedRole.Contains("(PRI)") ||
+            normalizedRole.Contains("PROJECT INCHARGE"))
+        {
+            return "PRI";
         }
 
         return string.Empty;

@@ -34,6 +34,7 @@ public static class IconGlyphs
     public const string EyeOff        = ""; // \ue8f5
     public const string Clipboard     = ""; // \ue85d
     public const string Equipment     = ""; // \ue322
+    public const string Print         = ""; // \ue8ad
     public const string Settings      = "u{E8B8}"; // 
     public const string Description   = "u{E873}"; // 
     public const string CheckCircle   = "u{E86C}"; // 

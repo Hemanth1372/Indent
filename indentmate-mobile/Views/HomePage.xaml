@@ -3,9 +3,11 @@
     x:Class="IndentMate.Mobile.Views.HomePage"
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:data="clr-namespace:IndentMate.Mobile.Data"
     xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
     Title="Home"
-    BackgroundColor="#1A1A2E">
+    BackgroundColor="#1A1A2E"
+    x:DataType="vm:HomeViewModel">
 
     <ContentPage.BindingContext>
         <vm:HomeViewModel />
@@ -71,7 +73,7 @@
             <CollectionView ItemsSource="{Binding RecentIndents}"
                             EmptyView="No indents yet.">
                 <CollectionView.ItemTemplate>
-                    <DataTemplate>
+                    <DataTemplate x:DataType="data:IndentSummary">
                         <Frame BackgroundColor="#2A2A3E" CornerRadius="8"
                                Margin="0,4" Padding="12" BorderColor="Transparent">
                             <Grid ColumnDefinitions="*,Auto">

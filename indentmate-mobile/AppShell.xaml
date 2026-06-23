@@ -40,6 +40,21 @@
         ContentTemplate="{DataTemplate views:IndentHomePage}"
         Title="SER Dashboard" />
 
+    <ShellContent
+        Route="project-incharge-dashboard"
+        ContentTemplate="{DataTemplate views:ProjectInchargeDashboardPage}"
+        Title="Project Incharge" />
+
+    <ShellContent
+        Route="project-incharge-list"
+        ContentTemplate="{DataTemplate views:ProjectInchargeListPage}"
+        Title="Project Indents" />
+
+    <ShellContent
+        Route="project-incharge-detail"
+        ContentTemplate="{DataTemplate views:ProjectInchargeDetailPage}"
+        Title="Transaction Detail" />
+
     <!-- Indent Header (SIE / SER selection) -->
     <ShellContent
         Route="sie-indent-header"

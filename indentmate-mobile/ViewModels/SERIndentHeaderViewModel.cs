@@ -15,6 +15,8 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
     private int _orderSearchVersion;
     private bool _lastOrderHasMore;
     private string _orderSearchText = string.Empty;
+    private DateTime _lastProjectsLoadedAtUtc = DateTime.MinValue;
+    private string _lastProjectsLoadedEngineerId = string.Empty;
 
     public ObservableCollection<LocalProject> Projects { get; } = new();
     public ObservableCollection<SEROrderOption> Orders { get; } = new();
@@ -42,13 +44,17 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
     {
         _databaseService = databaseService;
         _apiService = apiService;
-        _ = LoadProjectsAsync();
     }
 
     [RelayCommand]
     private async Task RefreshAsync()
     {
-        await LoadProjectsAsync();
+        await LoadProjectsAsync(force: true);
+    }
+
+    public async Task LoadIfStaleAsync()
+    {
+        await LoadProjectsAsync(force: false);
     }
 
     [RelayCommand]
@@ -105,7 +111,7 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
         Equipment = value?.EquipmentDisplay ?? string.Empty;
     }
 
-    private async Task LoadProjectsAsync()
+    private async Task LoadProjectsAsync(bool force)
     {
         await RunBusyAsync(async () =>
         {
@@ -120,6 +126,14 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
             if (string.IsNullOrWhiteSpace(engineerId))
                 return;
 
+            if (!force &&
+                Projects.Count != 0 &&
+                string.Equals(_lastProjectsLoadedEngineerId, engineerId, StringComparison.OrdinalIgnoreCase) &&
+                DateTime.UtcNow - _lastProjectsLoadedAtUtc < TimeSpan.FromMinutes(2))
+            {
+                return;
+            }
+
             var localProjects = await GetLocalProjectsAsync(engineerId);
             var projects = await GetMergedCurrentProjectsAsync(engineerId, localProjects, "SER");
 
@@ -133,6 +147,9 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
             {
                 SelectedProject = Projects.FirstOrDefault();
             }
+
+            _lastProjectsLoadedEngineerId = engineerId;
+            _lastProjectsLoadedAtUtc = DateTime.UtcNow;
         });
     }
 
@@ -202,11 +219,6 @@ public partial class SERIndentHeaderViewModel : BaseViewModel
                 })
                 .ToList();
 
-            var apiProjectIds = mergedProjects
-                .Select(project => project.ProjectId)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            mergedProjects.AddRange(localProjects.Where(project => !apiProjectIds.Contains(project.ProjectId)));
             return mergedProjects;
         }
         catch

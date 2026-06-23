@@ -7,7 +7,8 @@
     xmlns:glyphs="clr-namespace:IndentMate.Mobile.Resources"
     xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
     BackgroundColor="#F4F7FB"
-    Shell.NavBarIsVisible="False">
+    Shell.NavBarIsVisible="False"
+    x:DataType="vm:IndentHomeViewModel">
 
     <ContentPage.BindingContext>
         <vm:IndentHomeViewModel />
@@ -137,7 +138,7 @@
                         HeightRequest="1"
                         Margin="16,14" />
 
-                    <Grid ColumnDefinitions="44,*,280" ColumnSpacing="12" Padding="16,0,16,16">
+                    <Grid ColumnDefinitions="44,*,Auto" ColumnSpacing="12" Padding="16,0,16,16">
                         <Border
                             HeightRequest="44"
                             Padding="2"
@@ -204,8 +205,7 @@
                             DisplayMemberPath="Label"
                             HorizontalOptions="End"
                             ItemsSource="{Binding ProjectFilters}"
-                            Placeholder="All Projects"
-                            PopupWidthRequest="520"
+                            Placeholder="Select Project"
                             SelectedItem="{Binding SelectedProjectFilter}"
                             TriggerBackgroundColor="#294A7C"
                             TriggerBorderColor="#6680AD"
@@ -216,7 +216,7 @@
                             TriggerPlaceholderColor="#E7EEFA"
                             TriggerTextColor="White"
                             VerticalOptions="Center"
-                            WidthRequest="280" />
+                            WidthRequest="{Binding ProjectFilterWidth}" />
                     </Grid>
                 </VerticalStackLayout>
             </Border>
@@ -651,15 +651,15 @@
         <Border
             Grid.Row="0"
             Grid.RowSpan="2"
-            Margin="0,58,28,0"
+            Margin="12,66,12,0"
             BackgroundColor="White"
-            HorizontalOptions="End"
+            HorizontalOptions="Fill"
             IsVisible="{Binding ShowNotifications}"
+            MaximumWidthRequest="424"
             Stroke="#DDE5F0"
             StrokeShape="RoundRectangle 12"
             StrokeThickness="1"
             VerticalOptions="Start"
-            WidthRequest="424"
             ZIndex="50">
             <Border.Shadow>
                 <Shadow Brush="#33000000" Offset="0,8" Radius="18" Opacity="0.35" />
@@ -753,15 +753,15 @@
         <Border
             Grid.Row="0"
             Grid.RowSpan="2"
-            Margin="0,58,18,0"
+            Margin="12,66,12,0"
             BackgroundColor="White"
             HorizontalOptions="End"
             IsVisible="{Binding ShowAccountMenu}"
+            MaximumWidthRequest="180"
             Stroke="#DDE5F0"
             StrokeShape="RoundRectangle 12"
             StrokeThickness="1"
             VerticalOptions="Start"
-            WidthRequest="180"
             ZIndex="60">
             <Border.Shadow>
                 <Shadow Brush="#33000000" Offset="0,8" Radius="18" Opacity="0.28" />

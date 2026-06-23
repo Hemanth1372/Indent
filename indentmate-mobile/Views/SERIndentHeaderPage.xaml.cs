@@ -15,7 +15,7 @@ public partial class SERIndentHeaderPage : ContentPage
         base.OnAppearing();
         if (BindingContext is SERIndentHeaderViewModel viewModel)
         {
-            viewModel.RefreshCommand.Execute(null);
+            _ = viewModel.LoadIfStaleAsync();
         }
     }
 

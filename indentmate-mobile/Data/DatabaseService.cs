@@ -58,6 +58,8 @@ public class DatabaseService
             await EnsureLocalIndentSyncColumnsAsync(_db);
             await EnsureLocalBusinessPartnerColumnsAsync(_db);
             await EnsureLocalIndentItemColumnsAsync(_db);
+            await RemoveDemoSeedDataAsync(_db);
+            await EnsureIndexesAsync(_db);
 
             _initialized = true;
         }
@@ -623,6 +625,51 @@ public class DatabaseService
     {
         await AddColumnIfMissingAsync(db, "LocalIndentItems", "BusinessPartnerId", "TEXT NOT NULL DEFAULT ''");
         await AddColumnIfMissingAsync(db, "LocalIndentItems", "BusinessPartnerName", "TEXT NOT NULL DEFAULT ''");
+    }
+
+    private static async Task EnsureIndexesAsync(SQLiteAsyncConnection db)
+    {
+        var indexStatements = new[]
+        {
+            "CREATE INDEX IF NOT EXISTS idx_local_indents_engineer_created ON LocalIndents(EngineerId, CreatedAt DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_local_indents_engineer_status ON LocalIndents(EngineerId, Status)",
+            "CREATE INDEX IF NOT EXISTS idx_local_indents_engineer_synced ON LocalIndents(EngineerId, IsSynced)",
+            "CREATE INDEX IF NOT EXISTS idx_local_indents_pending_sync ON LocalIndents(Status, IsSynced, SubmittedAt)",
+            "CREATE INDEX IF NOT EXISTS idx_local_indents_official_no ON LocalIndents(EngineerId, OfficialIndentNo)",
+            "CREATE INDEX IF NOT EXISTS idx_local_indent_items_indent ON LocalIndentItems(IndentId)",
+            "CREATE INDEX IF NOT EXISTS idx_local_indent_items_sie_duplicate ON LocalIndentItems(IndentId, MaterialCode, LocationId, ActivityId, BusinessPartnerId)",
+            "CREATE INDEX IF NOT EXISTS idx_local_indent_items_ser_duplicate ON LocalIndentItems(IndentId, MaterialCode)",
+            "CREATE INDEX IF NOT EXISTS idx_local_projects_engineer_role ON LocalProjects(EngineerId, ResponsibilityCode)",
+            "CREATE INDEX IF NOT EXISTS idx_local_locations_project ON LocalLocations(ProjectId)",
+            "CREATE INDEX IF NOT EXISTS idx_local_activities_project ON LocalActivities(ProjectId)",
+            "CREATE INDEX IF NOT EXISTS idx_local_items_site_code ON LocalItems(SiteCode, ItemCode)",
+            "CREATE INDEX IF NOT EXISTS idx_local_warehouses_site_material ON LocalWarehouses(SiteCode, IsMaterialWH)",
+            "CREATE INDEX IF NOT EXISTS idx_local_warehouse_locations_warehouse ON LocalWarehouseLocations(WarehouseCode)",
+            "CREATE INDEX IF NOT EXISTS idx_local_business_partners_project_location ON LocalBusinessPartners(ProjectId, LocationCode, SubcontractorPO)",
+            "CREATE INDEX IF NOT EXISTS idx_local_service_orders_site_status ON LocalServiceOrders(SiteCode, Status)",
+            "CREATE INDEX IF NOT EXISTS idx_local_rental_orders_project_status ON LocalRentalOrders(ProjectCode, Status)",
+            "CREATE INDEX IF NOT EXISTS idx_local_rental_orders_site_status ON LocalRentalOrders(SiteCode, Status)",
+            "CREATE INDEX IF NOT EXISTS idx_local_engineers_last_sync ON LocalEngineers(LastSyncAt DESC)",
+            "CREATE INDEX IF NOT EXISTS idx_local_offline_queue_pending ON LocalOfflineQueue(SyncedAt, CreatedAt)"
+        };
+
+        foreach (var statement in indexStatements)
+        {
+            await db.ExecuteAsync(statement);
+        }
+    }
+
+    private static async Task RemoveDemoSeedDataAsync(SQLiteAsyncConnection db)
+    {
+        await db.ExecuteAsync("DELETE FROM LocalProjects WHERE ProjectId IN ('PRJ-SIE-001', 'PRJ-SER-001')");
+        await db.ExecuteAsync("DELETE FROM LocalLocations WHERE ProjectId IN ('PRJ-SIE-001', 'PRJ-SER-001') OR LocationCode IN ('LOC-SIE-01', 'LOC-SER-01')");
+        await db.ExecuteAsync("DELETE FROM LocalActivities WHERE ProjectId IN ('PRJ-SIE-001', 'PRJ-SER-001') OR ActivityId IN ('ACT-BOQ-001', 'ACT-NBOQ-001')");
+        await db.ExecuteAsync("DELETE FROM LocalBusinessPartners WHERE ProjectId IN ('PRJ-SIE-001', 'PRJ-SER-001') OR BusinessPartnerId = 'BP-SUB-001'");
+        await db.ExecuteAsync("DELETE FROM LocalWarehouseLocations WHERE WarehouseCode IN ('VWH-SIE', 'MWH-SIE') OR LocationCode IN ('STO-01', 'EMP-01', 'SUB-01', 'BIN-01')");
+        await db.ExecuteAsync("DELETE FROM LocalWarehouses WHERE WarehouseCode IN ('VWH-SIE', 'MWH-SIE')");
+        await db.ExecuteAsync("DELETE FROM LocalItems WHERE ItemCode IN ('MAT-001', 'MAT-002', 'SER-MAT-001', 'SER-MAT-002')");
+        await db.ExecuteAsync("DELETE FROM LocalServiceOrders WHERE OrderNo = 'SEV-00006'");
+        await db.ExecuteAsync("DELETE FROM LocalRentalOrders WHERE OrderNo = 'REN-00011' OR ProjectCode = 'PRJ-SER-001'");
     }
 
     public async Task<bool> HasDuplicateSIEItemAsync(

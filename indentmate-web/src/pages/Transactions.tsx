@@ -2,6 +2,7 @@ import { AlertCircle, ArrowLeft, ArrowUpRight, Building2, CalendarDays, Factory,
 import type { ReactNode } from 'react'
 import { useEffect, useMemo, useState } from 'react'
 import { useNavigate, useSearchParams } from 'react-router-dom'
+import { NumberedPagination } from '../components/NumberedPagination'
 import { api } from '../services/api'
 
 type IndentLineItem = {
@@ -35,12 +36,18 @@ type IndentTransaction = {
 
 type IndentsResponse = {
   data: IndentTransaction[]
+  total?: number
+  page?: number
+  limit?: number
+  totalPages?: number
 }
 
 type ProjectOption = {
   project_code: string
   project_description?: string | null
 }
+
+const TRANSACTIONS_PAGE_SIZE = 25
 
 const statusBadgeClasses: Record<string, string> = {
   Created: 'bg-blue-50 text-blue-700 ring-blue-600/20',
@@ -94,12 +101,17 @@ export default function Transactions({
   const [transactions, setTransactions] = useState<IndentTransaction[]>([])
   const [isLoading, setIsLoading] = useState(true)
   const [errorMessage, setErrorMessage] = useState('')
+  const [currentPage, setCurrentPage] = useState(1)
+  const [totalRecords, setTotalRecords] = useState(0)
+  const [totalPages, setTotalPages] = useState(1)
   const [dateFrom, setDateFrom] = useState(() => extraParams.date_from ?? searchParams.get('date_from') ?? '')
   const [dateTo, setDateTo] = useState(() => extraParams.date_to ?? searchParams.get('date_to') ?? '')
   const [projectFilter, setProjectFilter] = useState(() => extraParams.projectCode ?? searchParams.get('projectCode') ?? '')
   const [projectOptions, setProjectOptions] = useState<ProjectOption[]>([])
   const [projectOptionsLoading, setProjectOptionsLoading] = useState(false)
   const statusFilter = extraParams.status ?? searchParams.get('status') ?? ''
+  const serializedExtraParams = JSON.stringify(extraParams)
+  const serializedScopedProjectOptions = JSON.stringify(scopedProjectOptions ?? [])
   const projectSelectOptions = useMemo(
     () => projectOptions
       .map((project) => {
@@ -114,9 +126,11 @@ export default function Transactions({
     [projectOptions],
   )
 
-  async function fetchTransactions() {
+  async function fetchTransactions(page = currentPage) {
     if (!enabled) {
       setTransactions([])
+      setTotalRecords(0)
+      setTotalPages(1)
       setIsLoading(false)
       setErrorMessage('')
       return
@@ -126,6 +140,8 @@ export default function Transactions({
 
     try {
       const params = new URLSearchParams()
+      params.set('page', String(page))
+      params.set('limit', String(TRANSACTIONS_PAGE_SIZE))
 
       Object.entries(extraParams).forEach(([key, value]) => {
         if (showProjectFilter && key === 'projectCode') {
@@ -154,7 +170,13 @@ export default function Transactions({
 
       const queryString = params.toString()
       const response = await api.get<IndentsResponse>(`${endpoint}${queryString ? `?${queryString}` : ''}`)
-      setTransactions(response.data.data)
+      const rows = response.data.data
+      const responseTotal = Number(response.data.total ?? rows.length)
+      const responseTotalPages = Number(response.data.totalPages ?? Math.max(1, Math.ceil(responseTotal / TRANSACTIONS_PAGE_SIZE)))
+
+      setTransactions(rows)
+      setTotalRecords(responseTotal)
+      setTotalPages(Math.max(1, responseTotalPages))
       setErrorMessage('')
     } catch (error) {
       const message = error && typeof error === 'object' && 'response' in error
@@ -170,6 +192,16 @@ export default function Transactions({
     setDateFrom('')
     setDateTo('')
     setProjectFilter('')
+    setCurrentPage(1)
+  }
+
+  function applyFilters() {
+    setCurrentPage(1)
+    void fetchTransactions(1)
+  }
+
+  function refreshTransactions() {
+    void fetchTransactions(currentPage)
   }
 
   async function fetchProjectOptions() {
@@ -197,15 +229,15 @@ export default function Transactions({
   }
 
   useEffect(() => {
-    fetchTransactions()
-  }, [enabled, endpoint, refreshKey, statusFilter, projectFilter, JSON.stringify(extraParams)])
+    fetchTransactions(currentPage)
+  }, [enabled, endpoint, refreshKey, statusFilter, projectFilter, currentPage, serializedExtraParams])
 
   useEffect(() => {
     fetchProjectOptions()
-  }, [showProjectFilter, projectOptionsEndpoint, JSON.stringify(scopedProjectOptions ?? [])])
+  }, [showProjectFilter, projectOptionsEndpoint, serializedScopedProjectOptions])
 
   useEffect(() => {
-    const refresh = () => void fetchTransactions()
+    const refresh = () => void fetchTransactions(currentPage)
 
     window.addEventListener('notifications-refreshed', refresh)
     window.addEventListener('indent-status-updated', refresh)
@@ -214,13 +246,16 @@ export default function Transactions({
       window.removeEventListener('notifications-refreshed', refresh)
       window.removeEventListener('indent-status-updated', refresh)
     }
-  }, [enabled, endpoint, dateFrom, dateTo, statusFilter, projectFilter, JSON.stringify(extraParams)])
+  }, [enabled, endpoint, dateFrom, dateTo, statusFilter, projectFilter, currentPage, serializedExtraParams])
 
   useEffect(() => {
     if (!dateFrom && !dateTo) {
-      fetchTransactions()
+      fetchTransactions(currentPage)
     }
   }, [dateFrom, dateTo])
+
+  const visibleStart = totalRecords === 0 ? 0 : ((currentPage - 1) * TRANSACTIONS_PAGE_SIZE) + 1
+  const visibleEnd = Math.min(totalRecords, visibleStart + transactions.length - 1)
 
   return (
     <section className="w-full">
@@ -250,7 +285,10 @@ export default function Transactions({
               <select
                 className="h-10 w-full min-w-0 truncate rounded-md border border-slate-300 bg-white px-3 text-sm font-semibold normal-case tracking-normal text-slate-800 shadow-sm outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100"
                 disabled={projectOptionsLoading}
-                onChange={(event) => setProjectFilter(event.target.value)}
+                onChange={(event) => {
+                  setCurrentPage(1)
+                  setProjectFilter(event.target.value)
+                }}
                 title={projectSelectOptions.find((project) => project.value === projectFilter)?.label ?? 'All projects'}
                 value={projectFilter}
               >
@@ -285,7 +323,7 @@ export default function Transactions({
             <button
               className="inline-flex h-10 items-center justify-center rounded-md bg-blue-600 px-4 text-sm font-bold text-white shadow-sm transition hover:bg-blue-700 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={isLoading}
-              onClick={fetchTransactions}
+              onClick={applyFilters}
               type="button"
             >
               Apply
@@ -301,7 +339,7 @@ export default function Transactions({
             <button
               className="inline-flex h-10 items-center justify-center gap-2 rounded-md border border-slate-300 bg-white px-4 text-sm font-bold text-slate-700 shadow-sm transition hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60"
               disabled={isLoading}
-              onClick={fetchTransactions}
+              onClick={refreshTransactions}
               type="button"
             >
               <RefreshCw size={16} />
@@ -389,6 +427,19 @@ export default function Transactions({
               )}
             </tbody>
           </table>
+        </div>
+        <div className="flex flex-col gap-3 border-t border-slate-200 px-4 py-3 sm:flex-row sm:items-center sm:justify-between">
+          <p className="text-sm font-semibold text-slate-600">
+            Showing {visibleStart}-{visibleEnd} of {totalRecords}
+          </p>
+          {totalPages > 1 ? (
+            <NumberedPagination
+              currentPage={currentPage}
+              loading={isLoading}
+              onPageChange={setCurrentPage}
+              totalPages={totalPages}
+            />
+          ) : null}
         </div>
       </div>
     </section>

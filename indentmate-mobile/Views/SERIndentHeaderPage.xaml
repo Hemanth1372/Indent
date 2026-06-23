@@ -7,7 +7,8 @@
     xmlns:glyphs="clr-namespace:IndentMate.Mobile.Resources"
     xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
     BackgroundColor="#F4F7FB"
-    Shell.NavBarIsVisible="False">
+    Shell.NavBarIsVisible="False"
+    x:DataType="vm:SERIndentHeaderViewModel">
 
     <ContentPage.BindingContext>
         <vm:SERIndentHeaderViewModel />

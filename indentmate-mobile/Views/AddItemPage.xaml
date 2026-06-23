@@ -7,7 +7,8 @@
     xmlns:glyphs="clr-namespace:IndentMate.Mobile.Resources"
     xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
     BackgroundColor="#F4F7FB"
-    Shell.NavBarIsVisible="False">
+    Shell.NavBarIsVisible="False"
+    x:DataType="vm:AddItemViewModel">
 
     <ContentPage.BindingContext>
         <vm:AddItemViewModel />
@@ -280,21 +281,6 @@
                                     </Grid>
                                 </Grid>
                             </Border>
-                        </VerticalStackLayout>
-
-                        <!-- To Business Partner -->
-                        <VerticalStackLayout Spacing="7">
-                            <Label
-                                FontAttributes="Bold"
-                                FontSize="13"
-                                Text="To (Business Partner)"
-                                TextColor="#475467" />
-                            <controls:DropdownField
-                                DisplayMemberPath="DisplayName"
-                                HorizontalOptions="Fill"
-                                ItemsSource="{Binding BusinessPartners}"
-                                Placeholder="Select Contractor / BP"
-                                SelectedItem="{Binding SelectedBusinessPartner}" />
                         </VerticalStackLayout>
 
                         <!-- Remarks -->

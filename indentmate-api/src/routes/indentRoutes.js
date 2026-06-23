@@ -19,6 +19,7 @@ import {
   listIndents,
   listMyIndents,
   listProjectReviewIndents,
+  listProjectReviewProjects,
   updateIndentStatus,
 } from '../controllers/indentController.js'
 import { verifySuperAdmin } from '../middleware/authAdmin.js'
@@ -76,6 +77,7 @@ indentRoutes.post('/attachments', verifyToken, attachmentUpload.single('file'), 
 })
 indentRoutes.get('/mine', verifyToken, listMyIndents)
 indentRoutes.get('/mine/:id', verifyToken, getMyIndent)
+indentRoutes.get('/review/projects', verifyToken, listProjectReviewProjects)
 indentRoutes.get('/review', verifyToken, listProjectReviewIndents)
 indentRoutes.get('/review/:id', verifyToken, getProjectReviewIndent)
 indentRoutes.get('/', verifySuperAdmin, listIndents)

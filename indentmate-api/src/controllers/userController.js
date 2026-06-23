@@ -381,6 +381,19 @@ function normalizeFieldRole(role) {
   return null
 }
 
+function normalizeProjectInchargeRole(role) {
+  const normalizedRole = String(role ?? '').trim().toUpperCase()
+  if (
+    normalizedRole === 'PRI' ||
+    normalizedRole === 'PROJECT INCHARGE' ||
+    normalizedRole === 'PROJECT INCHARGE (PRI)' ||
+    normalizedRole.includes('(PRI)') ||
+    normalizedRole.includes('PROJECT INCHARGE') ||
+    normalizedRole.includes('PROJECT IN-CHARGE')
+  ) return 'Project Incharge'
+  return null
+}
+
 export async function syncUserPin(req, res, next) {
   try {
     const { login_name, current_pin } = req.validated.body
@@ -417,15 +430,18 @@ export async function syncUserPin(req, res, next) {
       [normalizedLoginName],
     )
 
-    const currentPrimaryRole = normalizeFieldRole(user.primary_role)
-    const activeFieldAssignments = roleResult.rows.filter((row) =>
-      computeStatus(row) === 'Active' && normalizeFieldRole(row.responsibility)
+    const currentPrimaryRole = normalizeFieldRole(user.primary_role) ?? normalizeProjectInchargeRole(user.primary_role)
+    const activeSupportedAssignments = roleResult.rows.filter((row) =>
+      computeStatus(row) === 'Active' && (normalizeProjectInchargeRole(row.responsibility) || normalizeFieldRole(row.responsibility))
     )
-    const fieldAssignment = currentPrimaryRole
-      ? activeFieldAssignments.find((row) => normalizeFieldRole(row.responsibility) === currentPrimaryRole)
-        ?? activeFieldAssignments[0]
-      : activeFieldAssignments[0]
-    const normalizedRole = normalizeFieldRole(fieldAssignment?.responsibility)
+    const preferredAssignment = activeSupportedAssignments.find((row) => normalizeProjectInchargeRole(row.responsibility))
+      ?? (currentPrimaryRole
+        ? activeSupportedAssignments.find((row) =>
+            (normalizeFieldRole(row.responsibility) ?? normalizeProjectInchargeRole(row.responsibility)) === currentPrimaryRole)
+        : null)
+      ?? activeSupportedAssignments[0]
+    const normalizedRole = normalizeProjectInchargeRole(preferredAssignment?.responsibility)
+      ?? normalizeFieldRole(preferredAssignment?.responsibility)
 
     if (normalizedRole && normalizedRole !== currentPrimaryRole) {
       await query(

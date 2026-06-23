@@ -12,6 +12,9 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
     private readonly ApiService _apiService;
     private List<LocalIndent> _allIndents = new();
     private List<LocalIndent> _visibleIndents = new();
+    private List<LocalProject> _availableProjects = new();
+    private DateTime _lastLoadedAtUtc = DateTime.MinValue;
+    private string _lastLoadedEngineerId = string.Empty;
 
     [ObservableProperty] private string _dashboardTitle = "Indent Home";
     [ObservableProperty] private string _userInfo = string.Empty;
@@ -49,6 +52,7 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
     [ObservableProperty] private bool _showNotifications;
     [ObservableProperty] private bool _showAccountMenu;
     [ObservableProperty] private int _unreadNotificationCount;
+    [ObservableProperty] private double _projectFilterWidth = 150;
     [ObservableProperty] private ProjectFilterOption? _selectedProjectFilter;
 
     // ── Pending for Approval (amber) ─────────────────────────────────────────
@@ -125,6 +129,16 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
     [RelayCommand]
     private async Task RefreshAsync()
     {
+        await LoadDashboardAsync(force: true);
+    }
+
+    public async Task LoadIfStaleAsync()
+    {
+        await LoadDashboardAsync(force: false);
+    }
+
+    private async Task LoadDashboardAsync(bool force)
+    {
         await RunBusyAsync(async () =>
         {
             var engineerId = await SecureStorage.Default.GetAsync("engineer_id") ?? string.Empty;
@@ -148,6 +162,7 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
                 UnreadNotificationCount = 0;
                 _allIndents = new List<LocalIndent>();
                 _visibleIndents = new List<LocalIndent>();
+                _availableProjects = new List<LocalProject>();
                 ProjectFilters.Clear();
                 RecentIndents.Clear();
                 Notifications.Clear();
@@ -157,8 +172,17 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
                 return;
             }
 
+            if (!force &&
+                _allIndents.Count != 0 &&
+                string.Equals(_lastLoadedEngineerId, engineerId, StringComparison.OrdinalIgnoreCase) &&
+                DateTime.UtcNow - _lastLoadedAtUtc < TimeSpan.FromSeconds(20))
+            {
+                return;
+            }
+
             await ReconcileSyncedIndentsWithServerAsync();
             await LoadNotificationsAsync();
+            _availableProjects = await LoadProjectFilterProjectsAsync(engineerId);
             _allIndents = (await _databaseService.GetIndentsForEngineerAsync(engineerId))
                 .Where(indent => indent.Status != "Incomplete")
                 .ToList();
@@ -166,6 +190,8 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
             BuildProjectFilters();
             ApplyProjectFilter();
             ApplyFilter();
+            _lastLoadedEngineerId = engineerId;
+            _lastLoadedAtUtc = DateTime.UtcNow;
         });
     }
 
@@ -339,9 +365,22 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
 
     private void BuildProjectFilters()
     {
+        var hadSelectedProject = SelectedProjectFilter is not null;
         var selectedProjectId = SelectedProjectFilter?.ProjectId ?? string.Empty;
+        var seenProjectIds = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         ProjectFilters.Clear();
         ProjectFilters.Add(new ProjectFilterOption("All Projects", string.Empty));
+
+        foreach (var project in _availableProjects
+            .Where(project => !string.IsNullOrWhiteSpace(project.ProjectId))
+            .OrderBy(project => project.DisplayName))
+        {
+            if (seenProjectIds.Add(project.ProjectId))
+            {
+                ProjectFilters.Add(new ProjectFilterOption(project.DisplayName, project.ProjectId));
+            }
+        }
 
         foreach (var project in _allIndents
             .Where(indent => !string.IsNullOrWhiteSpace(indent.ProjectId))
@@ -349,12 +388,53 @@ public partial class IndentHomeViewModel : BaseViewModel, IQueryAttributable
             .Select(group => new ProjectFilterOption(BuildProjectLabel(group.First()), group.Key))
             .OrderBy(project => project.Label))
         {
-            ProjectFilters.Add(project);
+            if (seenProjectIds.Add(project.ProjectId))
+            {
+                ProjectFilters.Add(project);
+            }
         }
 
-        SelectedProjectFilter = ProjectFilters.FirstOrDefault(project =>
-            string.Equals(project.ProjectId, selectedProjectId, StringComparison.OrdinalIgnoreCase))
-            ?? ProjectFilters.FirstOrDefault();
+        ProjectFilterWidth = CalculateProjectFilterWidth(
+            ProjectFilters.Select(project => project.Label).Append("Select Project"));
+
+        SelectedProjectFilter = hadSelectedProject
+            ? ProjectFilters.FirstOrDefault(project =>
+                string.Equals(project.ProjectId, selectedProjectId, StringComparison.OrdinalIgnoreCase))
+            : null;
+    }
+
+    private async Task<List<LocalProject>> LoadProjectFilterProjectsAsync(string engineerId)
+    {
+        var projects = await _databaseService.GetProjectsForEngineerAsync(engineerId);
+
+        if (projects.Count == 0)
+        {
+            try
+            {
+                projects = await _apiService.GetCurrentProjectsAsync();
+            }
+            catch
+            {
+                projects = new List<LocalProject>();
+            }
+        }
+
+        return projects
+            .Where(project => !string.IsNullOrWhiteSpace(project.ProjectId))
+            .GroupBy(project => project.ProjectId, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(project => project.ProjectId)
+            .ToList();
+    }
+
+    private static double CalculateProjectFilterWidth(IEnumerable<string> labels)
+    {
+        var longestLength = labels
+            .Select(label => (label ?? string.Empty).Trim().Length)
+            .DefaultIfEmpty(0)
+            .Max();
+
+        return Math.Clamp(58 + (longestLength * 7.4), 150, 320);
     }
 
     private void ApplyProjectFilter()

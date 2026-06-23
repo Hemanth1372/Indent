@@ -17,7 +17,6 @@ public partial class HomeViewModel : BaseViewModel
 
     public HomeViewModel()
     {
-        LoadDashboardAsync().ConfigureAwait(false);
     }
 
     [RelayCommand]
@@ -59,6 +58,8 @@ public partial class HomeViewModel : BaseViewModel
             _ when normalizedRole.Contains("(SER)") || normalizedRole.Contains("(SRE)") => "SER",
             _ when normalizedRole.Contains("SERVICE ENGINEER") || normalizedRole.Contains("SITE RECEIVING") => "SER",
             _ when normalizedRole.Contains("(SIE)") || normalizedRole.Contains("SITE ENGINEER") => "SIE",
+            "PRI" => "PRI",
+            _ when normalizedRole.Contains("(PRI)") || normalizedRole.Contains("PROJECT INCHARGE") => "PRI",
             _ => normalizedRole
         };
     }
@@ -69,6 +70,7 @@ public partial class HomeViewModel : BaseViewModel
         {
             "SIE" => "//sie-indent-header",
             "SER" => "//ser-indent-header",
+            "PRI" => "//project-incharge-dashboard",
             _ => null
         };
     }

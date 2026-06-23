@@ -13,6 +13,8 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
     private int _locationLoadVersion;
     private int _contractorLoadVersion;
     private int _contractorSelectionVersion;
+    private DateTime _lastProjectsLoadedAtUtc = DateTime.MinValue;
+    private string _lastProjectsLoadedEngineerId = string.Empty;
 
     public ObservableCollection<LocalProject> Projects { get; } = new();
     public ObservableCollection<string> IndentTypes { get; } = new() { "Issue", "Issue Return" };
@@ -52,13 +54,17 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
     {
         _databaseService = databaseService;
         _apiService = apiService;
-        _ = LoadProjectsAsync();
     }
 
     [RelayCommand]
     private async Task RefreshAsync()
     {
-        await LoadProjectsAsync();
+        await LoadProjectsAsync(force: true);
+    }
+
+    public async Task LoadIfStaleAsync()
+    {
+        await LoadProjectsAsync(force: false);
     }
 
     [RelayCommand]
@@ -146,7 +152,7 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
         return $"{parts[0][0]}{parts[^1][0]}".ToUpperInvariant();
     }
 
-    private async Task LoadProjectsAsync()
+    private async Task LoadProjectsAsync(bool force)
     {
         await RunBusyAsync(async () =>
         {
@@ -161,6 +167,14 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
             if (string.IsNullOrWhiteSpace(engineerId))
                 return;
 
+            if (!force &&
+                Projects.Count != 0 &&
+                string.Equals(_lastProjectsLoadedEngineerId, engineerId, StringComparison.OrdinalIgnoreCase) &&
+                DateTime.UtcNow - _lastProjectsLoadedAtUtc < TimeSpan.FromMinutes(2))
+            {
+                return;
+            }
+
             var localProjects = await GetLocalProjectsAsync(engineerId);
             var projects = await GetMergedCurrentProjectsAsync(engineerId, localProjects, "SIE");
 
@@ -174,6 +188,9 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
             {
                 SelectedProject = Projects.FirstOrDefault();
             }
+
+            _lastProjectsLoadedEngineerId = engineerId;
+            _lastProjectsLoadedAtUtc = DateTime.UtcNow;
         });
     }
 
@@ -243,11 +260,6 @@ public partial class SIEIndentHeaderViewModel : BaseViewModel
                 })
                 .ToList();
 
-            var apiProjectIds = mergedProjects
-                .Select(project => project.ProjectId)
-                .ToHashSet(StringComparer.OrdinalIgnoreCase);
-
-            mergedProjects.AddRange(localProjects.Where(project => !apiProjectIds.Contains(project.ProjectId)));
             return mergedProjects;
         }
         catch

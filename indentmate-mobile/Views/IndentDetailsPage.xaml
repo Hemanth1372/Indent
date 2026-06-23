@@ -4,10 +4,12 @@
     xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
     xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
     xmlns:controls="clr-namespace:IndentMate.Mobile.Controls"
+    xmlns:data="clr-namespace:IndentMate.Mobile.Data"
     xmlns:glyphs="clr-namespace:IndentMate.Mobile.Resources"
     xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
     BackgroundColor="#F4F7FB"
-    Shell.NavBarIsVisible="False">
+    Shell.NavBarIsVisible="False"
+    x:DataType="vm:IndentDetailsViewModel">
 
     <ContentPage.BindingContext>
         <vm:IndentDetailsViewModel />
@@ -42,7 +44,25 @@
                 Text="Indent Details"
                 TextColor="White"
                 VerticalOptions="Center" />
-            <BoxView Grid.Column="2" Color="Transparent" />
+            <Border
+                Grid.Column="2"
+                BackgroundColor="#33FFFFFF"
+                HeightRequest="40"
+                IsVisible="{Binding CanOpenPdf}"
+                StrokeShape="RoundRectangle 10"
+                StrokeThickness="0"
+                VerticalOptions="Center"
+                WidthRequest="40">
+                <Border.GestureRecognizers>
+                    <TapGestureRecognizer Command="{Binding OpenPdfCommand}" />
+                </Border.GestureRecognizers>
+                <controls:IconLabel
+                    Glyph="{x:Static glyphs:IconGlyphs.Print}"
+                    IconColor="White"
+                    IconSize="19"
+                    HorizontalOptions="Center"
+                    VerticalOptions="Center" />
+            </Border>
         </Grid>
 
         <!-- ── Scrollable content ──────────────────────────────────────────── -->
@@ -359,7 +379,7 @@
                 <!-- Item cards -->
                 <VerticalStackLayout BindableLayout.ItemsSource="{Binding Items}" Spacing="10">
                     <BindableLayout.ItemTemplate>
-                        <DataTemplate>
+                        <DataTemplate x:DataType="data:LocalIndentItem">
                             <Border
                                 BackgroundColor="White"
                                 Padding="0"
@@ -396,6 +416,7 @@
                                             </Border>
                                             <Button
                                                 Grid.Column="2"
+                                                x:DataType="{x:Null}"
                                                 Padding="10,0"
                                                 BackgroundColor="#F8FAFC"
                                                 BorderColor="#CBD5E1"
@@ -412,6 +433,7 @@
                                                 VerticalOptions="Center" />
                                             <Button
                                                 Grid.Column="3"
+                                                x:DataType="{x:Null}"
                                                 Padding="10,0"
                                                 BackgroundColor="#FFF5F5"
                                                 BorderColor="#FECACA"

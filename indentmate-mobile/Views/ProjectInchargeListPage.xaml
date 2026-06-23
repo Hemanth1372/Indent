@@ -1,0 +1,230 @@
+<?xml version="1.0" encoding="utf-8" ?>
+<ContentPage
+    x:Class="IndentMate.Mobile.Views.ProjectInchargeListPage"
+    xmlns="http://schemas.microsoft.com/dotnet/2021/maui"
+    xmlns:x="http://schemas.microsoft.com/winfx/2009/xaml"
+    xmlns:controls="clr-namespace:IndentMate.Mobile.Controls"
+    xmlns:glyphs="clr-namespace:IndentMate.Mobile.Resources"
+    xmlns:vm="clr-namespace:IndentMate.Mobile.ViewModels"
+    BackgroundColor="#F4F7FB"
+    Shell.NavBarIsVisible="False"
+    x:DataType="vm:ProjectInchargeListViewModel">
+
+    <ContentPage.BindingContext>
+        <vm:ProjectInchargeListViewModel />
+    </ContentPage.BindingContext>
+
+    <Grid>
+    <ScrollView>
+        <VerticalStackLayout
+            HorizontalOptions="Center"
+            MaximumWidthRequest="1440"
+            Padding="28,28,28,32"
+            Spacing="16">
+
+            <Button
+                BackgroundColor="#0E2A5C"
+                Command="{Binding BackCommand}"
+                CornerRadius="6"
+                FontAttributes="Bold"
+                HeightRequest="42"
+                HorizontalOptions="Start"
+                Padding="18,0"
+                Text="←  Back"
+                TextColor="White" />
+
+            <Grid ColumnDefinitions="300,*,190,190,90,90" ColumnSpacing="14" RowDefinitions="Auto,Auto" Padding="0,4,0,0">
+                <VerticalStackLayout Grid.RowSpan="2" Spacing="3" VerticalOptions="End">
+                    <Label CharacterSpacing="5" FontAttributes="Bold" FontSize="11" Text="PROJECT INDENTS" TextColor="#667085" />
+                    <Label FontAttributes="Bold" FontSize="26" Text="{Binding HeaderTitle}" TextColor="#111827" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Column="1" Spacing="5">
+                    <Label CharacterSpacing="2" FontAttributes="Bold" FontSize="11" Text="PROJECT" TextColor="#667085" />
+                    <controls:DropdownField
+                        DisplayMemberPath="Label"
+                        ItemsSource="{Binding Projects}"
+                        Placeholder="All Projects"
+                        SelectedItem="{Binding SelectedProject}" />
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Column="2" Spacing="5">
+                    <Label CharacterSpacing="2" FontAttributes="Bold" FontSize="11" Text="FROM" TextColor="#667085" />
+                    <Border BackgroundColor="White" HeightRequest="42" Padding="12,0" Stroke="#CBD5E1" StrokeShape="RoundRectangle 6">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding OpenCalendarCommand}" CommandParameter="from" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label FontAttributes="Bold" FontSize="14" Text="{Binding DateFromDisplay}" TextColor="{Binding DateFromTextColor}" VerticalOptions="Center" />
+                            <controls:IconLabel Grid.Column="1" Glyph="{x:Static glyphs:IconGlyphs.Calendar}" IconColor="#111827" IconSize="18" VerticalOptions="Center" />
+                        </Grid>
+                    </Border>
+                </VerticalStackLayout>
+
+                <VerticalStackLayout Grid.Column="3" Spacing="5">
+                    <Label CharacterSpacing="2" FontAttributes="Bold" FontSize="11" Text="TO" TextColor="#667085" />
+                    <Border BackgroundColor="White" HeightRequest="42" Padding="12,0" Stroke="#CBD5E1" StrokeShape="RoundRectangle 6">
+                        <Border.GestureRecognizers>
+                            <TapGestureRecognizer Command="{Binding OpenCalendarCommand}" CommandParameter="to" />
+                        </Border.GestureRecognizers>
+                        <Grid ColumnDefinitions="*,Auto">
+                            <Label FontAttributes="Bold" FontSize="14" Text="{Binding DateToDisplay}" TextColor="{Binding DateToTextColor}" VerticalOptions="Center" />
+                            <controls:IconLabel Grid.Column="1" Glyph="{x:Static glyphs:IconGlyphs.Calendar}" IconColor="#111827" IconSize="18" VerticalOptions="Center" />
+                        </Grid>
+                    </Border>
+                </VerticalStackLayout>
+
+                <Button
+                    Grid.Column="4"
+                    BackgroundColor="#2563EB"
+                    Command="{Binding ApplyFiltersCommand}"
+                    CornerRadius="6"
+                    FontAttributes="Bold"
+                    HeightRequest="42"
+                    Text="Apply"
+                    TextColor="White"
+                    VerticalOptions="End" />
+
+                <Button
+                    Grid.Column="5"
+                    BackgroundColor="White"
+                    BorderColor="#CBD5E1"
+                    BorderWidth="1"
+                    Command="{Binding ClearFiltersCommand}"
+                    CornerRadius="6"
+                    FontAttributes="Bold"
+                    HeightRequest="42"
+                    Text="Clear"
+                    TextColor="#667085"
+                    VerticalOptions="End" />
+            </Grid>
+
+            <BoxView BackgroundColor="#DDE5F0" HeightRequest="1" />
+
+            <Border BackgroundColor="White" Stroke="#DDE5F0" StrokeShape="RoundRectangle 8" StrokeThickness="1">
+                <VerticalStackLayout Spacing="0">
+                    <ScrollView Orientation="Horizontal">
+                        <VerticalStackLayout WidthRequest="1360" Spacing="0">
+                            <Grid BackgroundColor="#F8FAFC" ColumnDefinitions="70,180,100,130,330,280,90,130,50" Padding="16,12" ColumnSpacing="12">
+                                <Label CharacterSpacing="1.5" FontAttributes="Bold" FontSize="11" Text="OPEN" TextColor="#667085" />
+                                <Label Grid.Column="1" CharacterSpacing="1.5" FontAttributes="Bold" FontSize="11" Text="REQUEST ID" TextColor="#667085" />
+                                <Label Grid.Column="2" CharacterSpacing="1.5" FontAttributes="Bold" FontSize="11" Text="INDENT" TextColor="#667085" />
+                                <Label Grid.Column="3" CharacterSpacing="1.5" FontAttributes="Bold" FontSize="11" Text="DATE" TextColor="#667085" />
+                                <Label Grid.Column="4" CharacterSpacing="1.5" FontAttributes="Bold" FontSize="11" Text="PROJECT" TextColor="#667085" />
+                                <Label Grid.Column="5" CharacterSpacing="1.5" FontAttributes="Bold" FontSize="11" Text="WAREHOUSE" TextColor="#667085" />
+                                <Label Grid.Column="6" CharacterSpacing="1.5" FontAttributes="Bold" FontSize="11" Text="TYPE" TextColor="#667085" />
+                                <Label Grid.Column="7" CharacterSpacing="1.5" FontAttributes="Bold" FontSize="11" Text="FROM" TextColor="#667085" />
+                                <Label Grid.Column="8" CharacterSpacing="1.5" FontAttributes="Bold" FontSize="11" Text="TO" TextColor="#667085" />
+                            </Grid>
+
+                            <CollectionView EmptyView="No matching indents found." ItemsSource="{Binding Indents}">
+                                <CollectionView.ItemTemplate>
+                                    <DataTemplate x:DataType="{x:Null}">
+                                        <Grid ColumnDefinitions="70,180,100,130,330,280,90,130,50" Padding="16,14" ColumnSpacing="12" BackgroundColor="White">
+                                            <Border BackgroundColor="#EFF6FF" HeightRequest="42" Stroke="#BFDBFE" StrokeShape="Ellipse" WidthRequest="42">
+                                                <Border.GestureRecognizers>
+                                                    <TapGestureRecognizer Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.OpenIndentCommand}" CommandParameter="{Binding .}" />
+                                                </Border.GestureRecognizers>
+                                                <controls:IconLabel Glyph="{x:Static glyphs:IconGlyphs.NorthEast}" IconColor="#2563EB" IconSize="17" />
+                                            </Border>
+                                            <Label Grid.Column="1" FontAttributes="Bold" FontSize="13" LineBreakMode="WordWrap" Text="{Binding DisplayRequest}" TextColor="#047857" VerticalOptions="Center" />
+                                            <Label Grid.Column="2" FontAttributes="Bold" FontSize="13" LineBreakMode="WordWrap" Text="{Binding IndentNo}" TextColor="#111827" VerticalOptions="Center" />
+                                            <Label Grid.Column="3" FontSize="13" Text="{Binding CreatedAt, StringFormat='{0:dd/MM/yyyy}'}" TextColor="#334155" VerticalOptions="Center" />
+                                            <Label Grid.Column="4" FontSize="13" LineBreakMode="TailTruncation" Text="{Binding ProjectDisplay}" TextColor="#334155" VerticalOptions="Center" />
+                                            <Label Grid.Column="5" FontSize="13" LineBreakMode="TailTruncation" Text="{Binding WarehouseDisplay}" TextColor="#334155" VerticalOptions="Center" />
+                                            <Label Grid.Column="6" FontSize="13" Text="{Binding TypeDisplay}" TextColor="#334155" VerticalOptions="Center" />
+                                            <Label Grid.Column="7" FontSize="13" Text="{Binding SourceLocation}" TextColor="#334155" VerticalOptions="Center" />
+                                            <controls:IconLabel Grid.Column="8" Glyph="{x:Static glyphs:IconGlyphs.NorthEast}" IconColor="#94A3B8" IconSize="16" />
+                                        </Grid>
+                                    </DataTemplate>
+                                </CollectionView.ItemTemplate>
+                            </CollectionView>
+                        </VerticalStackLayout>
+                    </ScrollView>
+
+                    <BoxView BackgroundColor="#E5EAF2" HeightRequest="1" />
+                    <Grid ColumnDefinitions="*,Auto,Auto" Padding="20,12" ColumnSpacing="12">
+                        <Label FontSize="14" Text="{Binding ShowingText}" TextColor="#334155" VerticalOptions="Center" />
+                        <Button Grid.Column="1" BackgroundColor="White" BorderColor="#CBD5E1" BorderWidth="1" Command="{Binding PreviousPageCommand}" IsEnabled="{Binding CanGoPrevious}" Text="Previous" TextColor="#334155" />
+                        <Button Grid.Column="2" BackgroundColor="White" BorderColor="#CBD5E1" BorderWidth="1" Command="{Binding NextPageCommand}" IsEnabled="{Binding CanGoNext}" Text="Next" TextColor="#334155" />
+                    </Grid>
+                </VerticalStackLayout>
+            </Border>
+
+            <Border BackgroundColor="#FEF2F2" Padding="12,10" Stroke="#FECACA" StrokeShape="RoundRectangle 8" IsVisible="{Binding HasError}">
+                <Label FontAttributes="Bold" Text="{Binding StatusMessage}" TextColor="#DC2626" />
+            </Border>
+        </VerticalStackLayout>
+    </ScrollView>
+
+        <Grid
+            BackgroundColor="#33000000"
+            IsVisible="{Binding ShowCalendar}"
+            ZIndex="100">
+            <Grid.GestureRecognizers>
+                <TapGestureRecognizer Command="{Binding CloseCalendarCommand}" />
+            </Grid.GestureRecognizers>
+        </Grid>
+
+        <Border
+            BackgroundColor="White"
+            HorizontalOptions="Center"
+            IsVisible="{Binding ShowCalendar}"
+            MaximumWidthRequest="360"
+            Padding="0"
+            Stroke="#D1D5DB"
+            StrokeShape="RoundRectangle 8"
+            StrokeThickness="1"
+            VerticalOptions="Center"
+            WidthRequest="340"
+            ZIndex="101">
+            <VerticalStackLayout Spacing="0">
+                <Grid BackgroundColor="White" ColumnDefinitions="*,44,44" Padding="14,12">
+                    <VerticalStackLayout Spacing="1">
+                        <Label FontAttributes="Bold" FontSize="13" Text="{Binding CalendarTitle}" TextColor="#667085" />
+                        <Label FontAttributes="Bold" FontSize="18" Text="{Binding CalendarMonthTitle}" TextColor="#111827" />
+                    </VerticalStackLayout>
+                    <Button Grid.Column="1" BackgroundColor="White" Command="{Binding PreviousCalendarMonthCommand}" FontAttributes="Bold" FontSize="22" Padding="0" Text="‹" TextColor="#111827" />
+                    <Button Grid.Column="2" BackgroundColor="White" Command="{Binding NextCalendarMonthCommand}" FontAttributes="Bold" FontSize="22" Padding="0" Text="›" TextColor="#111827" />
+                </Grid>
+
+                <BoxView BackgroundColor="#E5E7EB" HeightRequest="1" />
+
+                <Grid ColumnDefinitions="*,*,*,*,*,*,*" Padding="14,12,14,6">
+                    <Label FontAttributes="Bold" FontSize="13" HorizontalTextAlignment="Center" Text="Su" TextColor="#111827" />
+                    <Label Grid.Column="1" FontAttributes="Bold" FontSize="13" HorizontalTextAlignment="Center" Text="Mo" TextColor="#111827" />
+                    <Label Grid.Column="2" FontAttributes="Bold" FontSize="13" HorizontalTextAlignment="Center" Text="Tu" TextColor="#111827" />
+                    <Label Grid.Column="3" FontAttributes="Bold" FontSize="13" HorizontalTextAlignment="Center" Text="We" TextColor="#111827" />
+                    <Label Grid.Column="4" FontAttributes="Bold" FontSize="13" HorizontalTextAlignment="Center" Text="Th" TextColor="#111827" />
+                    <Label Grid.Column="5" FontAttributes="Bold" FontSize="13" HorizontalTextAlignment="Center" Text="Fr" TextColor="#111827" />
+                    <Label Grid.Column="6" FontAttributes="Bold" FontSize="13" HorizontalTextAlignment="Center" Text="Sa" TextColor="#111827" />
+                </Grid>
+
+                <CollectionView ItemsSource="{Binding CalendarDays}" SelectionMode="None">
+                    <CollectionView.ItemsLayout>
+                        <GridItemsLayout Orientation="Vertical" Span="7" />
+                    </CollectionView.ItemsLayout>
+                    <CollectionView.ItemTemplate>
+                        <DataTemplate x:DataType="vm:ProjectReviewCalendarDay">
+                            <Border
+                                BackgroundColor="{Binding BackgroundColor}"
+                                HeightRequest="38"
+                                Margin="5,3"
+                                Stroke="{Binding BorderColor}"
+                                StrokeShape="Ellipse"
+                                StrokeThickness="1"
+                                WidthRequest="38">
+                                <Border.GestureRecognizers>
+                                    <TapGestureRecognizer
+                                        Command="{Binding Source={RelativeSource AncestorType={x:Type ContentPage}}, Path=BindingContext.SelectCalendarDayCommand}"
+                                        CommandParameter="{Binding .}" />
+                                </Border.GestureRecognizers>
+                                <Label FontSize="15" HorizontalTextAlignment="Center" Text="{Binding DayText}" TextColor="{Binding TextColor}" VerticalTextAlignment="Center" />
+                            </Border>
+                        </DataTemplate>
+                    </CollectionView.ItemTemplate>
+                </CollectionView>
+            </VerticalStackLayout>
+        </Border>
+    </Grid>
+</ContentPage>

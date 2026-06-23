@@ -16,7 +16,7 @@ public partial class SIEIndentHeaderPage : ContentPage
 
         if (BindingContext is SIEIndentHeaderViewModel viewModel)
         {
-            viewModel.RefreshCommand.Execute(null);
+            _ = viewModel.LoadIfStaleAsync();
         }
     }
 

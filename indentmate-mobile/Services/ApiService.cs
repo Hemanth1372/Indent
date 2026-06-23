@@ -1,5 +1,6 @@
 using Newtonsoft.Json;
 using IndentMate.Mobile.Data;
+using IndentMate.Mobile.ViewModels;
 using System.Net;
 using System.Net.Http.Headers;
 using System.Text;
@@ -15,7 +16,7 @@ public class ApiService
 
     public ApiService()
     {
-        _httpClient = new HttpClient { BaseAddress = new Uri(ApiEndpoints.BaseUrl) };
+        _httpClient = new HttpClient { BaseAddress = new Uri(ApiEndpoints.CurrentBaseUrl) };
         _httpClient.DefaultRequestHeaders.Accept.Add(
             new MediaTypeWithQualityHeaderValue("application/json"));
     }
@@ -219,7 +220,7 @@ public class ApiService
 
     public async Task<List<RemoteIndentReference>> GetMyIndentReferencesAsync(CancellationToken ct = default)
     {
-        var response = await GetAsync<MyIndentsResponse>("/api/indents/mine", ct);
+        var response = await GetAsync<MyIndentsResponse>("/api/indents/mine?references=1", ct);
 
         return response?.Data
             .Select(indent => new RemoteIndentReference(
@@ -248,6 +249,96 @@ public class ApiService
         await PatchAsync("/api/notifications/read-all", ct);
     }
 
+    public async Task<ProjectReviewListResult> GetProjectReviewIndentsAsync(
+        string? projectCode = null,
+        string? status = null,
+        string? dateFrom = null,
+        string? dateTo = null,
+        int? page = null,
+        int? limit = null,
+        CancellationToken ct = default)
+    {
+        var queryParts = new List<string>();
+
+        AddQuery(queryParts, "projectCode", projectCode);
+        AddQuery(queryParts, "status", status);
+        AddQuery(queryParts, "date_from", dateFrom);
+        AddQuery(queryParts, "date_to", dateTo);
+
+        if (page is > 0)
+            queryParts.Add($"page={page.Value}");
+        if (limit is > 0)
+            queryParts.Add($"limit={limit.Value}");
+
+        var endpoint = "/api/indents/review";
+        if (queryParts.Count != 0)
+            endpoint += $"?{string.Join("&", queryParts)}";
+
+        var response = await GetAsync<ProjectReviewListResponse>(endpoint, ct);
+        return new ProjectReviewListResult(
+            response?.Data ?? new List<ProjectReviewIndentSummary>(),
+            response?.Total ?? response?.Data?.Count ?? 0,
+            response?.Page ?? page ?? 1,
+            response?.Limit ?? limit ?? response?.Data?.Count ?? 0,
+            response?.TotalPages ?? 1,
+            response?.HasMore ?? false);
+    }
+
+    public async Task<List<ProjectReviewProjectOption>> GetProjectReviewProjectsAsync(CancellationToken ct = default)
+    {
+        var response = await GetAsync<ProjectReviewProjectsResponse>("/api/indents/review/projects", ct);
+        return response?.Data
+            .Select(project =>
+            {
+                var projectCode = (project.ProjectId ?? string.Empty).Trim();
+                var projectName = (project.ProjectName ?? string.Empty).Trim();
+                return new ProjectReviewProjectOption
+                {
+                    ProjectCode = projectCode,
+                    Label = string.IsNullOrWhiteSpace(projectName) || string.Equals(projectName, projectCode, StringComparison.OrdinalIgnoreCase)
+                        ? projectCode
+                        : $"{projectCode} - {projectName}"
+                };
+            })
+            .Where(project => !string.IsNullOrWhiteSpace(project.ProjectCode))
+            .GroupBy(project => project.ProjectCode, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(project => project.Label)
+            .ToList() ?? new List<ProjectReviewProjectOption>();
+    }
+
+    public async Task<ProjectReviewIndentDetail?> GetProjectReviewIndentAsync(string id, CancellationToken ct = default)
+    {
+        if (string.IsNullOrWhiteSpace(id))
+            return null;
+
+        var response = await GetAsync<ProjectReviewDetailResponse>(
+            $"/api/indents/review/{Uri.EscapeDataString(id)}",
+            ct);
+
+        return response?.Data;
+    }
+
+    public async Task<ProjectReviewIndentDetail?> UpdateProjectReviewStatusAsync(
+        string id,
+        string status,
+        IEnumerable<ProjectReviewApprovalLine>? items = null,
+        CancellationToken ct = default)
+    {
+        var payload = new ProjectReviewStatusUpdateRequest
+        {
+            Status = status,
+            Items = items?.ToList()
+        };
+
+        var response = await PatchAsync<ProjectReviewStatusUpdateRequest, ProjectReviewDetailResponse>(
+            $"/api/indents/{Uri.EscapeDataString(id)}/status",
+            payload,
+            ct);
+
+        return response?.Data;
+    }
+
     /// <summary>Generic PUT request.</summary>
     public async Task PutAsync<TRequest>(
         string endpoint, TRequest payload, CancellationToken ct = default)
@@ -268,6 +359,29 @@ public class ApiService
         };
         var response = await _httpClient.SendAsync(request, ct);
         response.EnsureSuccessStatusCode();
+    }
+
+    public async Task<TResponse?> PatchAsync<TRequest, TResponse>(
+        string endpoint,
+        TRequest payload,
+        CancellationToken ct = default)
+    {
+        await ApplyStoredAuthTokenAsync();
+        var json = JsonConvert.SerializeObject(payload);
+        using var request = new HttpRequestMessage(HttpMethod.Patch, endpoint)
+        {
+            Content = new StringContent(json, Encoding.UTF8, "application/json")
+        };
+        var response = await _httpClient.SendAsync(request, ct);
+        response.EnsureSuccessStatusCode();
+        var responseJson = await response.Content.ReadAsStringAsync(ct);
+        return JsonConvert.DeserializeObject<TResponse>(responseJson);
+    }
+
+    private static void AddQuery(List<string> queryParts, string key, string? value)
+    {
+        if (!string.IsNullOrWhiteSpace(value))
+            queryParts.Add($"{Uri.EscapeDataString(key)}={Uri.EscapeDataString(value.Trim())}");
     }
 
     private async Task ApplyStoredAuthTokenAsync()
@@ -308,6 +422,57 @@ public class ApiService
     {
         [JsonProperty("data")]
         public UploadedAttachment? Data { get; set; }
+    }
+
+    private sealed class ProjectReviewListResponse
+    {
+        [JsonProperty("data")]
+        public List<ProjectReviewIndentSummary> Data { get; set; } = new();
+
+        [JsonProperty("total")]
+        public int Total { get; set; }
+
+        [JsonProperty("page")]
+        public int Page { get; set; }
+
+        [JsonProperty("limit")]
+        public int Limit { get; set; }
+
+        [JsonProperty("totalPages")]
+        public int TotalPages { get; set; }
+
+        [JsonProperty("hasMore")]
+        public bool HasMore { get; set; }
+    }
+
+    private sealed class ProjectReviewDetailResponse
+    {
+        [JsonProperty("data")]
+        public ProjectReviewIndentDetail? Data { get; set; }
+    }
+
+    private sealed class ProjectReviewProjectsResponse
+    {
+        [JsonProperty("data")]
+        public List<ProjectReviewProjectRow> Data { get; set; } = new();
+    }
+
+    private sealed class ProjectReviewProjectRow
+    {
+        [JsonProperty("project_id")]
+        public string? ProjectId { get; set; }
+
+        [JsonProperty("project_name")]
+        public string? ProjectName { get; set; }
+    }
+
+    private sealed class ProjectReviewStatusUpdateRequest
+    {
+        [JsonProperty("status")]
+        public string Status { get; set; } = string.Empty;
+
+        [JsonProperty("items", NullValueHandling = NullValueHandling.Ignore)]
+        public List<ProjectReviewApprovalLine>? Items { get; set; }
     }
 
     private sealed class MyIndentRow

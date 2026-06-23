@@ -45,52 +45,56 @@ export async function listOrderOptions(req, res, next) {
       )`)
     }
 
-    const serviceResult = await query(
+    params.push(limit + 1)
+    const limitParam = `$${params.length}`
+    params.push(offset)
+    const offsetParam = `$${params.length}`
+
+    const result = await query(
       `
-        SELECT
-          'Service' AS order_type,
-          service_order_no AS order_no,
-          status,
-          project_site AS project_code,
-          COALESCE(NULLIF(project_description, ''), project_site) AS project_description,
-          item_code,
-          COALESCE(NULLIF(item_description, ''), NULLIF(description, ''), item_code) AS item_description,
-          serial_number,
-          COALESCE(NULLIF(description, ''), NULLIF(item_description, ''), item_code) AS order_description
-        FROM service_orders
-        WHERE ${serviceFilters.join('\n          AND ')}
-        ORDER BY service_order_no ASC
+        WITH all_orders AS (
+          SELECT
+            'Service' AS order_type,
+            service_order_no AS order_no,
+            status,
+            project_site AS project_code,
+            COALESCE(NULLIF(project_description, ''), project_site) AS project_description,
+            item_code,
+            COALESCE(NULLIF(item_description, ''), NULLIF(description, ''), item_code) AS item_description,
+            serial_number,
+            COALESCE(NULLIF(description, ''), NULLIF(item_description, ''), item_code) AS order_description
+          FROM service_orders
+          WHERE ${serviceFilters.join('\n            AND ')}
+
+          UNION ALL
+
+          SELECT
+            'Rental' AS order_type,
+            rental_order AS order_no,
+            status,
+            project_code,
+            COALESCE(NULLIF(project_description, ''), project_code) AS project_description,
+            item_code,
+            COALESCE(NULLIF(item_description, ''), item_code) AS item_description,
+            '' AS serial_number,
+            COALESCE(NULLIF(rental_description, ''), NULLIF(item_description, ''), rental_order) AS order_description
+          FROM rental_order_master
+          WHERE ${rentalFilters.join('\n            AND ')}
+        )
+        SELECT *
+        FROM all_orders
+        ORDER BY order_no ASC, order_type ASC
+        LIMIT ${limitParam}
+        OFFSET ${offsetParam}
       `,
       params,
     )
 
-    const rentalResult = await query(
-      `
-        SELECT
-          'Rental' AS order_type,
-          rental_order AS order_no,
-          status,
-          project_code,
-          COALESCE(NULLIF(project_description, ''), project_code) AS project_description,
-          item_code,
-          COALESCE(NULLIF(item_description, ''), item_code) AS item_description,
-          '' AS serial_number,
-          COALESCE(NULLIF(rental_description, ''), NULLIF(item_description, ''), rental_order) AS order_description
-        FROM rental_order_master
-        WHERE ${rentalFilters.join('\n          AND ')}
-        ORDER BY rental_order ASC
-      `,
-      params,
-    )
-
-    const rows = [...serviceResult.rows, ...rentalResult.rows].sort((left, right) =>
-      String(left.order_no).localeCompare(String(right.order_no)),
-    )
-    const data = rows.slice(offset, offset + limit)
+    const data = result.rows.slice(0, limit)
 
     return res.json({
       data,
-      hasMore: offset + data.length < rows.length,
+      hasMore: result.rows.length > limit,
       nextOffset: offset + data.length,
     })
   } catch (error) {

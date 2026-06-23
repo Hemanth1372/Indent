@@ -118,16 +118,10 @@ const INDENT_SELECT_SQL = `
 export async function listIndents(req, res, next) {
   try {
     const { whereSql, params } = buildIndentListFilter(req.query)
-    const result = await query(
-      `
-        ${INDENT_SELECT_SQL}
-        ${whereSql}
-        ORDER BY h.created_at DESC, h.indent_no DESC
-      `,
-      params,
-    )
+    const pagination = buildListPagination(req.query)
+    const result = await fetchIndentListPage(whereSql, params, pagination)
 
-    return res.json({ data: result.rows })
+    return res.json(result)
   } catch (error) {
     return next(error)
   }
@@ -136,7 +130,7 @@ export async function listIndents(req, res, next) {
 export async function listProjectReviewIndents(req, res, next) {
   try {
     const requestedProjectCode = String(req.query?.projectCode ?? '').trim()
-    const allowedProjectCodes = getProjectInchargeProjectCodes(req.user)
+    const allowedProjectCodes = (await getProjectInchargeProjects(req.user)).map((project) => project.project_id)
 
     if (allowedProjectCodes.length === 0) {
       return res.status(403).json({ message: 'Project Incharge access is not available' })
@@ -151,16 +145,24 @@ export async function listProjectReviewIndents(req, res, next) {
       projectCode: requestedProjectCode,
       projectCodes: requestedProjectCode ? [] : allowedProjectCodes,
     })
-    const result = await query(
-      `
-        ${INDENT_SELECT_SQL}
-        ${whereSql}
-        ORDER BY h.created_at DESC, h.indent_no DESC
-      `,
-      params,
-    )
+    const pagination = buildListPagination(req.query)
+    const result = await fetchIndentListPage(whereSql, params, pagination)
 
-    return res.json({ data: result.rows })
+    return res.json(result)
+  } catch (error) {
+    return next(error)
+  }
+}
+
+export async function listProjectReviewProjects(req, res, next) {
+  try {
+    const projects = await getProjectInchargeProjects(req.user)
+
+    if (projects.length === 0) {
+      return res.status(403).json({ message: 'Project Incharge access is not available' })
+    }
+
+    return res.json({ data: projects })
   } catch (error) {
     return next(error)
   }
@@ -174,22 +176,43 @@ export async function listMyIndents(req, res, next) {
       return res.status(401).json({ message: 'Authenticated user is required' })
     }
 
+    if (isTruthyQueryValue(req.query?.references)) {
+      const result = await query(
+        `
+          SELECT
+            h.app_request_id,
+            h.indent_no,
+            h.status
+          FROM indent_headers h
+          WHERE h.created_by = $1
+          ORDER BY h.created_at DESC, h.indent_no DESC
+        `,
+        [createdBy],
+      )
+
+      return res.json({ data: result.rows })
+    }
+
     const { whereSql, params } = buildIndentListFilter(req.query, [createdBy])
     const filterSql = whereSql ? whereSql.replace(/^WHERE\s+/i, 'AND ') : ''
-    const result = await query(
+    const pagination = buildListPagination(req.query)
+    const result = await fetchIndentListPage(
       `
-        ${INDENT_SELECT_SQL}
         WHERE h.created_by = $1
         ${filterSql}
-        ORDER BY h.created_at DESC, h.indent_no DESC
       `,
       params,
+      pagination,
     )
 
-    return res.json({ data: result.rows })
+    return res.json(result)
   } catch (error) {
     return next(error)
   }
+}
+
+function isTruthyQueryValue(value) {
+  return ['1', 'true', 'yes', 'y'].includes(String(value ?? '').trim().toLowerCase())
 }
 
 export async function getIndent(req, res, next) {
@@ -208,7 +231,7 @@ export async function getIndent(req, res, next) {
 
 export async function getProjectReviewIndent(req, res, next) {
   try {
-    const allowedProjectCodes = getProjectInchargeProjectCodes(req.user)
+    const allowedProjectCodes = (await getProjectInchargeProjects(req.user)).map((project) => project.project_id)
 
     if (allowedProjectCodes.length === 0) {
       return res.status(403).json({ message: 'Project Incharge access is required' })
@@ -910,6 +933,82 @@ function normalizeOptionOffset(value) {
   return parsed
 }
 
+function normalizeListLimit(value) {
+  const parsed = Number.parseInt(String(value ?? ''), 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return 25
+  return Math.min(parsed, 100)
+}
+
+function normalizeListPage(value) {
+  const parsed = Number.parseInt(String(value ?? ''), 10)
+  if (!Number.isFinite(parsed) || parsed <= 0) return 1
+  return parsed
+}
+
+function buildListPagination(source) {
+  const hasPagination = source?.limit !== undefined || source?.page !== undefined || source?.offset !== undefined
+
+  if (!hasPagination) {
+    return null
+  }
+
+  const limit = normalizeListLimit(source?.limit)
+  const requestedPage = normalizeListPage(source?.page)
+  const offset = source?.offset !== undefined
+    ? normalizeOptionOffset(source.offset)
+    : (requestedPage - 1) * limit
+  const page = Math.floor(offset / limit) + 1
+
+  return { limit, offset, page }
+}
+
+async function fetchIndentListPage(whereSql, params, pagination) {
+  if (!pagination) {
+    const result = await query(
+      `
+        ${INDENT_SELECT_SQL}
+        ${whereSql}
+        ORDER BY h.created_at DESC, h.indent_no DESC
+      `,
+      params,
+    )
+
+    return { data: result.rows }
+  }
+
+  const countResult = await query(
+    `
+      SELECT COUNT(*)::int AS total
+      FROM indent_headers h
+      ${whereSql}
+    `,
+    params,
+  )
+  const total = Number(countResult.rows[0]?.total ?? 0)
+  const pagedParams = [...params, pagination.limit, pagination.offset]
+  const result = await query(
+    `
+      ${INDENT_SELECT_SQL}
+      ${whereSql}
+      ORDER BY h.created_at DESC, h.indent_no DESC
+      LIMIT $${params.length + 1}
+      OFFSET $${params.length + 2}
+    `,
+    pagedParams,
+  )
+  const totalPages = Math.max(1, Math.ceil(total / pagination.limit))
+
+  return {
+    data: result.rows,
+    total,
+    page: pagination.page,
+    limit: pagination.limit,
+    totalPages,
+    hasMore: pagination.offset + result.rows.length < total,
+    nextOffset: pagination.offset + result.rows.length,
+  }
+}
+
 function buildIndentListFilter(source, initialParams = []) {
   const params = [...initialParams]
   const clauses = []
@@ -972,7 +1071,7 @@ function buildIndentListFilter(source, initialParams = []) {
   }
 }
 
-function getProjectInchargeProjectCodes(user) {
+function getProjectInchargeProjectsFromToken(user) {
   const assignedProjects = Array.isArray(user?.assigned_projects)
     ? user.assigned_projects
     : Array.isArray(user?.assignedProjects)
@@ -981,8 +1080,77 @@ function getProjectInchargeProjectCodes(user) {
 
   return assignedProjects
     .filter((project) => normalizeProjectInchargeRole(project.role_name))
-    .map((project) => String(project.project_id ?? project.location ?? '').trim())
-    .filter(Boolean)
+    .map((project) => {
+      const projectId = String(project.project_id ?? project.location ?? '').trim()
+      const projectName = String(project.project_name ?? '').trim()
+      return {
+        project_id: projectId,
+        project_name: projectName,
+        location: String(project.location ?? projectId).trim(),
+        status: String(project.status ?? 'Active').trim(),
+        role_name: project.role_name,
+      }
+    })
+    .filter((project) => project.project_id)
+}
+
+async function getProjectInchargeProjects(user) {
+  const tokenProjects = getProjectInchargeProjectsFromToken(user)
+  if (tokenProjects.length > 0) {
+    return dedupeProjectInchargeProjects(tokenProjects)
+  }
+
+  const employeeId = String(user?.login_name ?? user?.employeeId ?? user?.employee_id ?? '').trim()
+  if (!employeeId) {
+    return []
+  }
+
+  const result = await query(
+    `
+      SELECT
+        rm.project_id,
+        COALESCE(pm.project_description, rm.project_description, rm.project_id) AS project_name,
+        rm.project_id AS location,
+        COALESCE(rm.manual_status, 'Active') AS status,
+        rm.responsibility AS role_name
+      FROM responsibility_master rm
+      LEFT JOIN project_master pm ON pm.project_code = rm.project_id
+      WHERE lower(btrim(rm.employee_id)) = lower(btrim($1))
+        AND COALESCE(rm.manual_status, 'Active') <> 'Inactive'
+        AND (rm.valid_from IS NULL OR rm.valid_from::date <= CURRENT_DATE)
+        AND (rm.valid_to IS NULL OR rm.valid_to::date >= CURRENT_DATE)
+      ORDER BY COALESCE(pm.project_description, rm.project_description, rm.project_id)
+    `,
+    [employeeId],
+  )
+
+  return dedupeProjectInchargeProjects(
+    result.rows.filter((project) => normalizeProjectInchargeRole(project.role_name)),
+  )
+}
+
+function dedupeProjectInchargeProjects(projects) {
+  const seen = new Set()
+  const output = []
+
+  for (const project of projects) {
+    const projectId = String(project.project_id ?? '').trim()
+    const key = projectId.toLowerCase()
+    if (!projectId || seen.has(key)) {
+      continue
+    }
+
+    seen.add(key)
+    output.push({
+      project_id: projectId,
+      project_name: String(project.project_name ?? projectId).trim(),
+      location: String(project.location ?? projectId).trim(),
+      status: String(project.status ?? 'Active').trim(),
+      role_name: project.role_name,
+    })
+  }
+
+  return output
 }
 
 function normalizeProjectInchargeRole(role) {
@@ -1058,7 +1226,7 @@ export async function updateIndentStatus(req, res, next) {
     }
 
     const existingIndent = existingResult.rows[0]
-    const allowedProjectCodes = getProjectInchargeProjectCodes(req.user)
+    const allowedProjectCodes = (await getProjectInchargeProjects(req.user)).map((project) => project.project_id)
     const hasProjectInchargeAccess = allowedProjectCodes.some((projectCode) =>
       String(projectCode).trim().toLowerCase() === String(existingIndent.project_code).trim().toLowerCase(),
     )

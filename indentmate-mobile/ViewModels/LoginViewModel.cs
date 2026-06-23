@@ -61,7 +61,7 @@ public partial class LoginViewModel : BaseViewModel
         _databaseService = new DatabaseService(Path.Combine(FileSystem.AppDataDirectory, "indentmate.db"));
         _httpClient = new HttpClient
         {
-            BaseAddress = new Uri(ApiEndpoints.BaseUrl),
+            BaseAddress = new Uri(ApiEndpoints.CurrentBaseUrl),
             Timeout = TimeSpan.FromSeconds(15)
         };
     }
@@ -133,6 +133,7 @@ public partial class LoginViewModel : BaseViewModel
                 return;
             }
 
+            SecureStorage.Default.Remove("jwt_token");
             var storedHash = await SecureStorage.Default.GetAsync("pin_hash");
             var selectedEngineer = SelectedEngineer;
             var manualEngineer = selectedEngineer is null
@@ -169,7 +170,7 @@ public partial class LoginViewModel : BaseViewModel
 
                 if (HasError)
                 {
-                    if (!string.Equals(StatusMessage, BackendConnectionErrorMessage, StringComparison.Ordinal))
+                    if (!IsBackendConnectionError(StatusMessage))
                     {
                         return;
                     }
@@ -180,17 +181,45 @@ public partial class LoginViewModel : BaseViewModel
 
                     if (offlineEngineer is not null)
                     {
+                        if (IsProjectInchargeRole(offlineEngineer.ResponsibilityCode) && !await HasBackendTokenAsync())
+                        {
+                            HasError = true;
+                            StatusMessage = "Project Incharge login needs online backend verification. Please check internet access and try again.";
+                            PinInput = string.Empty;
+                            return;
+                        }
+
                         await CompleteLoginAsync(offlineEngineer);
                         return;
                     }
 
                     HasError = true;
-                    StatusMessage = "Access Denied: No valid SIE/SER role assigned to this user.";
+                    StatusMessage = "Access Denied: No valid SIE/SER/Project Incharge role assigned to this user.";
                     PinInput = string.Empty;
                     return;
                 }
 
-                await ShowIncorrectPinAsync(activeEngineerId);
+                var localEngineer = selectedEngineer ??
+                    manualEngineer ??
+                    await BuildEngineerFromSecureStorageAsync(activeEngineerId, storedHash);
+
+                if (localEngineer is not null)
+                {
+                    if (IsProjectInchargeRole(localEngineer.ResponsibilityCode) && !await HasBackendTokenAsync())
+                    {
+                        HasError = true;
+                        StatusMessage = "Project Incharge login needs online backend verification. Please check internet access and try again.";
+                        PinInput = string.Empty;
+                        return;
+                    }
+
+                    await CompleteLoginAsync(localEngineer);
+                    return;
+                }
+
+                HasError = true;
+                StatusMessage = "Access Denied: No valid SIE/SER/Project Incharge role assigned to this user.";
+                PinInput = string.Empty;
                 return;
             }
 
@@ -486,52 +515,78 @@ public partial class LoginViewModel : BaseViewModel
 
     private async Task<LocalEngineer?> AuthenticateManualUserAsync(string engineerId, string password)
     {
-        try
+        HttpResponseMessage? lastFailedResponse = null;
+        var hadConnectionFailure = false;
+
+        foreach (var baseUrl in ApiEndpoints.CandidateBaseUrls)
         {
-            var response = await _httpClient.PostAsJsonAsync("/api/auth/login", new
+            try
             {
-                login_name = engineerId,
-                password
-            });
+                var response = await _httpClient.PostAsJsonAsync(new Uri(new Uri(baseUrl), "/api/auth/web-login"), new
+                {
+                    employee_id = engineerId,
+                    login_name = engineerId,
+                    password
+                });
 
-            if (!response.IsSuccessStatusCode)
-            {
-                await HandleFailedBackendLoginAsync(response, engineerId);
-                return null;
+                if (!response.IsSuccessStatusCode)
+                {
+                    lastFailedResponse = response;
+                    continue;
+                }
+
+                var loginResponse = await response.Content.ReadFromJsonAsync<LoginApiResponse>();
+                if (loginResponse?.Token is null || loginResponse.User is null)
+                {
+                    lastFailedResponse = response;
+                    continue;
+                }
+
+                ApiEndpoints.SetActiveBaseUrl(baseUrl);
+                var loginName = NormalizeEngineerId(
+                    loginResponse.User.EmployeeId ??
+                    loginResponse.User.LoginName ??
+                    engineerId);
+                var responseName = loginResponse.User.EmployeeName ?? loginResponse.User.Name;
+                var employeeName = string.IsNullOrWhiteSpace(responseName)
+                    ? loginName
+                    : responseName.Trim();
+                var role = ResolveAppRole(loginResponse.User);
+
+                await SecureStorage.Default.SetAsync("jwt_token", loginResponse.Token);
+                SaveProjectInchargeProjects(loginResponse.User.AssignedProjects);
+
+                return new LocalEngineer
+                {
+                    EngineerId = loginName,
+                    Name = employeeName,
+                    Company = await SecureStorage.Default.GetAsync("company") ?? Company,
+                    PinHash = LNApiService.ComputeSHA256Hash(password),
+                    LNEnvironment = await SecureStorage.Default.GetAsync("ln_environment") ?? string.Empty,
+                    ResponsibilityCode = role,
+                    LastSyncAt = DateTime.UtcNow
+                };
             }
-
-            var loginResponse = await response.Content.ReadFromJsonAsync<LoginApiResponse>();
-            if (loginResponse?.Token is null || loginResponse.User is null)
+            catch
             {
-                return null;
+                hadConnectionFailure = true;
             }
-
-            var loginName = NormalizeEngineerId(loginResponse.User.LoginName ?? engineerId);
-            var responseName = loginResponse.User.EmployeeName ?? loginResponse.User.Name;
-            var employeeName = string.IsNullOrWhiteSpace(responseName)
-                ? loginName
-                : responseName.Trim();
-            var role = NormalizeRole(loginResponse.User.Role ?? loginResponse.User.PrimaryRole);
-
-            await SecureStorage.Default.SetAsync("jwt_token", loginResponse.Token);
-
-            return new LocalEngineer
-            {
-                EngineerId = loginName,
-                Name = employeeName,
-                Company = await SecureStorage.Default.GetAsync("company") ?? Company,
-                PinHash = LNApiService.ComputeSHA256Hash(password),
-                LNEnvironment = await SecureStorage.Default.GetAsync("ln_environment") ?? string.Empty,
-                ResponsibilityCode = role,
-                LastSyncAt = DateTime.UtcNow
-            };
         }
-        catch
+
+        if (lastFailedResponse is not null)
         {
-            HasError = true;
-            StatusMessage = BackendConnectionErrorMessage;
+            await HandleFailedBackendLoginAsync(lastFailedResponse, engineerId);
             return null;
         }
+
+        if (hadConnectionFailure)
+        {
+            HasError = true;
+            StatusMessage = "Could not reach the IndentMate backend. Please check internet access and try again.";
+            return null;
+        }
+
+        return null;
     }
 
     private async Task HandleFailedBackendLoginAsync(HttpResponseMessage response, string engineerId)
@@ -562,7 +617,7 @@ public partial class LoginViewModel : BaseViewModel
             string.Equals(loginError?.ErrorCode, "UNAUTHORIZED_FIELD_ROLE", StringComparison.OrdinalIgnoreCase))
         {
             HasError = true;
-            StatusMessage = "Access Denied: This application is restricted to field personnel (SIE/SER) only.";
+            StatusMessage = "Access Denied: This application is restricted to field personnel and Project Incharge users only.";
             PinInput = string.Empty;
             return;
         }
@@ -582,6 +637,14 @@ public partial class LoginViewModel : BaseViewModel
             await PurgeDeactivatedEngineerAsync(engineerId);
             HasError = true;
             StatusMessage = "No login ID found.";
+            PinInput = string.Empty;
+            return;
+        }
+
+        if (response.StatusCode != System.Net.HttpStatusCode.Unauthorized)
+        {
+            HasError = true;
+            StatusMessage = loginError?.Message ?? $"Backend authentication failed with status {(int)response.StatusCode}. Please try again.";
             PinInput = string.Empty;
         }
     }
@@ -648,7 +711,7 @@ public partial class LoginViewModel : BaseViewModel
 
         var storedRole = await SecureStorage.Default.GetAsync("user_role");
         var responsibilityCode = NormalizeRole(storedRole);
-        if (responsibilityCode is not ("SER" or "SIE"))
+        if (responsibilityCode is not ("SER" or "SIE" or "PRI"))
         {
             return null;
         }
@@ -672,7 +735,7 @@ public partial class LoginViewModel : BaseViewModel
         {
             SecureStorage.Default.Remove("session_active");
             HasError = true;
-            StatusMessage = "Access Denied: No valid SIE/SER role assigned to this user.";
+            StatusMessage = "Access Denied: No valid SIE/SER/Project Incharge role assigned to this user.";
             PinInput = string.Empty;
             return;
         }
@@ -774,6 +837,8 @@ public partial class LoginViewModel : BaseViewModel
             _ when normalizedRole.Contains("(SER)") || normalizedRole.Contains("(SRE)") => "SER",
             _ when normalizedRole.Contains("SERVICE ENGINEER") || normalizedRole.Contains("SITE RECEIVING") => "SER",
             _ when normalizedRole.Contains("(SIE)") || normalizedRole.Contains("SITE ENGINEER") => "SIE",
+            "PRI" => "PRI",
+            _ when normalizedRole.Contains("(PRI)") || normalizedRole.Contains("PROJECT INCHARGE") => "PRI",
             _ => normalizedRole
         };
     }
@@ -784,8 +849,59 @@ public partial class LoginViewModel : BaseViewModel
         {
             "SIE" => "//sie-dashboard",
             "SER" => "//ser-dashboard",
+            "PRI" => "//project-incharge-dashboard",
             _ => null
         };
+    }
+
+    private static async Task<bool> HasBackendTokenAsync()
+    {
+        return !string.IsNullOrWhiteSpace(await SecureStorage.Default.GetAsync("jwt_token"));
+    }
+
+    private static bool IsProjectInchargeRole(string? role)
+    {
+        return NormalizeRole(role) == "PRI";
+    }
+
+    private static bool IsBackendConnectionError(string? message)
+    {
+        return string.Equals(message, BackendConnectionErrorMessage, StringComparison.Ordinal) ||
+            (message?.Contains("Could not reach the IndentMate backend", StringComparison.OrdinalIgnoreCase) ?? false);
+    }
+
+    private static string ResolveAppRole(LoginApiUser user)
+    {
+        var hasProjectInchargeAssignment = user.AssignedProjects.Any(project => NormalizeRole(project.RoleName) == "PRI");
+        if (hasProjectInchargeAssignment)
+        {
+            return "PRI";
+        }
+
+        return NormalizeRole(user.Role ?? user.PrimaryRole);
+    }
+
+    private static void SaveProjectInchargeProjects(IEnumerable<LoginApiAssignedProject>? assignedProjects)
+    {
+        var projects = (assignedProjects ?? Enumerable.Empty<LoginApiAssignedProject>())
+            .Where(project => NormalizeRole(project.RoleName) == "PRI")
+            .Select(project =>
+            {
+                var projectCode = (project.ProjectId ?? string.Empty).Trim();
+                var projectName = (project.ProjectName ?? string.Empty).Trim();
+                return new ProjectReviewProjectOption
+                {
+                    ProjectCode = projectCode,
+                    Label = string.IsNullOrWhiteSpace(projectName) ? projectCode : $"{projectCode} - {projectName}"
+                };
+            })
+            .Where(project => !string.IsNullOrWhiteSpace(project.ProjectCode))
+            .GroupBy(project => project.ProjectCode, StringComparer.OrdinalIgnoreCase)
+            .Select(group => group.First())
+            .OrderBy(project => project.ProjectCode)
+            .ToList();
+
+        Preferences.Default.Set("project_incharge_projects", JsonSerializer.Serialize(projects));
     }
 
     private static HashSet<string> ReadHiddenRecentEngineers()
@@ -868,6 +984,24 @@ public partial class LoginViewModel : BaseViewModel
 
         [JsonPropertyName("primary_role")]
         public string? PrimaryRole { get; set; }
+
+        [JsonPropertyName("assigned_projects")]
+        public List<LoginApiAssignedProject> AssignedProjects { get; set; } = new();
+
+        [JsonPropertyName("assignedProjects")]
+        public List<LoginApiAssignedProject> AssignedProjectsCamel { set => AssignedProjects = value ?? new(); }
+    }
+
+    private sealed class LoginApiAssignedProject
+    {
+        [JsonPropertyName("project_id")]
+        public string? ProjectId { get; set; }
+
+        [JsonPropertyName("project_name")]
+        public string? ProjectName { get; set; }
+
+        [JsonPropertyName("role_name")]
+        public string? RoleName { get; set; }
     }
 
     private sealed class LoginApiError

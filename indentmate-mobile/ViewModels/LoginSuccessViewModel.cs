@@ -105,6 +105,8 @@ public partial class LoginSuccessViewModel : BaseViewModel
             _ when normalizedRole.Contains("(SER)") || normalizedRole.Contains("(SRE)") => "SER",
             _ when normalizedRole.Contains("SERVICE ENGINEER") || normalizedRole.Contains("SITE RECEIVING") => "SER",
             _ when normalizedRole.Contains("(SIE)") || normalizedRole.Contains("SITE ENGINEER") => "SIE",
+            "PRI" => "PRI",
+            _ when normalizedRole.Contains("(PRI)") || normalizedRole.Contains("PROJECT INCHARGE") => "PRI",
             _ => normalizedRole
         };
     }
@@ -115,6 +117,7 @@ public partial class LoginSuccessViewModel : BaseViewModel
         {
             "SIE" => "Site Engineer (SIE)",
             "SER" => "Service Engineer (SER)",
+            "PRI" => "Project Incharge (PRI)",
             _ => string.IsNullOrWhiteSpace(role) ? "Field Engineer" : role
         };
     }
@@ -125,6 +128,7 @@ public partial class LoginSuccessViewModel : BaseViewModel
         {
             "SIE" => "//sie-dashboard",
             "SER" => "//ser-dashboard",
+            "PRI" => "//project-incharge-dashboard",
             _ => null
         };
     }
@@ -134,7 +138,7 @@ public partial class LoginSuccessViewModel : BaseViewModel
         SecureStorage.Default.Remove("session_active");
         await Shell.Current.DisplayAlertAsync(
             "Role required",
-            "Access Denied: No valid SIE/SER role assigned to this user. Please login again.",
+            "Access Denied: No valid SIE/SER/Project Incharge role assigned to this user. Please login again.",
             "OK");
         await Shell.Current.GoToAsync("//login");
     }

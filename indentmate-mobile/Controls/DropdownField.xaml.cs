@@ -648,7 +648,21 @@ public partial class DropdownField : ContentView
 
     private void OnHostScrollViewScrolled(object? sender, ScrolledEventArgs e)
     {
-        SetOpen(false);
+        if (popupBorder is null || FindPageRoot() is not Grid root)
+            return;
+
+        var popupWidth = popupBorder.WidthRequest > 0 ? popupBorder.WidthRequest : GetPopupWidth(root);
+        var position = GetPopupPlacement(root, popupWidth);
+
+        if (IsTriggerOutsideHostViewport(position.Y))
+        {
+            SetOpen(false);
+            return;
+        }
+
+        popupBorder.Margin = new Thickness(position.X, position.Y, 0, 0);
+        Grid.SetRow(popupBorder, position.GridRow);
+        Grid.SetRowSpan(popupBorder, position.GridRowSpan);
     }
 
     private Grid? FindPageRoot()
@@ -685,6 +699,12 @@ public partial class DropdownField : ContentView
 
     private PopupPlacement GetPopupPlacement(Grid root, double popupWidth)
     {
+        var triggerHeight = Height > 0
+            ? Height
+            : TriggerBorder.Height > 0
+                ? TriggerBorder.Height
+                : TriggerBorder.HeightRequest;
+
         var scrollView = FindAncestorScrollView();
         if (scrollView is not null)
         {
@@ -694,7 +714,7 @@ public partial class DropdownField : ContentView
 
             return new PopupPlacement(
                 ClampPopupX(positionInScrollView.X, popupWidth, root),
-                positionInScrollView.Y - scrollView.ScrollY + TriggerBorder.Height - 1,
+                positionInScrollView.Y - scrollView.ScrollY + triggerHeight,
                 row,
                 rowSpan);
         }
@@ -702,7 +722,7 @@ public partial class DropdownField : ContentView
         var position = GetPositionRelativeTo(root);
         return new PopupPlacement(
             ClampPopupX(position.X, popupWidth, root),
-            position.Y + TriggerBorder.Height - 1,
+            position.Y + triggerHeight,
             0,
             Math.Max(1, root.RowDefinitions.Count));
     }
@@ -729,6 +749,15 @@ public partial class DropdownField : ContentView
         }
 
         return null;
+    }
+
+    private bool IsTriggerOutsideHostViewport(double popupY)
+    {
+        if (popupScrollView is null || popupScrollView.Height <= 0)
+            return false;
+
+        var triggerTop = popupY - TriggerBorder.Height;
+        return popupY < 0 || triggerTop > popupScrollView.Height;
     }
 
     private sealed record PopupPlacement(double X, double Y, int GridRow, int GridRowSpan);
